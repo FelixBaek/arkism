@@ -28,6 +28,9 @@ func validArtifact(kind string, data artifactMetadata) bool {
 	if !sourceHashPattern.MatchString(data.Digest) || data.Bytes < 1 || data.Bytes > 200<<20 {
 		return false
 	}
+	if kind == "document" {
+		return documentFormatMIME(data.MIME)
+	}
 	switch data.MIME {
 	case "text/plain":
 		return kind == "code" || kind == "ocr" || kind == "tool_output"

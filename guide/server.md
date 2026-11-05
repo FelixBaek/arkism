@@ -159,8 +159,14 @@ Keep the file out of Git. All settings:
 | `MEMORY_BLOB_SHAREDKEY_ENDPOINT` | Optional object storage that speaks the Shared Key blob protocol, instead of S3: the account's blob service URL (https). Set it with `_ACCOUNT`, `_CONTAINER`, `_KEY` (the base64 account key) and optionally `_PREFIX` (all `MEMORY_BLOB_SHAREDKEY_*`). Set only one object storage |
 | `MEMORY_BLOB_SERVICE_ACCOUNT_ENDPOINT` | Optional object storage that speaks the JSON object API with OAuth service-account keys, instead of S3 HMAC keys: the API base URL (https). Set it with `_BUCKET`, `_KEY_FILE` (path of the service-account key file the provider issues; its token address must be https), `_SCOPE` (the read-write storage scope the provider documents) and optionally `_PREFIX` (all `MEMORY_BLOB_SERVICE_ACCOUNT_*`). The server signs a one-hour assertion with the key, trades it for an access token and reuses it until a minute before it expires. Set only one object storage |
 | `MEMORY_DOCUMENT_CONVERTER` | Optional absolute path of a converter run as `<path> <file>` that prints text, for the extensions listed in `MEMORY_DOCUMENT_CONVERTER_EXTENSIONS` (for example `.epub,.rtf,.odt`). `.doc`, `.xls` and `.ppt` have built-in readers; listed there, the converter reads the files those readers cannot. It runs without a shell, with an empty environment, in its own temporary folder (removed afterwards) and process group (stopped as a whole on timeout), for at most 60 seconds, with 4 MiB of output. Other unsupported formats get 415 |
-| `MEMORY_FILE_VISION` | `1` when the server model (`SKILL_LLM_*` with `ARKISM_WIKI=on`) takes image input: uploaded png/jpg/webp images and scanned PDFs (JPEG page images, up to 8 pages) are read by it for memory extraction. Off by default; without it these uploads get 415 |
+| `MEMORY_FILE_VISION` | `1` when the server model (`SKILL_LLM_*` with `ARKISM_WIKI=on`) takes image input: uploaded png/jpg/webp images, image blocks, and scanned PDFs (JPEG or 8-bit RGB/gray Flate page images, up to `MEMORY_FILE_VISION_MAX_PAGES` pages, default 8, at most 200) are read by it for memory extraction and knowledge uploads. Off by default; without it these uploads get 415 |
 | `MEMORY_EXTRACT_BATCH` | `1` lets queued extraction jobs of more than 2 chunks send them to the server model as one provider batch (messages protocol only: `{endpoint}/batches`). Submitting reserves one usage-ledger row per chunk under the daily call cap (two batches cannot both pass it). The job waits as `retry` with `batch_pending` and is checked every minute for up to a day; after a restart the owner's next `GET` of the job (or its run route) resumes the checks. Each answer settles its reserved row and becomes review candidates only; turning the setting off drops a waiting batch and the job goes on per chunk. Off by default |
+| `MEMORY_FILE_MAX_BYTES` | Largest uploaded file for memory extraction and knowledge uploads, in bytes (default 4 MiB, at most 200 MiB). The JSON request may be that much in base64 plus 64 KiB |
+| `MEMORY_FILE_BATCH_MAX_FILES`, `MEMORY_FILE_BATCH_MAX_BYTES` | Limits of one `POST /v1/files/memories/batch` request: files (default 10, at most 100) and their bytes together (default 100 MiB, at most 1 GiB). Files are read one at a time, so memory stays near one file |
+| `MEMORY_FILE_PARSERS`, `MEMORY_FILE_PARSER_ALLOWLIST` | Comma-separated reader order used when a request names none (default `builtin,converter,vision,transcribe` plus configured external readers), and the readers a request may name in `parsers` (default all configured). A reader that cannot read a file hands it to the next; a limit, a refusal or the model budget stops the chain |
+| `MEMORY_FILE_PARSER_JOB_URL` | Optional external reading service (reader `upload_job`) using the upload-and-poll protocol: `POST {url}/upload` (multipart `file`), `GET {url}/{id}` until done, `GET {url}/{id}?expand=markdown_full`. Key in `MEMORY_FILE_PARSER_JOB_API_KEY` |
+| `MEMORY_FILE_PARSER_PRESIGNED_URL` | Optional external reading service (reader `presigned_job`) using the presigned-upload protocol under `{url}/org/{MEMORY_FILE_PARSER_PRESIGNED_ORG}`; token in `MEMORY_FILE_PARSER_PRESIGNED_TOKEN`. Each file needs a `transfer:model_input` decision for destination `external:file_parser`; the file name never leaves the server |
+| `MEMORY_FILE_KEEP_ORIGINALS` | `1` keeps each file uploaded for memory extraction as an attachment of its evidence (needs `MEMORY_BLOB_DIRECTORY` or object storage). Recall and reflect list them with `include: ["attachments"]`; download is `GET /v1/sources/{id}/artifacts/{artifact_id}`. Off by default. Files from agents and files whose text had private or secret parts removed are not kept |
 | `MEMORY_TRANSCRIBE_ENDPOINT` | Optional speech-to-text URL (https, or http on loopback) that takes multipart `file` + `model` and answers `{"text": ...}`, the common `/audio/transcriptions` protocol. Set `MEMORY_TRANSCRIBE_MODEL` and, if needed, `MEMORY_TRANSCRIBE_API_KEY`. Uploaded mp3/wav/m4a/ogg/webm/flac files (at most 4 MiB) are then transcribed for memory extraction; without it they get 415 |
 | `MEMORY_SESSION_ARCHIVE_KEY` | 32-byte hex key that encrypts archived session transcripts |
 
@@ -282,9 +288,22 @@ wiki. What a person approves and how is described in
    `wiki_file_transcribe`. What the model returns goes through the same
    privacy filters and becomes review candidates only. A `dry_run` upload
    never calls these models; it answers with the skip reason `dry_run_media`.
-7. **File extraction jobs.** Cancel a running extraction with
+   Knowledge uploads now read images and audio the same way, and an upload may
+   send text with images in place (`blocks`). External reading services
+   (`MEMORY_FILE_PARSER_*`) are off until set, and each file sent to one needs
+   a `transfer:model_input` decision for `external:file_parser`. The per-file
+   limit (`MEMORY_FILE_MAX_BYTES`) and the scanned-PDF page bound
+   (`MEMORY_FILE_VISION_MAX_PAGES`) keep their old defaults.
+7. **File extraction jobs and documents.** Cancel a running extraction with
    `POST /v1/operations/{id}/cancel`. Operator retry is refused; the uploader
    resumes a failed job with `POST /v1/files/memories/jobs/{id}/run`.
+   `GET /v1/files/memories/documents` lists extraction documents.
+   `PATCH /v1/files/memories/documents/{id}` (people only) edits a document's
+   tags and passes the edit to its waiting candidates and, one audited
+   revision each, to the memories its approved candidates became.
+   `POST /v1/files/memories/documents/{id}/reprocess` (the uploader) reads a
+   finished document again from its stored evidence; it spends model calls
+   like an upload and only creates candidates.
 8. **Object storage for attached files (optional).** With `MEMORY_BLOB_S3_*`,
    `MEMORY_BLOB_SHAREDKEY_*` or `MEMORY_BLOB_SERVICE_ACCOUNT_*` set, attached files live in the bucket, not in
    `MEMORY_BLOB_DIRECTORY`. The server backup does not copy the bucket; with the

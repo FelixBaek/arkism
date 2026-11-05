@@ -10,6 +10,7 @@ package memory
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -50,6 +51,8 @@ type ReflectInput struct {
 	// Mission and Disposition override the space's reflect_mission and reflect_disposition.
 	Mission     string              `json:"mission,omitempty"`
 	Disposition *ReflectDisposition `json:"disposition,omitempty"`
+	// Include "attachments" lists the files kept with each retrieved memory's evidence.
+	Include []string `json:"include,omitempty"`
 	// space is the resolved space settings every reflect search runs with.
 	space *SpaceConfig
 }
@@ -66,9 +69,10 @@ func (d *ReflectDisposition) valid() bool {
 }
 
 type ReflectRetrieved struct {
-	ID    string  `json:"id"`
-	Kind  string  `json:"kind"`
-	Score float64 `json:"score"`
+	ID          string          `json:"id"`
+	Kind        string          `json:"kind"`
+	Score       float64         `json:"score"`
+	Attachments []HitAttachment `json:"attachments,omitempty"`
 }
 
 type ReflectPrompt struct {
@@ -135,7 +139,7 @@ func validReflectInput(in *ReflectInput) bool {
 	in.Mission = strings.TrimSpace(in.Mission)
 	return validScope(in.Scope) && in.Limit >= 0 && in.Limit <= 20 && in.MaxTokens >= 64 && in.MaxTokens <= reflectMaxTokens && validReflectTags(*in) &&
 		in.MaxIterations >= 1 && in.MaxIterations <= reflectMaxIter && utf8.RuneCountInString(in.Mission) <= reflectMissionMax && utf8.ValidString(in.Mission) &&
-		in.Disposition.valid() && len(in.ResponseSchema) <= reflectSchemaMax
+		in.Disposition.valid() && len(in.ResponseSchema) <= reflectSchemaMax && (len(in.Include) == 0 || slices.Equal(in.Include, []string{"attachments"}))
 }
 
 // validReflectTags checks tags, tags_match and tag_groups as the search would.
@@ -198,10 +202,10 @@ func (s *Service) Reflect(ctx context.Context, token string, in ReflectInput) (R
 	if in.PromptOnly {
 		system, user := reflectPrompt(run, in.MaxIterations == 1)
 		out.Prompt = &ReflectPrompt{System: system, User: user}
-		return reflectRetrieved(out, run), nil
+		return s.reflectRetrieved(ctx, token, out, run, nil)
 	}
 	out, err = s.reflectLoop(ctx, token, run, out)
-	return reflectRetrieved(out, run), err
+	return s.reflectRetrieved(ctx, token, out, run, err)
 }
 
 // reflectSearch is the search a reflect step runs; without prompt_only the hits go to
@@ -217,11 +221,16 @@ func reflectSearch(in ReflectInput, query string) SearchInput {
 	return search
 }
 
-func reflectRetrieved(out ReflectOutput, run *reflectRun) ReflectOutput {
+// reflectRetrieved lists the records the answer drew on; with include
+// attachments each memory also lists the files kept with its evidence.
+func (s *Service) reflectRetrieved(ctx context.Context, token string, out ReflectOutput, run *reflectRun, err error) (ReflectOutput, error) {
 	for _, h := range run.hits {
-		out.Retrieved = append(out.Retrieved, ReflectRetrieved{ID: h.ID, Kind: h.Kind, Score: h.Score})
+		if err == nil && slices.Contains(run.in.Include, "attachments") {
+			err = s.attachFiles(ctx, token, run.in.Scope, &h)
+		}
+		out.Retrieved = append(out.Retrieved, ReflectRetrieved{ID: h.ID, Kind: h.Kind, Score: h.Score, Attachments: h.Attachments})
 	}
-	return out
+	return out, err
 }
 
 // reflectGuidance fills the mission and disposition: the request's, else the space's resolved

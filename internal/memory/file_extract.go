@@ -142,6 +142,8 @@ type FileMemoriesInput struct {
 	Strategy      string     `json:"strategy,omitempty"`
 	// Parsers names the readers to try, in order; empty uses the server's order.
 	Parsers []string `json:"parsers,omitempty"`
+	// Blocks is text with images in place, sent instead of content_base64.
+	Blocks []FileBlock `json:"blocks,omitempty"`
 }
 
 // IngestInput is text to extract memory candidates from (POST /v1/memories/ingest).
@@ -633,11 +635,16 @@ func (s *Service) uploadFile(in FileMemoriesInput) (uploadedFile, error) {
 	if err != nil {
 		return uploadedFile{}, err
 	}
-	raw, err := decodeUpload(in.ContentBase64, s.Files.maxBytes())
-	if err != nil {
-		return uploadedFile{}, err
+	f := uploadedFile{Scope: in.Scope, Name: in.Filename, MIME: mime, Parsers: in.Parsers, DryRun: in.DryRun}
+	if len(in.Blocks) > 0 {
+		if in.ContentBase64 != "" {
+			return uploadedFile{}, ErrInvalid
+		}
+		f.Blocks, err = decodeBlocks(in.Blocks, s.Files.maxBytes())
+		return f, err
 	}
-	return uploadedFile{Scope: in.Scope, Name: in.Filename, MIME: mime, Raw: raw, Parsers: in.Parsers, DryRun: in.DryRun}, nil
+	f.Raw, err = decodeUpload(in.ContentBase64, s.Files.maxBytes())
+	return f, err
 }
 
 func pagePointers(pages []string) []*string {
@@ -719,7 +726,11 @@ func (s *Service) extractUploaded(ctx context.Context, token string, d Decision,
 		return out, s.previewChunks(ctx, token, d, f.Scope, &plan, chunks, &out)
 	}
 	plan.Label = f.Name
-	return s.extractStored(ctx, token, d, f.Scope, plan, "file:"+f.Name, "", chunks, out, fileExtractSyncChunks, false)
+	out, err = s.extractStored(ctx, token, d, f.Scope, plan, "file:"+f.Name, "", chunks, out, fileExtractSyncChunks, false)
+	if err == nil {
+		s.keepOriginal(ctx, d, f, &out, redacted)
+	}
+	return out, err
 }
 
 // ingestMaxItems bounds one ingest request; every item may become its own job.

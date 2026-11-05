@@ -40160,8 +40160,7 @@
                 "additionalProperties": false,
                 "required": [
                   "scope",
-                  "filename",
-                  "content_base64"
+                  "filename"
                 ],
                 "properties": {
                   "scope": {
@@ -40171,7 +40170,8 @@
                     "type": "string"
                   },
                   "content_base64": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "The file, base64; at most MEMORY_FILE_MAX_BYTES (default 4 MiB). Not sent together with blocks."
                   },
                   "mime": {
                     "type": "string"
@@ -40179,10 +40179,54 @@
                   "dry_run": {
                     "type": "boolean"
                   },
+                  "parsers": {
+                    "type": "array",
+                    "maxItems": 8,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Readers to try in order (builtin, converter, vision, transcribe and any configured external reader such as upload_job or presigned_job); empty uses MEMORY_FILE_PARSERS. Only readers in MEMORY_FILE_PARSER_ALLOWLIST may be named."
+                  },
+                  "blocks": {
+                    "type": "array",
+                    "maxItems": 64,
+                    "description": "Text with images in place, sent instead of content_base64: each image block is read by the opted-in image model (MEMORY_FILE_VISION) where it stands; all blocks together count against MEMORY_FILE_MAX_BYTES.",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "type"
+                      ],
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "text",
+                            "image"
+                          ]
+                        },
+                        "text": {
+                          "type": "string"
+                        },
+                        "mime": {
+                          "type": "string",
+                          "enum": [
+                            "image/png",
+                            "image/jpeg",
+                            "image/webp"
+                          ]
+                        },
+                        "content_base64": {
+                          "type": "string"
+                        },
                   "context": {"type": "string", "maxLength": 2000, "description": "What the text is (a channel, a meeting); sent to the model next to the text, privacy-filtered, never stored as a claim."},
                   "timestamp": {"type": "string", "format": "date-time", "description": "Reference time of the file: its relative dates are read against it in the space's default_timezone. Default the upload time."},
                   "tags": {"type": "array", "maxItems": 20, "items": {"type": "string", "maxLength": 128, "pattern": "^[^:]+$"}, "description": "Plain labels (no ':') put on every candidate."},
                   "strategy": {"type": "string", "pattern": "^[a-z0-9_-]{1,32}$", "description": "A named strategy of the space's extraction_strategies; default extraction_default_strategy. Unknown names are 400."}
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -46240,6 +46284,17 @@
           },
           "disposition": {
             "$ref": "#/components/schemas/ReflectDisposition"
+          },
+          "include": {
+            "type": "array",
+            "maxItems": 1,
+            "items": {
+              "type": "string",
+              "enum": [
+                "attachments"
+              ]
+            },
+            "description": "attachments lists, on each retrieved memory, the files kept with its evidence (as recall include attachments)."
           }
         }
       },
@@ -46310,6 +46365,39 @@
                 },
                 "score": {
                   "type": "number"
+                },
+                "attachments": {
+                  "type": "array",
+                  "readOnly": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "id",
+                      "source_id",
+                      "kind",
+                      "mime",
+                      "bytes"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "source_id": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "type": "string"
+                      },
+                      "mime": {
+                        "type": "string"
+                      },
+                      "bytes": {
+                        "type": "integer"
+                      }
+                    }
+                  },
+                  "description": "With include attachments."
                 }
               }
             }
@@ -48931,25 +49019,67 @@
             "readOnly": true,
             "description": "Present only with explain=true.",
             "properties": {
-              "lane_ranks": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
-              "fused_score": {"type": "number"},
-              "rerank_score": {"type": "number", "minimum": 0, "maximum": 1},
-              "model_rank": {"type": "integer", "minimum": 1, "description": "1-based place the server model gave this hit; omitted when the model rerank did not apply."},
-              "graph_hops": {"type": "integer", "minimum": 1, "maximum": 3, "description": "graph or causal steps from a top hit where this hit was first reached."}
+              "lane_ranks": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "fused_score": {
+                "type": "number"
+              },
+              "rerank_score": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "model_rank": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "1-based place the server model gave this hit; omitted when the model rerank did not apply."
+              },
+              "graph_hops": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 3,
+                "description": "graph or causal steps from a top hit where this hit was first reached."
+              }
             }
           },
           "source_traces": {
             "type": "array",
             "readOnly": true,
             "maxItems": 3,
-            "items": {"$ref": "#/components/schemas/SourceTrace"},
+            "items": {
+              "$ref": "#/components/schemas/SourceTrace"
+            },
             "description": "Present only with include containing sources, on memory hits: the first three checked source traces (same states and authorization as GET /v1/memories/{id}/sources). excerpt is cut to 300 characters, private spans masked, and left out for restricted memories or secret-looking text. archive_messages is omitted. Outside max_chars and the token budget."
           },
           "entities": {
             "type": "array",
             "readOnly": true,
             "maxItems": 10,
-            "items": {"type": "object", "additionalProperties": false, "required": ["id", "name", "type"], "properties": {"id": {"type": "string"}, "name": {"type": "string"}, "type": {"type": "string"}, "summary": {"type": "string", "description": "person-approved entity summary; only with include_options.entities.max_tokens."}, "observations": {"type": "array", "maxItems": 5, "items": {"$ref": "#/components/schemas/IncludedFact"}, "description": "approved, recallable observations that mention the entity (needs read:observations); only with include_options.entities.max_tokens."}}},
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "name",
+                "type"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"}, "summary": {"type": "string", "description": "person-approved entity summary; only with include_options.entities.max_tokens."}, "observations": {"type": "array", "maxItems": 5, "items": {"$ref": "#/components/schemas/IncludedFact"}, "description": "approved, recallable observations that mention the entity (needs read:observations); only with include_options.entities.max_tokens."
+                }
+              }
+            },
             "description": "Present only with include containing entities, on memory hits: named entities the memory mentions, as the entity reads show them (agents see confirmed entities only). At most 10. With include_options.entities.max_tokens each also carries its approved summary and up to 5 observations, all within that token budget for the hit, cleared for outside transfer."
           },
           "source_facts": {
@@ -48969,7 +49099,30 @@
             "readOnly": true,
             "description": "memory reach within the same Scope. Missing on old rows is read as personal for kind user, general otherwise."
           },
-          "occurred": {"type": "object", "additionalProperties": false, "required": ["from", "to"], "properties": {"phrase": {"type": "string", "maxLength": 64}, "from": {"type": "string", "format": "date-time"}, "to": {"type": "string", "format": "date-time"}}, "readOnly": true, "description": "When the content says the event happened, [from, to); phrase is the text it was read from, empty when the extractor or a reviewer gave the dates. Recall time windows match on overlap with it before observed_at, valid_from and stored times."},
+          "occurred": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "from",
+              "to"
+            ],
+            "properties": {
+              "phrase": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "from": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "to": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "readOnly": true,
+            "description": "When the content says the event happened, [from, to); phrase is the text it was read from, empty when the extractor or a reviewer gave the dates. Recall time windows match on overlap with it before observed_at, valid_from and stored times."
+          },
           "reach_project": {
             "type": "string",
             "readOnly": true,
@@ -49214,6 +49367,39 @@
           "created_by": {
             "type": "string",
             "description": "Existing creator principal display metadata, optional; does not establish human presence, independent evaluation or current permission."
+          },
+          "attachments": {
+            "type": "array",
+            "readOnly": true,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "source_id",
+                "kind",
+                "mime",
+                "bytes"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "source_id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "mime": {
+                  "type": "string"
+                },
+                "bytes": {
+                  "type": "integer"
+                }
+              }
+            },
+            "description": "Present only with include containing attachments: files kept with the hit's evidence."
           }
         },
         "required": [
@@ -50363,10 +50549,18 @@
           },
           "include": {
             "type": "array",
-            "maxItems": 3,
+            "maxItems": 4,
             "uniqueItems": true,
-            "items": {"type": "string", "enum": ["sources", "entities", "source_facts"]},
-            "description": "Attach to each memory hit its checked source traces with short excerpts (sources), the named entities it mentions (entities) and, on observation hits, the source memories it was written from (source_facts). See Hit.source_traces, Hit.entities and Hit.source_facts. These extras are not counted against max_chars or budget_tokens; they are bounded instead: at most 3 sources (excerpts cut to 300 characters) and 10 entities per hit, or the include_options token budgets."
+            "items": {
+              "type": "string",
+              "enum": [
+                "sources",
+                "entities",
+                "source_facts",
+                "attachments"
+              ]
+            },
+            "description": "Attach to each memory hit its checked source traces with short excerpts (sources), the named entities it mentions (entities) and, on observation hits, the source memories it was written from (source_facts). See Hit.source_traces, Hit.entities and Hit.source_facts. These extras are not counted against max_chars or budget_tokens; they are bounded instead: at most 3 sources (excerpts cut to 300 characters) and 10 entities per hit, or the include_options token budgets. attachments lists the files kept with each hit's traced sources (Hit.attachments, at most 5 per source; references only, download through GET /v1/sources/{id}/artifacts/{artifact_id}); a restricted memory lists none."
           },
           "include_options": {
             "type": "object",
@@ -55607,12 +55801,7 @@
           },
           "mime_type": {
             "type": "string",
-            "enum": [
-              "text/plain",
-              "text/markdown",
-              "application/json",
-              "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            ]
+            "description": "The file's type: text, Word, the other document formats POST /v1/files/memories reads, and with the opted-in models images and audio."
           },
           "synthetic": {
             "type": "boolean"
@@ -55623,12 +55812,20 @@
           },
           "content_base64": {
             "type": "string",
-            "description": "A Word (.docx) file, base64; the server reads its text. Not sent together with content.",
-            "maxLength": 5592408
+            "description": "The file, base64, at most MEMORY_FILE_MAX_BYTES (default 4 MiB); the server reads its text through the reader chain. Not sent together with content."
           },
           "expected_revision": {
             "type": "integer",
             "minimum": 0
+          },
+          "parsers": {
+            "type": "array",
+            "maxItems": 8,
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            },
+            "description": "Readers to try in order (builtin, converter, vision, transcribe and any configured external reader such as upload_job or presigned_job); empty uses MEMORY_FILE_PARSERS. Only readers in MEMORY_FILE_PARSER_ALLOWLIST may be named."
           }
         },
         "required": [

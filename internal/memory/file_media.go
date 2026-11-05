@@ -19,8 +19,11 @@ import (
 	"net/textproto"
 	"os"
 	"path"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -58,13 +61,97 @@ type uploadedFile struct {
 	Raw     []byte
 	Parsers []string
 	DryRun  bool
+	// Blocks is text with images in place, read instead of Raw.
+	Blocks []fileBlock
+}
+
+// FileBlock is one part of text-with-images input: a text block, or an image
+// block that the opted-in image model reads in place.
+type FileBlock struct {
+	Type          string `json:"type"` // text | image
+	Text          string `json:"text,omitempty"`
+	MIME          string `json:"mime,omitempty"`
+	ContentBase64 string `json:"content_base64,omitempty"`
+}
+
+type fileBlock struct {
+	Text  string
+	Image []byte
+	MIME  string
+}
+
+const fileBlocksMax = 64
+
+// decodeBlocks checks blocks against the per-file limit counted over all of them.
+func decodeBlocks(blocks []FileBlock, limit int64) ([]fileBlock, error) {
+	if len(blocks) > fileBlocksMax {
+		return nil, ErrInvalid
+	}
+	out := make([]fileBlock, 0, len(blocks))
+	var total int64
+	for _, b := range blocks {
+		var fb fileBlock
+		switch b.Type {
+		case "text":
+			if b.ContentBase64 != "" || b.MIME != "" || strings.TrimSpace(b.Text) == "" || !utf8.ValidString(b.Text) || strings.ContainsRune(b.Text, 0) {
+				return nil, ErrInvalid
+			}
+			fb.Text = b.Text
+			total += int64(len(b.Text))
+		case "image":
+			if b.Text != "" || b.MIME != "" && !slices.Contains([]string{"image/png", "image/jpeg", "image/webp"}, b.MIME) {
+				return nil, ErrInvalid
+			}
+			raw, err := decodeUpload(b.ContentBase64, limit)
+			if err != nil {
+				return nil, err
+			}
+			fb.Image, fb.MIME = raw, b.MIME
+			total += int64(len(raw))
+		default:
+			return nil, ErrInvalid
+		}
+		if total > limit {
+			return nil, errBlobTooLarge
+		}
+		out = append(out, fb)
+	}
+	return out, nil
+}
+
+// blockPages joins the blocks into one page; each image becomes the image
+// model's reading of it, marked as such, where it stood.
+func (s *Service) blockPages(ctx context.Context, token string, d Decision, f uploadedFile) ([]string, error) {
+	var page strings.Builder
+	for i, b := range f.Blocks {
+		text := b.Text
+		if b.Image != nil {
+			img := f
+			img.Name, img.MIME = fmt.Sprintf("%s#image-%d", f.Name, i+1), b.MIME
+			read, err := s.readImages(ctx, token, d, img, [][]byte{b.Image})
+			if err != nil {
+				return nil, err
+			}
+			text = "[image " + strconv.Itoa(i+1) + "]\n" + read[0]
+		}
+		page.WriteString(strings.TrimSpace(text) + "\n\n")
+	}
+	return []string{strings.TrimSpace(page.String())}, nil
 }
 
 // fileMemoryPages reads an upload into page texts: documents with their
 // readers, images, scanned PDFs and audio through the opted-in models. A dry run
 // of a model-read file returns no pages and a dry_run_media note.
 func (s *Service) fileMemoryPages(ctx context.Context, token string, d Decision, f uploadedFile) ([]string, bool, []ExtractSkip, error) {
-	pages, paged, notes, err := s.readFilePages(ctx, token, d, f)
+	var pages []string
+	var paged bool
+	var notes []ExtractSkip
+	var err error
+	if len(f.Blocks) > 0 {
+		pages, err = s.blockPages(ctx, token, d, f)
+	} else {
+		pages, paged, notes, err = s.readFilePages(ctx, token, d, f)
+	}
 	if errors.Is(err, errMediaDryRun) {
 		return nil, paged, []ExtractSkip{{Locator: "file", Reason: "dry_run_media"}}, nil
 	}
@@ -388,4 +475,51 @@ func (t *HTTPTranscriber) Transcribe(ctx context.Context, ext, mime string, audi
 		return "", ProviderUsage{}, ErrUnavailable
 	}
 	return out.Text, usage, nil
+}
+
+// uploadArtifactKind is the attachment kind an uploaded file is kept as; "" keeps none.
+func uploadArtifactKind(mime string) string {
+	switch {
+	case mime == "application/pdf":
+		return "pdf"
+	case validArtifact("image", artifactMetadata{Digest: ContentHash(""), MIME: mime, Bytes: 1}):
+		return "image"
+	case validArtifact("audio", artifactMetadata{Digest: ContentHash(""), MIME: mime, Bytes: 1}):
+		return "audio"
+	case documentFormatMIME(mime):
+		return "document"
+	}
+	return ""
+}
+
+// keepOriginal attaches the uploaded file to its first evidence source when the
+// operator turned it on. Only a person, service or pipeline may attach; a file
+// whose text had private or secret parts removed is not kept, since the original
+// still holds them. A file not kept gets a note; the upload still succeeds.
+func (s *Service) keepOriginal(ctx context.Context, d Decision, f uploadedFile, out *FileMemoriesResult, redacted int) {
+	if !s.Files.KeepOriginals || len(out.SourceIDs) == 0 || len(f.Raw) == 0 {
+		return
+	}
+	kind := uploadArtifactKind(f.MIME)
+	reason := ""
+	switch {
+	case kind == "":
+		reason = "original_not_kept:format"
+	case redacted > 0:
+		reason = "original_not_kept:redacted"
+	case !validArtifactActor(d, f.Scope):
+		reason = "original_not_kept:actor"
+	}
+	if reason == "" {
+		src, err := s.Repo.Get(ctx, "sources", f.Scope, out.SourceIDs[0])
+		if err == nil {
+			err = s.attachOriginal(ctx, d, f.Scope, Ref{Collection: "sources", ID: src.ID, Revision: src.Revision}, kind, f.MIME, f.Raw)
+		}
+		if err == nil {
+			return
+		}
+		code, _ := errorResponse(err)
+		reason = "original_not_kept:" + code
+	}
+	out.Skipped = append(out.Skipped, ExtractSkip{Reason: reason})
 }

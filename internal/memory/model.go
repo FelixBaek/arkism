@@ -437,8 +437,9 @@ type Hit struct {
 	VectorMatch        *VectorMatch   `json:"vector_match,omitempty" bson:"-"`
 	Explain            *HitExplain    `json:"explain,omitempty" bson:"-"`
 	// SourceTraces and Entities are filled only when the search asked for them (recall_include.go).
-	SourceTraces []SourceTrace `json:"source_traces,omitempty" bson:"-"`
-	Entities     []HitEntity   `json:"entities,omitempty" bson:"-"`
+	SourceTraces []SourceTrace   `json:"source_traces,omitempty" bson:"-"`
+	Entities     []HitEntity     `json:"entities,omitempty" bson:"-"`
+	Attachments  []HitAttachment `json:"attachments,omitempty" bson:"-"`
 	// SourceFacts are an observation hit's source memories (include source_facts).
 	SourceFacts []IncludedFact `json:"source_facts,omitempty" bson:"-"`
 	Kind        string         `json:"kind,omitempty" bson:"kind"`

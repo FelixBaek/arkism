@@ -21,9 +21,11 @@ const (
 	includeFactsDefault   = 4096
 	includeFactsPerHit    = 8 // source memories read per observation hit
 	includeEntityFactsMax = 5 // approved observations per entity
+	// includeAttachmentsMax files per traced source; only references, the bytes stay behind GET /v1/sources/{id}/artifacts/{artifact_id}.
+	includeAttachmentsMax = 5
 )
 
-var includeParts = []string{"sources", "entities", "source_facts"}
+var includeParts = []string{"sources", "entities", "source_facts", "attachments"}
 
 // IncludeOptions give an include part a token budget; a part named here must be in include.
 type IncludeOptions struct {
@@ -37,6 +39,16 @@ type IncludeOptions struct {
 type IncludeBudget struct {
 	MaxTokens               int `json:"max_tokens"`
 	MaxTokensPerObservation int `json:"max_tokens_per_observation,omitempty"`
+}
+
+// HitAttachment is a file kept with a hit's evidence; the download goes through
+// GET /v1/sources/{source_id}/artifacts/{id}, which checks the caller again.
+type HitAttachment struct {
+	ID       string `json:"id"`
+	SourceID string `json:"source_id"`
+	Kind     string `json:"kind"`
+	MIME     string `json:"mime"`
+	Bytes    int64  `json:"bytes"`
 }
 
 // HitEntity is a named entity an included hit mentions; Summary and Observations are
@@ -102,6 +114,13 @@ func (s *Service) attachIncludes(ctx context.Context, token string, in SearchInp
 		}
 		for i := range out.Items {
 			if err := s.attachSources(ctx, token, in.Scope, &out.Items[i], budget); err != nil {
+				return err
+			}
+		}
+	}
+	if slices.Contains(in.Include, "attachments") {
+		for i := range out.Items {
+			if err := s.attachFiles(ctx, token, in.Scope, &out.Items[i]); err != nil {
 				return err
 			}
 		}
@@ -307,4 +326,36 @@ func (s *Service) entityObservations(ctx context.Context, token string, scope Sc
 		}
 	}
 	return byEntity, nil
+}
+
+// attachFiles lists the files kept with a memory hit's traced sources. A
+// restricted memory lists none, and a source the caller may not read is left out.
+func (s *Service) attachFiles(ctx context.Context, token string, scope Scope, h *Hit) error {
+	if h.Collection != colMemories || h.Origin != "memory" || h.Sensitivity == "restricted" {
+		return nil
+	}
+	sources := h.SourceTraces
+	if sources == nil {
+		trace, err := s.traceRecordSources(ctx, token, scope, h.ID, colMemories, includeSourcesMax)
+		if skippable(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		sources = trace.Sources
+	}
+	for _, t := range sources {
+		list, err := s.ListSourceArtifacts(ctx, token, t.SourceID, ArtifactListInput{Scope: scope, Limit: includeAttachmentsMax})
+		if skippable(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		for _, a := range list.Items {
+			h.Attachments = append(h.Attachments, HitAttachment{ID: a.ID, SourceID: t.SourceID, Kind: a.Kind, MIME: a.MIME, Bytes: a.Bytes})
+		}
+	}
+	return nil
 }

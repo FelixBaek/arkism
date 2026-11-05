@@ -88,6 +88,8 @@ type FileSettings struct {
 	Allowed []string
 	// Hosted are the external reading services the operator configured, by reader name.
 	Hosted map[string]HostedParser
+	// KeepOriginals keeps each uploaded file as an attachment of its evidence (MEMORY_FILE_KEEP_ORIGINALS=1).
+	KeepOriginals bool
 }
 
 func (f FileSettings) maxBytes() int64 { return positiveOr(f.MaxBytes, fileMaxBytesDefault) }
@@ -164,6 +166,13 @@ func FileSettingsFromEnv() (FileSettings, error) {
 		}
 	}
 	f.BatchFiles, f.VisionPages = int(files), int(pages)
+	switch os.Getenv("MEMORY_FILE_KEEP_ORIGINALS") {
+	case "", "0", "false":
+	case "1", "true":
+		f.KeepOriginals = true
+	default:
+		return FileSettings{}, fmt.Errorf("MEMORY_FILE_KEEP_ORIGINALS: %w", ErrInvalid)
+	}
 	if f.Hosted, err = hostedParsersFromEnv(); err != nil {
 		return FileSettings{}, err
 	}
@@ -203,6 +212,16 @@ func envParserList(f FileSettings, name string) ([]string, error) {
 		out = append(out, p)
 	}
 	return out, nil
+}
+
+// documentFormatMIME reports a MIME type a built-in reader names.
+func documentFormatMIME(mime string) bool {
+	for _, f := range documentFormats {
+		if f.mime == mime {
+			return true
+		}
+	}
+	return false
 }
 
 // documentMIME checks a file name and the MIME type the client gave (may be
