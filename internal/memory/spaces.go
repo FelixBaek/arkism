@@ -108,6 +108,13 @@ type SpaceConfig struct {
 	ExtractionStrategies      map[string]ExtractStrategy `json:"extraction_strategies,omitempty" bson:"extraction_strategies,omitempty"`
 	ExtractionDefaultStrategy string                     `json:"extraction_default_strategy,omitempty" bson:"extraction_default_strategy,omitempty"`
 	DefaultTimezone           string                     `json:"default_timezone,omitempty" bson:"default_timezone,omitempty"`
+	// MemoryLanguage is the language captured memories are written in: "auto" (the server
+	// default) keeps the language of the person's own words, or a language tag such as "ko".
+	MemoryLanguage string `json:"memory_language,omitempty" bson:"memory_language,omitempty"`
+	// WorkStateCandidates (opt-in) turns a saved work checkpoint or handoff into decision
+	// candidates for "where the work stands"; RecallSessionArchives (opt-in) adds a session-archive lane to search.
+	WorkStateCandidates   *bool `json:"work_state_candidates,omitempty" bson:"work_state_candidates,omitempty"`
+	RecallSessionArchives *bool `json:"recall_session_archives,omitempty" bson:"recall_session_archives,omitempty"`
 	// Reflect, mental-model and consolidation blocks (reflect_models_settings.go).
 	ReflectDefaults     *SpaceReflectDefaults     `json:"reflect_default_options,omitempty" bson:"reflect_default_options,omitempty"`
 	MentalModelDefaults *SpaceMentalModelDefaults `json:"mental_model_defaults,omitempty" bson:"mental_model_defaults,omitempty"`
@@ -158,6 +165,9 @@ type SpaceConfigInput struct {
 	ExtractionStrategies      *map[string]ExtractStrategy `json:"extraction_strategies,omitempty"`
 	ExtractionDefaultStrategy *string                     `json:"extraction_default_strategy,omitempty"`
 	DefaultTimezone           *string                     `json:"default_timezone,omitempty"`
+	MemoryLanguage            *string                     `json:"memory_language,omitempty"`
+	WorkStateCandidates       *bool                       `json:"work_state_candidates,omitempty"`
+	RecallSessionArchives     *bool                       `json:"recall_session_archives,omitempty"`
 	ReflectDefaults           *SpaceReflectDefaults       `json:"reflect_default_options,omitempty"`
 	MentalModelDefaults       *SpaceMentalModelDefaults   `json:"mental_model_defaults,omitempty"`
 	Consolidation             *SpaceConsolidation         `json:"consolidation,omitempty"`

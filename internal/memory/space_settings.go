@@ -31,6 +31,7 @@ import (
 // the claim or request. Patterns are Go regular expressions (RE2: linear time).
 
 const (
+	memoryLanguageAuto   = "auto"
 	spaceExtractConcise  = "concise"
 	spaceExtractVerbose  = "verbose"
 	spaceExtractCustom   = "custom"
@@ -53,8 +54,10 @@ const (
 )
 
 var (
-	spaceExtractModes  = []string{"", spaceExtractConcise, spaceExtractVerbose, spaceExtractCustom, spaceExtractVerbatim, spaceExtractChunks}
-	spaceStrategyName  = regexp.MustCompile(`^[a-z0-9_-]{1,32}$`)
+	spaceExtractModes = []string{"", spaceExtractConcise, spaceExtractVerbose, spaceExtractCustom, spaceExtractVerbatim, spaceExtractChunks}
+	spaceStrategyName = regexp.MustCompile(`^[a-z0-9_-]{1,32}$`)
+	// memoryLanguageTag is a language tag a space may write memories in ("ko", "en", "pt-BR").
+	memoryLanguageTag  = regexp.MustCompile(`^[a-z]{2,3}(-[A-Za-z0-9]{2,8}){0,2}$`)
 	spaceToolPattern   = regexp.MustCompile(`^[a-z0-9_]{1,64}$`)
 	spaceDefenseAction = []string{"redact", "block"}
 	// ErrDefenseBlocked: a space defense rule refused the text.
@@ -125,7 +128,8 @@ func validExtractionSettings(c SpaceConfig) error {
 	if err := validExtractStrategy(c.extractBase()); err != nil {
 		return err
 	}
-	if len(c.ExtractionStrategies) > spaceStrategiesMax || c.ExtractionDefaultStrategy != "" && !spaceStrategyName.MatchString(c.ExtractionDefaultStrategy) {
+	if len(c.ExtractionStrategies) > spaceStrategiesMax || c.ExtractionDefaultStrategy != "" && !spaceStrategyName.MatchString(c.ExtractionDefaultStrategy) ||
+		c.MemoryLanguage != "" && c.MemoryLanguage != memoryLanguageAuto && !memoryLanguageTag.MatchString(c.MemoryLanguage) {
 		return ErrInvalid
 	}
 	if c.DefaultTimezone != "" {
@@ -360,6 +364,15 @@ func applyExtractionInput(c *SpaceConfig, in SpaceConfigInput) {
 	if in.DefaultTimezone != nil {
 		c.DefaultTimezone = strings.TrimSpace(*in.DefaultTimezone)
 	}
+	if in.MemoryLanguage != nil {
+		c.MemoryLanguage = strings.TrimSpace(*in.MemoryLanguage)
+	}
+	if in.WorkStateCandidates != nil || in.resets.workState {
+		c.WorkStateCandidates = in.WorkStateCandidates
+	}
+	if in.RecallSessionArchives != nil || in.resets.sessionArchives {
+		c.RecallSessionArchives = in.RecallSessionArchives
+	}
 }
 
 // spaceResets are the boolean settings a PATCH hands back to the template or
@@ -367,6 +380,7 @@ func applyExtractionInput(c *SpaceConfig, in SpaceConfigInput) {
 type spaceResets struct {
 	lanes, rerank, rerankModel, extractCausal bool
 	entitiesFreeForm, entityFreeTypes         bool
+	workState, sessionArchives                bool
 	lane                                      []string // lanes.<name>: null
 }
 
@@ -385,13 +399,16 @@ func (in *SpaceConfigInput) UnmarshalJSON(b []byte) error {
 		FreeForm    json.RawMessage `json:"entities_allow_free_form"`
 		FreeTypes   json.RawMessage `json:"entity_free_types"`
 		Causal      json.RawMessage `json:"extract_causal"`
+		WorkState   json.RawMessage `json:"work_state_candidates"`
+		Archives    json.RawMessage `json:"recall_session_archives"`
 	}
 	if err := json.Unmarshal(b, &raw); err != nil {
 		return err
 	}
 	isNull := func(m json.RawMessage) bool { return string(m) == "null" }
 	in.resets = spaceResets{lanes: isNull(raw.Lanes), rerank: isNull(raw.Rerank), rerankModel: isNull(raw.RerankModel),
-		entitiesFreeForm: isNull(raw.FreeForm), entityFreeTypes: isNull(raw.FreeTypes), extractCausal: isNull(raw.Causal)}
+		entitiesFreeForm: isNull(raw.FreeForm), entityFreeTypes: isNull(raw.FreeTypes), extractCausal: isNull(raw.Causal),
+		workState: isNull(raw.WorkState), sessionArchives: isNull(raw.Archives)}
 	var lanes map[string]json.RawMessage
 	if in.Lanes != nil && json.Unmarshal(raw.Lanes, &lanes) == nil {
 		for _, f := range spaceLaneFields {
@@ -469,7 +486,8 @@ func (s *Service) serverSpaceDefaults() SpaceConfig {
 	return SpaceConfig{ExtractionMode: spaceExtractConcise, Lanes: &SpaceLanes{FTS: &on, Vector: &on, Temporal: &on, Graph: &graph, Semantic: &off},
 		Rerank: &rerank, RerankModel: &model, RecallBudgetTokens: 2000, ReflectMaxTokens: reflectDefaultMaxTokens, AutoDerive: serverAutoDerive(),
 		RecallLaneWeights: serverLaneWeights(), EntityResolution: entityResolvePropose, EntitiesAllowFreeForm: &on, EntityFreeTypes: &off,
-		ExtractionChunkSize: fileExtractChunkRunes, ExtractCausal: &model, DefaultTimezone: usageZone().String()}
+		ExtractionChunkSize: fileExtractChunkRunes, ExtractCausal: &model, DefaultTimezone: usageZone().String(),
+		MemoryLanguage: memoryLanguageAuto, WorkStateCandidates: &off, RecallSessionArchives: &off}
 }
 
 func inheritSetting[T any](out *SpaceConfig, layers []spaceLayer, src map[string]string, name string, field func(*SpaceConfig) *T, set func(T) bool) {
@@ -541,6 +559,9 @@ func resolveExtraction(out *SpaceConfig, layers []spaceLayer, src map[string]str
 		func(v map[string]ExtractStrategy) bool { return len(v) > 0 })
 	inheritSetting(out, layers, src, "extraction_default_strategy", func(c *SpaceConfig) *string { return &c.ExtractionDefaultStrategy }, str)
 	inheritSetting(out, layers, src, "default_timezone", func(c *SpaceConfig) *string { return &c.DefaultTimezone }, str)
+	inheritSetting(out, layers, src, "memory_language", func(c *SpaceConfig) *string { return &c.MemoryLanguage }, str)
+	inheritSetting(out, layers, src, "work_state_candidates", func(c *SpaceConfig) **bool { return &c.WorkStateCandidates }, func(v *bool) bool { return v != nil })
+	inheritSetting(out, layers, src, "recall_session_archives", func(c *SpaceConfig) **bool { return &c.RecallSessionArchives }, func(v *bool) bool { return v != nil })
 }
 
 // resolveAutoDerive fills each auto_derive field from the first layer that sets it.

@@ -372,8 +372,9 @@ func (s *Service) SaveWorkCheckpoint(ctx context.Context, token string, in WorkC
 	}
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	var out WorkCheckpointSaveOutput
+	fresh := false // a replay proposes nothing again
 	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		out = WorkCheckpointSaveOutput{}
+		out, fresh = WorkCheckpointSaveOutput{}, false
 		if err := fenceWorkSubject(ctx, tx, in.Scope); err != nil {
 			return err
 		}
@@ -435,11 +436,14 @@ func (s *Service) SaveWorkCheckpoint(ctx context.Context, token string, in WorkC
 		if err := audit(ctx, tx, in.Scope, d.PrincipalID, action, in.ID); err != nil {
 			return err
 		}
-		out = WorkCheckpointSaveOutput{ID: in.ID, Revision: record.Revision, Authority: AuthorityDataOnly}
+		out, fresh = WorkCheckpointSaveOutput{ID: in.ID, Revision: record.Revision, Authority: AuthorityDataOnly}, true
 		return nil
 	})
 	if e != nil {
 		return WorkCheckpointSaveOutput{}, e
+	}
+	if fresh {
+		s.workStateCandidates(ctx, token, in)
 	}
 	return out, nil
 }

@@ -77,6 +77,14 @@ type CaptureClaim struct {
 
 	// Entities the caller states for this claim (EntityInput); they go on the candidate.
 	Entities []EntityInput `json:"entities,omitempty"`
+	// Relations between two stated entity names (capture_labels.go); edges only after approval.
+	Relations []EntityRelationInput `json:"relations,omitempty"`
+	// Rule marks a standing always/never rule: a person's approval also makes it a directive.
+	Rule string `json:"rule,omitempty"`
+	// DecisionStatus (decision claims only) is proposed, confirmed or dropped.
+	DecisionStatus string `json:"decision_status,omitempty"`
+	// Temporary marks a "this time only" request; it gets a default expiry.
+	Temporary bool `json:"temporary,omitempty"`
 	// labels are the document's reviewer tags; only server-side extraction sets them.
 	labels []string
 }
@@ -120,7 +128,7 @@ func validCaptureInput(in CaptureInput, now time.Time) bool {
 }
 
 func validCaptureClaim(c CaptureClaim) bool {
-	return validCaptureClaimEvidence(c) && validCaptureClaimClassification(c) && validCaptureClaimFields(c)
+	return validCaptureClaimEvidence(c) && validCaptureClaimClassification(c) && validCaptureClaimFields(c) && validClaimExtras(c)
 }
 
 func validCaptureClaimEvidence(c CaptureClaim) bool {
@@ -289,7 +297,7 @@ func (s *Service) defendedClaim(ctx context.Context, token string, in CaptureInp
 // claimLabelTexts exposes copies of the claim's labels to the defense rules; the returned
 // func writes the (possibly redacted) metadata values back. The caller's slices stay untouched.
 func claimLabelTexts(c *CaptureClaim) ([]*string, func()) {
-	c.Tags, c.Entities = slices.Clone(c.Tags), slices.Clone(c.Entities)
+	c.Tags, c.Entities, c.Relations = slices.Clone(c.Tags), slices.Clone(c.Entities), slices.Clone(c.Relations)
 	keys := slices.Sorted(maps.Keys(c.Metadata))
 	values := make([]string, len(keys))
 	texts := []*string{}
@@ -302,6 +310,9 @@ func claimLabelTexts(c *CaptureClaim) ([]*string, func()) {
 	}
 	for i := range c.Entities {
 		texts = append(texts, &c.Entities[i].Name)
+	}
+	for i := range c.Relations { // redacted alike, so a relation still names its redacted entity
+		texts = append(texts, &c.Relations[i].Source, &c.Relations[i].Target)
 	}
 	return texts, func() {
 		if len(keys) > 0 {
@@ -370,8 +381,9 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 	cand, err := s.Create(ctx, token, "memory_candidates", CreateInput{
 		capture:       write,
 		MemoryContext: c.MemoryContext, Occurred: c.occurred,
-		Scope: scope, Kind: c.Kind, Text: c.Text, Summary: c.Reason, Keywords: []string{c.Subject}, Tags: tags, Entities: c.Entities,
-		Sources: canonicalSources, Confidence: c.Confidence, Generated: true, Generator: in.Generator,
+		Scope: scope, Kind: c.Kind, Text: c.Text, Summary: c.Reason, Keywords: []string{c.Subject}, Tags: tags, Entities: c.Entities, entityRelations: c.Relations,
+		ExpiresAt: claimExpiry(c, time.Now()),
+		Sources:   canonicalSources, Confidence: c.Confidence, Generated: true, Generator: in.Generator,
 		SourceEventID: src.ID, Relations: c.SourceRefs, OnSecret: "block", Classification: c.classification(),
 	})
 	if err != nil {
@@ -664,7 +676,7 @@ func captureTags(in CaptureInput, c CaptureClaim) ([]string, bool) {
 	if c.Repo != "" && c.Kind != "user" {
 		tags = append(tags, "repo:"+c.Repo)
 	}
-	tags = wikiUnion(tags, claimLabelTags(c.Tags, c.Metadata))
+	tags = wikiUnion(tags, append(claimLabelTags(c.Tags, c.Metadata), claimExtraTags(c)...))
 	// The tag outlives this call, so no automatic approver can promote it later either.
 	suspect := instructionLike.MatchString(structuredText(c))
 	if suspect {

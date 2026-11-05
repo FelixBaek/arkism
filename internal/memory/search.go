@@ -202,6 +202,9 @@ func fuseWeighted(lists [][]Hit, limit int, weights map[string]float64) []Scored
 func (s *Service) Search(ctx context.Context, token string, in SearchInput) (ContextBundle, error) {
 	return withOperation(s, ctx, token, OpRecall, in.Scope, in, func() (ContextBundle, error) {
 		out, _, err := s.searchWithActor(ctx, token, in)
+		if err == nil {
+			s.attachSessionLane(ctx, token, in, &out)
+		}
 		return out, err
 	})
 }

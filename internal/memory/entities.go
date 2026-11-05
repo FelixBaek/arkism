@@ -224,7 +224,9 @@ func (s *Service) afterMemoryApproval(ctx context.Context, actor string, active 
 	}
 	if _, err = s.applyEntityExtraction(ctx, r.Scope, actor, cfg, memoryEntityFinds(r, cfg), false); err != nil && !errors.Is(err, ErrUnavailable) {
 		slog.Warn("entity extraction after approval failed", "memory", r.ID, "error", err)
+		return
 	}
+	s.applyEntityRelations(ctx, actor, r)
 }
 
 // entityNameInputs states plain entity names (ingest options) as concept entities of a claim.

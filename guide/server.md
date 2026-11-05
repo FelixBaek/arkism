@@ -545,6 +545,16 @@ wiki. What a person approves and how is described in
     token in its path) is now accepted: it is sealed like the headers, and
     reads show it with the key as `[REDACTED]`.
 
+### Extraction labels and opt-ins
+
+Extracted claims may now carry a `rule` (`always`, `never`), a `decision_status` (`proposed`, `confirmed`, `dropped`), a `temporary` flag and `relations` between the entities they name. They only mark the candidate. A person's approval acts on them: a rule memory also becomes an active directive, which SessionStart shows first; stated relations become knowledge graph edges; a temporary request expires after 7 days. A recalled procedure that names a file that no longer exists gets an invalidation proposal with reason `path_missing`, for a person to decide.
+
+Three space settings (`PUT/PATCH /v1/spaces/{workspace}/{project}/config`, or the default template) leave an upgrade's behaviour as it was:
+
+- `memory_language`: `auto` (default, the language the person wrote in) or a language tag such as `ko` or `en`. The capture hook and lesson extraction write memory texts in it. Server-side file extraction still keeps the source language.
+- `work_state_candidates` (default off, `null` inherits): a fresh work checkpoint or handoff save also proposes its decisions (`decision_status: proposed`) and one current-state line as decision candidates. They go through the normal capture gate and stay candidates until a person reviews them.
+- `recall_session_archives` (default off, `null` inherits): search (purpose `answer` or none) adds up to 3 raw past session messages as a separate `sessions` lane. That text is not reviewed memory; a principal without session archive access gets no lane.
+
 ### Reflect, consolidation and mental-model settings
 
 Three space settings blocks (`PUT/PATCH /v1/spaces/{workspace}/{project}/config`, or the default template) are empty by default, so an upgrade keeps today's behaviour. Each block is inherited whole; sending an empty block clears it.

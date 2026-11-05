@@ -123,6 +123,8 @@ type Record struct {
 
 	// Entities are the names the caller stated for a candidate (entity_labels.go EntityInput).
 	Entities []EntityInput `json:"entities,omitempty" bson:"entities,omitempty"`
+	// EntityRelations are the relations stated between those names (capture_labels.go).
+	EntityRelations []EntityRelationInput `json:"entity_relations,omitempty" bson:"entity_relations,omitempty"`
 
 	KnowledgeRetrieval   *KnowledgeRetrievalLog `json:"knowledge_retrieval,omitempty" bson:"knowledge_retrieval,omitempty"`
 	Knowledge            *KnowledgeRecord       `json:"knowledge,omitempty" bson:"knowledge,omitempty"`
@@ -495,6 +497,9 @@ type ContextBundle struct {
 	// Provisional are pending candidates a space opted in to show, never mixed into Items.
 	Provisional       []Hit  `json:"provisional,omitempty"`
 	ProvisionalNotice string `json:"provisional_notice,omitempty"`
+	// Sessions is the opt-in session-archive lane (space setting recall_session_archives):
+	// raw past messages, kept apart from memories because no person reviewed them.
+	Sessions []ArchiveMessageView `json:"sessions,omitempty"`
 	// sourceFacts are the cleaned source memories of observation hits, held for
 	// include source_facts until the search's checks are done (recall_include.go).
 	sourceFacts map[string][]Hit

@@ -42,7 +42,7 @@ var (
 	// signal proposal type -> the memory kinds it may name
 	signalTypes          = map[string][]string{"rule_often_violated": {"user", "procedural", "decision"}, "lesson_often_failing": {"lesson"}}
 	invalidationType     = "invalidation"
-	invalidationReasons  = []string{"outdated", "incorrect"}
+	invalidationReasons  = []string{"outdated", "incorrect", "path_missing"}
 	maintenanceDecisions = map[string]string{"accept": "accepted", "swap": "swapped", "dismiss": "dismissed", "forget_both": "forgotten", "forget_keep": "forgotten", "forget_retire": "forgotten", "forget": "forgotten"}
 )
 

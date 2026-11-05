@@ -129,6 +129,8 @@ type CreateInput struct {
 	ArchiveMessages []ArchiveMessageRef `json:"archive_messages,omitempty" bson:"archive_messages,omitempty"`
 	// Entities: memory candidates only; the names apply when the memory is approved.
 	Entities []EntityInput `json:"entities,omitempty"`
+	// entityRelations: server-owned, set by capture only (capture_labels.go).
+	entityRelations []EntityRelationInput
 
 	TrustLevel     string      `json:"trust_level,omitempty"`
 	Confidence     *float64    `json:"confidence,omitempty"`
@@ -575,6 +577,7 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 		return Record{}, err
 	}
 	clean.capture = in.capture
+	clean.entityRelations = in.entityRelations // names were defended with the claim; a redacted end stops matching its entity
 	in = clean
 	d, e := s.authorizeCreate(ctx, token, col, in, file)
 	if e != nil {
@@ -584,7 +587,7 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 	if e = normalizeCreateTimes(col, &in, now); e != nil {
 		return Record{}, e
 	}
-	r := Record{MemoryContext: copyMemoryContext(in.MemoryContext), ArchiveMessages: append([]ArchiveMessageRef(nil), in.ArchiveMessages...), Confidence: in.Confidence, Evaluation: in.Evaluation, Run: in.Run, ToolCall: in.ToolCall, OriginProduct: in.OriginProduct, SourceRef: in.SourceRef, SourceEventID: in.SourceEventID, TraceID: in.TraceID, CollectedAt: in.CollectedAt, Generator: in.Generator, CreatedByType: d.Role, Sensitivity: in.Sensitivity, Inspection: &inspection, ID: ID(), Scope: in.Scope, Kind: in.Kind, Status: "active", Revision: 1, Text: in.Text, Summary: in.Summary, Keywords: in.Keywords, Tags: in.Tags, Entities: in.Entities, Sources: in.Sources, Relations: in.Relations, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, Trust: 0.5, EffectiveAt: in.EffectiveAt, Occurred: in.Occurred, ExpiresAt: in.ExpiresAt, SkillID: in.SkillID, BaseVersion: in.BaseVersion, Target: in.Target, Passed: in.Passed, Reflection: in.Reflection}
+	r := Record{MemoryContext: copyMemoryContext(in.MemoryContext), ArchiveMessages: append([]ArchiveMessageRef(nil), in.ArchiveMessages...), Confidence: in.Confidence, Evaluation: in.Evaluation, Run: in.Run, ToolCall: in.ToolCall, OriginProduct: in.OriginProduct, SourceRef: in.SourceRef, SourceEventID: in.SourceEventID, TraceID: in.TraceID, CollectedAt: in.CollectedAt, Generator: in.Generator, CreatedByType: d.Role, Sensitivity: in.Sensitivity, Inspection: &inspection, ID: ID(), Scope: in.Scope, Kind: in.Kind, Status: "active", Revision: 1, Text: in.Text, Summary: in.Summary, Keywords: in.Keywords, Tags: in.Tags, Entities: in.Entities, EntityRelations: in.entityRelations, Sources: in.Sources, Relations: in.Relations, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, Trust: 0.5, EffectiveAt: in.EffectiveAt, Occurred: in.Occurred, ExpiresAt: in.ExpiresAt, SkillID: in.SkillID, BaseVersion: in.BaseVersion, Target: in.Target, Passed: in.Passed, Reflection: in.Reflection}
 	if r.ExpiresAt != nil && !r.ExpiresAt.After(now) {
 		return Record{}, ErrInvalid
 	}
@@ -1506,6 +1509,11 @@ func promoteApprovedCandidate(ctx context.Context, tx Tx, r Record, review *Cand
 	}
 	if e = insertSourceRecord(ctx, tx, "memories", memory); e != nil {
 		return Record{}, e
+	}
+	if review != nil {
+		if e = ruleDirective(ctx, tx, memory, d); e != nil {
+			return Record{}, e
+		}
 	}
 	if replacementRelation.ID != "" {
 		if e = insertSourceRecord(ctx, tx, "memory_relations", replacementRelation); e != nil {
