@@ -23,8 +23,10 @@ const (
 	documentMaxFile = 4 << 20
 	// documentMaxText bounds the text read out of one file; a small zip can inflate a lot.
 	documentMaxText = 32 << 20
-	xlsxMIME        = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-	pptxMIME        = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+	// documentMaxZipEntries bounds the parts listed in an OOXML file.
+	documentMaxZipEntries = 10000
+	xlsxMIME              = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	pptxMIME              = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 )
 
 var errUnsupportedFormat = errors.New("unsupported document format")
@@ -130,12 +132,16 @@ func textPage(convert func(string) (string, error)) func([]byte) ([]string, bool
 	}
 }
 
-// officeParts opens an Office (zip) file and reads the wanted parts, with
-// their unpacked size counted against documentMaxText.
+// officeParts opens an OOXML (zip) file and reads the wanted parts, with
+// their unpacked size counted against documentMaxText. Go's XML decoder does
+// not expand entities declared in a DTD, so parts cannot inflate further.
 func officeParts(raw []byte, want func(string) bool) (map[string][]byte, error) {
 	zr, err := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
 	if err != nil {
 		return nil, ErrInvalid
+	}
+	if len(zr.File) > documentMaxZipEntries {
+		return nil, errBlobTooLarge
 	}
 	out, budget := map[string][]byte{}, int64(documentMaxText)
 	for _, f := range zr.File {
@@ -168,18 +174,20 @@ func csvTable(sep rune) func(string) (string, error) {
 		if err != nil {
 			return "", ErrInvalid
 		}
-		return markdownTable(rows), nil
+		return markdownTable(rows)
 	}
 }
 
 // markdownTable writes rows as a Markdown table; the first row is the header.
-func markdownTable(rows [][]string) string {
+// The text is bounded by documentMaxText: padding short rows to the widest one
+// or repeating a long shared cell could otherwise inflate a small file.
+func markdownTable(rows [][]string) (string, error) {
 	width := 0
 	for _, row := range rows {
 		width = max(width, len(row))
 	}
 	if width == 0 {
-		return ""
+		return "", nil
 	}
 	var b strings.Builder
 	for i, row := range rows {
@@ -189,6 +197,9 @@ func markdownTable(rows [][]string) string {
 			if c < len(row) {
 				cell = strings.Join(strings.Fields(strings.ReplaceAll(row[c], "|", `\|`)), " ")
 			}
+			if b.Len()+len(cell) > documentMaxText {
+				return "", errBlobTooLarge
+			}
 			b.WriteString(" " + cell + " |")
 		}
 		b.WriteString("\n")
@@ -196,7 +207,7 @@ func markdownTable(rows [][]string) string {
 			b.WriteString("|" + strings.Repeat(" --- |", width) + "\n")
 		}
 	}
-	return b.String()
+	return b.String(), nil
 }
 
 // pageNumber reads N out of a part name such as ppt/slides/slide12.xml.

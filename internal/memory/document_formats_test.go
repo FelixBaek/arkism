@@ -1,3 +1,5 @@
+//go:build linux
+
 package memory
 
 import (
@@ -5,6 +7,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -163,5 +166,57 @@ func TestFileMemoriesAndKnowledgeReadNewFormats(t *testing.T) {
 	in.Filename = "deck.key"
 	if _, err = f.svc.IngestKnowledge(testCtx, f.human, in); !errors.Is(err, errUnsupportedFormat) {
 		t.Fatalf("unknown format: %v", err)
+	}
+}
+
+// TestDocumentReaderHardening covers private markers in HTML, slide order
+// from the presentation list and inflation through padding or repeated parts.
+func TestDocumentReaderHardening(t *testing.T) {
+	text, err := documentText("p.html", []byte(`<p>공개</p><private class="x"><p>비밀 문단</p></private><p>끝</p>`))
+	if err != nil || !strings.Contains(text, "<private>") || !strings.Contains(text, "</private>") {
+		t.Fatalf("private marker lost: %q %v", text, err)
+	}
+	if masked, n := extractClean(text); n == 0 || strings.Contains(masked, "비밀") || !strings.Contains(masked, "끝") {
+		t.Fatalf("private span reached the model text: %q", masked)
+	}
+	deck := zipOf(t, map[string]string{
+		"ppt/presentation.xml":            `<p:presentation xmlns:p="p" xmlns:r="r"><p:sldIdLst><p:sldId id="257" r:id="rId9"/><p:sldId id="256" r:id="rId8"/><p:sldId id="258" r:id="rId9"/></p:sldIdLst></p:presentation>`,
+		"ppt/_rels/presentation.xml.rels": `<Relationships><Relationship Id="rId8" Target="slides/slide1.xml"/><Relationship Id="rId9" Target="/ppt/slides/slide2.xml"/></Relationships>`,
+		"ppt/slides/slide1.xml":           `<p:sld xmlns:a="a" xmlns:p="p"><a:p><a:t>first by number</a:t></a:p></p:sld>`,
+		"ppt/slides/slide2.xml":           `<p:sld xmlns:a="a" xmlns:p="p"><a:p><a:t>first in the deck</a:t></a:p></p:sld>`,
+		"ppt/slides/slide3.xml":           `<p:sld xmlns:a="a" xmlns:p="p"><a:p><a:t>not in the deck</a:t></a:p></p:sld>`,
+	})
+	pages, _, err := documentPages("d.pptx", deck)
+	if err != nil || len(pages) != 2 || pages[0] != "first in the deck" || pages[1] != "first by number" {
+		t.Fatalf("presentation order: %q %v", pages, err)
+	}
+	rows := strings.Repeat(`<row><c r="IV1"><v>1</v></c></row>`, xlsxMaxCells/200)
+	wide := zipOf(t, map[string]string{
+		"xl/workbook.xml":            `<workbook xmlns:r="r"><sheets><sheet name="a" r:id="rId1"/></sheets></workbook>`,
+		"xl/_rels/workbook.xml.rels": `<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>`,
+		"xl/worksheets/sheet1.xml":   `<worksheet><sheetData>` + rows + `</sheetData></worksheet>`,
+	})
+	if _, _, err = documentPages("w.xlsx", wide); !errors.Is(err, errBlobTooLarge) {
+		t.Fatalf("padded sheet: %v", err)
+	}
+	long := strings.Repeat("y", 1<<20)
+	shared := zipOf(t, map[string]string{
+		"xl/workbook.xml":            `<workbook xmlns:r="r"><sheets>` + strings.Repeat(`<sheet name="a" r:id="rId1"/>`, 1000) + `</sheets></workbook>`,
+		"xl/_rels/workbook.xml.rels": `<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>`,
+		"xl/sharedStrings.xml":       `<sst><si><t>` + long + `</t></si></sst>`,
+		"xl/worksheets/sheet1.xml":   `<worksheet><sheetData><row>` + strings.Repeat(`<c t="s"><v>0</v></c>`, 40) + `</row></sheetData></worksheet>`,
+	})
+	if _, _, err = documentPages("s.xlsx", shared); !errors.Is(err, errBlobTooLarge) {
+		t.Fatalf("repeated shared string: %v", err)
+	}
+	if _, err = markdownTable([][]string{{"a"}, make([]string, documentMaxText/2)}); !errors.Is(err, errBlobTooLarge) {
+		t.Fatalf("padded table: %v", err)
+	}
+	many := map[string]string{}
+	for i := range documentMaxZipEntries + 1 {
+		many[fmt.Sprintf("x/%d", i)] = ""
+	}
+	if _, _, err = documentPages("m.docx", zipOf(t, many)); !errors.Is(err, errBlobTooLarge) {
+		t.Fatalf("zip entries: %v", err)
 	}
 }

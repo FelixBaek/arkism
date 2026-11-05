@@ -71803,7 +71803,7 @@
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/WireResponseKnowledgeVersion"
+                  "$ref": "#/components/schemas/WireResponseKnowledgeDocumentSummary"
                 }
               },
               {
@@ -71826,53 +71826,6 @@
           "next_cursor"
         ],
         "x-go-type": "memory.KnowledgeHistoryPage",
-        "x-go-source": "internal/memory/document_history.go"
-      },
-      "WireResponseKnowledgeVersion": {
-        "type": "object",
-        "properties": {
-          "document_id": {
-            "type": "string"
-          },
-          "source_version": {
-            "type": "string"
-          },
-          "filename": {
-            "type": "string"
-          },
-          "mime_type": {
-            "type": "string"
-          },
-          "parser_version": {
-            "type": "string"
-          },
-          "extraction_status": {
-            "type": "string"
-          },
-          "chunks": {
-            "type": "integer"
-          },
-          "current": {
-            "type": "boolean"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "additionalProperties": false,
-        "required": [
-          "document_id",
-          "source_version",
-          "filename",
-          "mime_type",
-          "parser_version",
-          "extraction_status",
-          "chunks",
-          "current",
-          "created_at"
-        ],
-        "x-go-type": "memory.KnowledgeVersion",
         "x-go-source": "internal/memory/document_history.go"
       }
     },

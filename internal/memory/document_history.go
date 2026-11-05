@@ -78,23 +78,11 @@ type KnowledgeChunkPage struct {
 	NextCursor        string `json:"next_cursor"`
 }
 
-type KnowledgeVersion struct {
-	DocumentID       string    `json:"document_id"`
-	SourceVersion    string    `json:"source_version"`
-	Filename         string    `json:"filename"`
-	MIMEType         string    `json:"mime_type"`
-	ParserVersion    string    `json:"parser_version"`
-	ExtractionStatus string    `json:"extraction_status"`
-	Chunks           int       `json:"chunks"`
-	Current          bool      `json:"current"`
-	CreatedAt        time.Time `json:"created_at"`
-}
-
 type KnowledgeHistoryPage struct {
-	SourceID   string             `json:"source_id"`
-	Items      []KnowledgeVersion `json:"items"`
-	Total      int                `json:"total"`
-	NextCursor string             `json:"next_cursor"`
+	SourceID   string                     `json:"source_id"`
+	Items      []KnowledgeDocumentSummary `json:"items"`
+	Total      int                        `json:"total"`
+	NextCursor string                     `json:"next_cursor"`
 }
 
 // DocumentPage is the cursor and limit of a document list request.
@@ -241,13 +229,26 @@ func (s *Service) DocumentHistory(ctx context.Context, token string, scope Scope
 	return out, nil
 }
 
-// KnowledgeChunks lists the current document's chunks; text is withheld when restricted.
+// KnowledgeChunks lists the current document's chunks. Chunk text is shown to
+// a person only: an agent reads knowledge through retrieval, which requires a
+// reviewed source and a binding. Restricted, quarantined or erased text is
+// withheld from everyone.
 func (s *Service) KnowledgeChunks(ctx context.Context, token string, scope Scope, id string, page DocumentPage) (KnowledgeChunkPage, error) {
+	d, err := s.knowledgeAuthorization(ctx, token, "read:"+colKnowledgeSources, scope, id)
+	if err != nil {
+		return KnowledgeChunkPage{}, err
+	}
 	src, err := s.GetKnowledgeSource(ctx, token, id, scope)
 	if err != nil {
 		return KnowledgeChunkPage{}, err
 	}
 	doc, err := s.Repo.Get(ctx, colKnowledgeDocuments, scope, src.Knowledge.DocumentID)
+	if err == nil && (doc.Knowledge == nil || doc.Knowledge.KnowledgeSourceID != src.ID) {
+		err = ErrConflict
+	}
+	if err == nil {
+		err = knowledgeLive(ctx, s.Repo, doc)
+	}
 	if err != nil {
 		return KnowledgeChunkPage{}, err
 	}
@@ -262,15 +263,16 @@ func (s *Service) KnowledgeChunks(ctx context.Context, token string, scope Scope
 		return KnowledgeChunkPage{}, err
 	}
 	for _, c := range chunks {
+		if c.Knowledge == nil || c.Knowledge.DocumentID != doc.ID {
+			return KnowledgeChunkPage{}, ErrConflict
+		}
 		v := KnowledgeChunkView{ID: c.ID, ChunkIndex: c.Knowledge.ChunkIndex, SectionPath: c.Knowledge.SectionPath, Hash: c.ContentHash, TokenEstimate: c.Knowledge.TokenEstimate, Status: c.Status}
-		if c.Sensitivity == "restricted" || c.PrivacyQuarantined || c.ContentErased {
-			v.TextWithheld = true
-		} else {
+		if v.TextWithheld = d.Role != roleHuman || c.Sensitivity == "restricted" || knowledgeLive(ctx, s.Repo, c) != nil; !v.TextWithheld {
 			v.Text = c.Text
 		}
 		out.Items = append(out.Items, v)
 	}
-	if d, e := s.authorize(ctx, token, "read:memory_candidates", scope, "", ""); e == nil {
+	if d, e := s.authorize(ctx, token, "read:memory_candidates", scope, "", ""); e == nil && d.Role == roleHuman {
 		extractID := extractDocID(scope, d.PrincipalID, "knowledge:"+id)
 		if _, e = s.Repo.Get(ctx, "jobs", scope, extractID); e == nil {
 			out.ExtractDocumentID = extractID
@@ -279,27 +281,16 @@ func (s *Service) KnowledgeChunks(ctx context.Context, token string, scope Scope
 	return out, nil
 }
 
-// KnowledgeHistory lists the source's document versions, newest first.
+// KnowledgeHistory pages the source's document versions, newest first, from
+// the document list (ListKnowledgeDocuments).
 func (s *Service) KnowledgeHistory(ctx context.Context, token string, scope Scope, id string, page DocumentPage) (KnowledgeHistoryPage, error) {
-	src, err := s.GetKnowledgeSource(ctx, token, id, scope)
+	list, err := s.ListKnowledgeDocuments(ctx, token, scope, id)
 	if err != nil {
 		return KnowledgeHistoryPage{}, err
 	}
-	ids := src.Knowledge.DocumentIDs
-	start, end, next, err := pageOffset(page, len(ids))
+	start, end, next, err := pageOffset(page, len(list.Items))
 	if err != nil {
 		return KnowledgeHistoryPage{}, err
 	}
-	out := KnowledgeHistoryPage{SourceID: id, Items: []KnowledgeVersion{}, Total: len(ids), NextCursor: next}
-	for i := start; i < end; i++ {
-		docID := ids[len(ids)-1-i]
-		doc, err := s.Repo.Get(ctx, colKnowledgeDocuments, scope, docID)
-		if err != nil {
-			return KnowledgeHistoryPage{}, err
-		}
-		k := doc.Knowledge
-		out.Items = append(out.Items, KnowledgeVersion{DocumentID: doc.ID, SourceVersion: k.SourceVersion, Filename: k.OriginalFilename, MIMEType: k.MIMEType, ParserVersion: k.ParserVersion,
-			ExtractionStatus: k.ExtractionStatus, Chunks: len(k.ChunkIDs), Current: doc.ID == src.Knowledge.DocumentID, CreatedAt: doc.CreatedAt})
-	}
-	return out, nil
+	return KnowledgeHistoryPage{SourceID: id, Items: list.Items[start:end], Total: len(list.Items), NextCursor: next}, nil
 }

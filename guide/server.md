@@ -154,7 +154,7 @@ Keep the file out of Git. All settings:
 | `MEMORY_CAPTURE_MERGE_SIMILARITY` | Cosine similarity (0–1, default 0.92) at which a captured claim gets a merge proposal toward the closest approved memory instead of a plain review entry. Needs an embedder; a person still decides |
 | `MEMORY_BLOB_DIRECTORY` | Folder for attached files. With object storage on, it keeps only the lock and upload staging |
 | `MEMORY_BLOB_S3_ENDPOINT` | Optional S3-compatible object storage URL (https, or http on loopback). Set it with `_BUCKET`, `_REGION`, `_ACCESS_KEY_ID`, `_SECRET_ACCESS_KEY`, and optionally `_PREFIX` and `_SESSION_TOKEN` (all `MEMORY_BLOB_S3_*`) to keep attached files there. Deletion and erasure delete the objects. File backups and restore cover only the local folder |
-| `MEMORY_DOCUMENT_CONVERTER` | Optional absolute path of a converter run as `<path> <file>` that prints text, for the extensions listed in `MEMORY_DOCUMENT_CONVERTER_EXTENSIONS` (for example `.doc,.ppt,.xls`). It runs without a shell, for at most 60 seconds, with 4 MiB of output. Other unsupported formats get 415 |
+| `MEMORY_DOCUMENT_CONVERTER` | Optional absolute path of a converter run as `<path> <file>` that prints text, for the extensions listed in `MEMORY_DOCUMENT_CONVERTER_EXTENSIONS` (for example `.doc,.ppt,.xls`). It runs without a shell, with an empty environment, in its own temporary folder (removed afterwards) and process group (stopped as a whole on timeout), for at most 60 seconds, with 4 MiB of output. Other unsupported formats get 415 |
 | `MEMORY_SESSION_ARCHIVE_KEY` | 32-byte hex key that encrypts archived session transcripts |
 
 Values the `arkism` tools read:
@@ -248,6 +248,14 @@ wiki. What a person approves and how is described in
 5. **File extraction jobs.** Cancel a running extraction with
    `POST /v1/operations/{id}/cancel`. Operator retry is refused; the uploader
    resumes a failed job with `POST /v1/files/memories/jobs/{id}/run`.
+6. **Object storage for attached files (optional).** With `MEMORY_BLOB_S3_*`
+   set, attached files live in the bucket, not in `MEMORY_BLOB_DIRECTORY`.
+   The server backup does not copy the bucket, and `memoryd --adopt-restored-blobs`
+   refuses to run while object storage is on. Back the bucket up yourself
+   (bucket versioning or a scheduled copy) at least as often as the database
+   backup, and restore it to the same time as the database. Switch storage
+   only on an empty blob folder: blob garbage collection stops with an error
+   while digest files are still in the folder.
 
 ## Model providers
 

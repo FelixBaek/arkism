@@ -1,11 +1,11 @@
 //go:build !unix
 
-package crewrun
+package procgroup
 
 import "os/exec"
 
-// setProcessGroup does nothing here: process groups are a Unix feature, and
+// Set does nothing here: process groups are a Unix feature, and
 // CommandContext still kills the direct child on timeout.
-func setProcessGroup(*exec.Cmd) {
+func Set(*exec.Cmd) {
 	// no process groups on this platform
 }

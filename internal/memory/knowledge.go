@@ -80,7 +80,7 @@ type KnowledgeIngestInput struct {
 	Filename  string `json:"filename"`
 	MIMEType  string `json:"mime_type"`
 	Content   string `json:"content"`
-	// ContentBase64 carries a file (Word, PDF, Excel, PowerPoint, ...); the server reads its text into Content.
+	// ContentBase64 carries a file (.docx, .pdf, .xlsx, .pptx, ...); the server reads its text into Content.
 	ContentBase64    string `json:"content_base64,omitempty"`
 	Synthetic        bool   `json:"synthetic"`
 	ExpectedRevision int64  `json:"expected_revision,omitempty"`

@@ -1,6 +1,6 @@
 package memory
 
-// Excel (.xlsx) and PowerPoint (.pptx) files are read like Word files: zip +
+// Spreadsheet (.xlsx) and slide (.pptx) files are read like .docx files: zip +
 // XML with the standard library. A sheet becomes a Markdown table under its
 // name; a slide becomes one page of its paragraphs.
 import (
@@ -41,6 +41,16 @@ func xmlAttr(t xml.StartElement, local string) string {
 	return ""
 }
 
+// xmlRelID reads the relationship id (r:id); a slide id also has a plain id.
+func xmlRelID(t xml.StartElement) string {
+	for _, a := range t.Attr {
+		if a.Name.Local == "id" && a.Name.Space != "" {
+			return a.Value
+		}
+	}
+	return ""
+}
+
 // xmlParagraphs joins the text elements of each paragraph element into a line.
 func xmlParagraphs(data []byte, para, text string) (string, error) {
 	var out, line strings.Builder
@@ -66,22 +76,21 @@ func xmlParagraphs(data []byte, para, text string) (string, error) {
 	return strings.TrimSpace(out.String()), err
 }
 
-// pptxPages returns one page per slide, in slide-number order.
-// shortcut: slide-number order, not the presentation's own order; read ppt/presentation.xml if decks reorder slides.
+// pptxPages returns one page per slide in the deck's own order (the slide
+// list in ppt/presentation.xml); a file without that list falls back to the
+// slide-number order.
 func pptxPages(raw []byte) ([]string, bool, error) {
-	parts, err := officeParts(raw, func(name string) bool { _, ok := pageNumber(name, "ppt/slides/slide"); return ok })
+	parts, err := officeParts(raw, func(name string) bool {
+		_, ok := pageNumber(name, "ppt/slides/slide")
+		return ok || name == "ppt/presentation.xml" || name == "ppt/_rels/presentation.xml.rels"
+	})
 	if err != nil {
 		return nil, false, err
 	}
-	names := make([]string, 0, len(parts))
-	for name := range parts {
-		names = append(names, name)
+	names, err := pptxSlideOrder(parts)
+	if err != nil {
+		return nil, false, err
 	}
-	slices.SortFunc(names, func(a, b string) int {
-		x, _ := pageNumber(a, "ppt/slides/slide")
-		y, _ := pageNumber(b, "ppt/slides/slide")
-		return x - y
-	})
 	pages := []string{}
 	for _, name := range names {
 		text, err := xmlParagraphs(parts[name], "p", "t")
@@ -94,6 +103,58 @@ func pptxPages(raw []byte) ([]string, bool, error) {
 		return nil, false, ErrInvalid
 	}
 	return pages, true, nil
+}
+
+// pptxSlideOrder lists the slide parts in presentation order, each once.
+func pptxSlideOrder(parts map[string][]byte) ([]string, error) {
+	names, seen := []string{}, map[string]bool{}
+	if parts["ppt/presentation.xml"] != nil {
+		targets, err := ooxmlRels(parts["ppt/_rels/presentation.xml.rels"], "ppt")
+		if err != nil {
+			return nil, err
+		}
+		if err = xmlWalk(parts["ppt/presentation.xml"], func(tok xml.Token) {
+			if t, ok := tok.(xml.StartElement); ok && t.Name.Local == "sldId" {
+				if part := targets[xmlRelID(t)]; parts[part] != nil && !seen[part] && strings.HasPrefix(part, "ppt/slides/") {
+					seen[part] = true
+					names = append(names, part)
+				}
+			}
+		}); err != nil {
+			return nil, err
+		}
+		if len(names) > 0 {
+			return names, nil
+		}
+	}
+	for name := range parts {
+		if _, ok := pageNumber(name, "ppt/slides/slide"); ok {
+			names = append(names, name)
+		}
+	}
+	slices.SortFunc(names, func(a, b string) int {
+		x, _ := pageNumber(a, "ppt/slides/slide")
+		y, _ := pageNumber(b, "ppt/slides/slide")
+		return x - y
+	})
+	return names, nil
+}
+
+// ooxmlRels maps relationship ids to part names; a relative target is
+// resolved against base (the folder of the part that owns the relationships).
+func ooxmlRels(data []byte, base string) (map[string]string, error) {
+	targets := map[string]string{}
+	err := xmlWalk(data, func(tok xml.Token) {
+		if t, ok := tok.(xml.StartElement); ok && t.Name.Local == "Relationship" {
+			target := xmlAttr(t, "Target")
+			if rest, abs := strings.CutPrefix(target, "/"); abs {
+				targets[xmlAttr(t, "Id")] = path.Clean(rest)
+			} else {
+				targets[xmlAttr(t, "Id")] = path.Join(base, target)
+			}
+		}
+	})
+	return targets, err
 }
 
 // xlsxPages returns one Markdown table per sheet, in workbook order.
@@ -112,13 +173,17 @@ func xlsxPages(raw []byte) ([]string, bool, error) {
 	if err != nil {
 		return nil, false, err
 	}
-	pages, text := []string{}, 0
+	pages, text, cells := []string{}, 0, 0
 	for _, sh := range sheets {
-		rows, err := xlsxRows(parts[sh.part], shared)
+		rows, err := xlsxRows(parts[sh.part], shared, &cells)
 		if err != nil {
 			return nil, false, err
 		}
-		page := "## " + sh.name + "\n\n" + markdownTable(rows)
+		table, err := markdownTable(rows)
+		if err != nil {
+			return nil, false, err
+		}
+		page := "## " + sh.name + "\n\n" + table
 		if text += len(page); text > documentMaxText {
 			return nil, false, errBlobTooLarge
 		}
@@ -171,18 +236,16 @@ type xlsxSheet struct{ name, part string }
 
 // xlsxSheets lists the sheets in workbook order with their part names.
 func xlsxSheets(parts map[string][]byte) ([]xlsxSheet, error) {
-	targets := map[string]string{}
-	if err := xmlWalk(parts["xl/_rels/workbook.xml.rels"], func(tok xml.Token) {
-		if t, ok := tok.(xml.StartElement); ok && t.Name.Local == "Relationship" {
-			targets[xmlAttr(t, "Id")] = path.Clean(path.Join("xl", strings.TrimPrefix(xmlAttr(t, "Target"), "/xl/")))
-		}
-	}); err != nil {
+	targets, err := ooxmlRels(parts["xl/_rels/workbook.xml.rels"], "xl")
+	if err != nil {
 		return nil, err
 	}
-	sheets := []xlsxSheet{}
+	sheets, seen := []xlsxSheet{}, map[string]bool{}
 	if err := xmlWalk(parts["xl/workbook.xml"], func(tok xml.Token) {
 		if t, ok := tok.(xml.StartElement); ok && t.Name.Local == "sheet" {
-			if part := targets[xmlAttr(t, "id")]; parts[part] != nil {
+			// a part listed twice is read once, so a workbook cannot repeat one large sheet
+			if part := targets[xmlRelID(t)]; parts[part] != nil && !seen[part] {
+				seen[part] = true
 				sheets = append(sheets, xlsxSheet{name: strings.Join(strings.Fields(xmlAttr(t, "name")), " "), part: part})
 			}
 		}
@@ -200,8 +263,13 @@ type xlsxCell struct {
 	inValue, any bool
 }
 
+// xlsxMaxCells bounds the cells (with the blanks before them) kept from one
+// file: a short row naming a far column would otherwise pad out a lot.
+const xlsxMaxCells = 1 << 20
+
 // xlsxRows reads a sheet's rows; a cell's column comes from its reference.
-func xlsxRows(data []byte, shared []string) ([][]string, error) {
+// cells counts the cells kept so far across the file's sheets.
+func xlsxRows(data []byte, shared []string, cells *int) ([][]string, error) {
 	rows := [][]string{}
 	var row []string
 	var cell xlsxCell
@@ -223,7 +291,9 @@ func xlsxRows(data []byte, shared []string) ([][]string, error) {
 			case "c":
 				row = xlsxPut(row, &cell, shared)
 			case "row":
-				rows = append(rows, row)
+				if *cells += len(row); *cells <= xlsxMaxCells {
+					rows = append(rows, row)
+				}
 			}
 		case xml.CharData:
 			if cell.inValue {
@@ -231,6 +301,9 @@ func xlsxRows(data []byte, shared []string) ([][]string, error) {
 			}
 		}
 	})
+	if err == nil && *cells > xlsxMaxCells {
+		err = errBlobTooLarge
+	}
 	return rows, err
 }
 

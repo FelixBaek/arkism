@@ -1,3 +1,5 @@
+//go:build linux
+
 package memory
 
 import (
@@ -115,5 +117,16 @@ func TestKnowledgeChunksAndHistoryRoutes(t *testing.T) {
 	}
 	if code, _ := docGet(t, f, "/v1/knowledge/sources/"+src.ID+"/history"+q, "not-a-token"); code == 200 {
 		t.Fatal("history readable without a token")
+	}
+	// An agent reads knowledge text only through retrieval (reviewed, bound sources).
+	code, page = docGet(t, f, "/v1/knowledge/sources/"+src.ID+"/chunks"+q, f.agent)
+	items, _ = page["items"].([]any)
+	for _, it := range items {
+		if m := it.(map[string]any); m["text"] != nil || m["text_withheld"] != true {
+			t.Fatalf("agent got chunk text: %v", m)
+		}
+	}
+	if code != 200 || len(items) == 0 || page["extract_document_id"] != nil {
+		t.Fatalf("agent chunk view: %d %v", code, page)
 	}
 }

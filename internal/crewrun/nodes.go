@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/FelixBaek/arkism/internal/flowresult"
 	"github.com/FelixBaek/arkism/internal/host/crew/keystore"
+	"github.com/FelixBaek/arkism/internal/procgroup"
 	"github.com/FelixBaek/arkism/internal/receiptchain"
 	"io"
 	"maps"
@@ -322,7 +323,7 @@ func runCmd(ctx context.Context, s cmdSpec) ([]byte, error) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, s.args[0], s.args[1:]...)
 	cmd.Dir, cmd.Env = s.dir, s.env
-	setProcessGroup(cmd)
+	procgroup.Set(cmd)
 	if s.stdin != nil {
 		cmd.Stdin = bytes.NewReader(s.stdin)
 	}

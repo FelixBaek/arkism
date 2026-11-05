@@ -155,7 +155,7 @@ var httpRoutePolicies = map[string]routePolicy{
 	"GET /v1/files/memories/documents/{id}/chunks":         {action: "read:memory_candidates", scope: routeQuery},
 	"GET /v1/files/memories/documents/{id}/history":        {action: "read:memory_candidates", scope: routeQuery},
 	"GET /v1/knowledge/sources/{id}/chunks":                {action: "read:knowledge_sources", scope: routeQuery},
-	"GET /v1/knowledge/sources/{id}/history":               {action: "read:knowledge_sources", scope: routeQuery},
+	"GET /v1/knowledge/sources/{id}/history":               {action: "read:knowledge_documents", scope: routeQuery},
 	"POST /v1/files/memories/jobs/{id}/run":                {action: "write:memory_candidates", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},
 	"POST /v1/knowledge/sources/{id}/extract_memories":     {action: "write:memory_candidates", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},
 	"POST /v1/code_graph/batch":                            {action: "write:code_graph", scope: routeJSON, limit: 24 << 20},

@@ -38,6 +38,9 @@ func htmlText(src string) (string, error) {
 		switch {
 		case htmlSkipped[name] && !closing:
 			next = htmlSkipTo(src, next, name)
+		case name == "private":
+			// Keep the marker as text so the privacy filter masks the span.
+			out.WriteString(map[bool]string{false: "<private>", true: "</private>"}[closing])
 		case name == "td" || name == "th":
 			if !closing {
 				out.WriteString(" | ")

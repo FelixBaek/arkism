@@ -18,12 +18,14 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/FelixBaek/arkism/internal/procgroup"
 )
 
-const (
-	converterTimeout   = 60 * time.Second
-	converterMaxOutput = 4 << 20
-)
+const converterMaxOutput = 4 << 20
+
+// converterTimeout is a variable so a test can shorten it.
+var converterTimeout = 60 * time.Second
 
 var errOutputLimit = errors.New("converter output limit")
 
@@ -38,8 +40,8 @@ func converterHandles(ext string) bool {
 	})
 }
 
-// convertDocument runs the converter on the file and returns its text.
-// shortcut: a converter that forks children is only stopped by WaitDelay; add a process group kill if converters need it.
+// convertDocument runs the converter on the file and returns its text. The
+// converter runs in its own process group, so a timeout also stops what it started.
 func convertDocument(ext string, raw []byte) (string, error) {
 	bin := os.Getenv("MEMORY_DOCUMENT_CONVERTER")
 	if !filepath.IsAbs(bin) {
@@ -58,6 +60,7 @@ func convertDocument(ext string, raw []byte) (string, error) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, input)
 	cmd.Dir, cmd.Env, cmd.WaitDelay = dir, []string{"HOME=" + dir, "TMPDIR=" + dir, "LANG=C.UTF-8"}, 5*time.Second
+	procgroup.Set(cmd)
 	out := &cappedBuffer{limit: converterMaxOutput}
 	cmd.Stdout, cmd.Stderr = out, io.Discard
 	err = cmd.Run()
