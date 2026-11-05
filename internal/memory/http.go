@@ -268,7 +268,7 @@ func errorResponse(e error) (string, int) {
 		code, status = "secret_detected", 422
 	case errors.Is(e, errPDFNoText):
 		code, status = "no_extractable_text", 422
-	case errors.Is(e, errModelNotConfigured), errors.Is(e, errWikiModelMissing):
+	case errors.Is(e, ErrModelNotConfigured):
 		code, status = "model_not_configured", 503
 	case errors.Is(e, ErrSemanticLaneDown):
 		code, status = "semantic_lane_unavailable", 503
@@ -278,8 +278,6 @@ func errorResponse(e error) (string, int) {
 		code, status = "access_denied", 403
 	case errors.Is(e, ErrNotFound):
 		code, status = "not_found", 404
-	case errors.Is(e, ErrModelNotConfigured):
-		code = "model_not_configured"
 	case errors.Is(e, ErrModelBudget):
 		return e.Error(), http.StatusTooManyRequests
 	case errors.Is(e, ErrDynamicsQueueFull):

@@ -75,7 +75,7 @@ func TestExtractPreviewFiltersPrivacyAndStoresNothing(t *testing.T) {
 		t.Fatalf("agent preview: %v", err)
 	}
 	f.svc.Wiki = nil
-	if _, err = f.svc.ExtractPreview(testCtx, f.human, ExtractPreviewInput{Scope: scopeA, Text: text}); !errors.Is(err, errModelNotConfigured) {
+	if _, err = f.svc.ExtractPreview(testCtx, f.human, ExtractPreviewInput{Scope: scopeA, Text: text}); !errors.Is(err, ErrModelNotConfigured) {
 		t.Fatalf("no model: %v", err)
 	}
 }

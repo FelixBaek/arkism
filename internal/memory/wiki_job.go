@@ -550,7 +550,7 @@ type wikiWrite struct {
 func (s *Service) buildWiki(ctx context.Context, token string, d Decision, claimed Record, job *WikiJob) (*wikiWrite, error) {
 	scope := claimed.Scope
 	if s.Wiki == nil {
-		return nil, errWikiModelMissing
+		return nil, ErrModelNotConfigured
 	}
 	gen := s.Wiki.Generator()
 	if !validGenerator(&gen) {

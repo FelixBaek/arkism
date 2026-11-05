@@ -42,8 +42,6 @@ const (
 	fileExtractQuoteRunes  = 110
 )
 
-var errModelNotConfigured = fmt.Errorf("model_not_configured: %w", ErrUnavailable)
-
 var (
 	extractSemanticKinds = []string{"fact", "preference", "correction", "lesson", "failure_recovery"}
 	extractEvidenceKinds = []string{"user_statement", "tool_observation", "agent_statement", "inference"}
@@ -220,7 +218,7 @@ func (s *Service) extractActor(ctx context.Context, token, action string, scope 
 		return d, err
 	}
 	if s.Wiki == nil {
-		return d, errModelNotConfigured
+		return d, ErrModelNotConfigured
 	}
 	return d, nil
 }

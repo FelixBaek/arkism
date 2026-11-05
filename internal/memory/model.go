@@ -24,7 +24,7 @@ var (
 	ErrSemanticLaneDown = errors.New("semantic_lane_unavailable")
 	ErrModelBudget      = errors.New("model_budget_exceeded")
 	// ErrModelNotConfigured: this server has no model for server-side answers (Service.Wiki is nil).
-	ErrModelNotConfigured = errors.New("model_not_configured")
+	ErrModelNotConfigured = fmt.Errorf("model_not_configured: %w", ErrUnavailable)
 	ErrCandidateQuota     = errors.New("candidate_daily_limit")
 )
 

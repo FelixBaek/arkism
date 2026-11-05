@@ -137,7 +137,5 @@ func (s *Service) coreHTTPGetV1SpacesExportDownload(w http.ResponseWriter, r *ht
 		respond(w, nil, err)
 		return
 	}
-	w.Header().Set(headerContentType, "application/x-ndjson")
-	w.Header().Set("Content-Disposition", `attachment; filename="space-bundle.jsonl"`)
-	_, _ = w.Write([]byte(bundle))
+	writeAttachment(w, "application/x-ndjson", "space-bundle.jsonl", []byte(bundle))
 }

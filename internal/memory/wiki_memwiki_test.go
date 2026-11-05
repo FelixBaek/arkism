@@ -132,10 +132,10 @@ func TestWikiFromMemoriesRespectsLocksAndInput(t *testing.T) {
 		t.Fatalf("queue with no matches yet: %v", err)
 	}
 	f.svc.Wiki = nil
-	if _, err = f.svc.BuildWikiFromMemories(testCtx, f.human, WikiMemoryBuildInput{Scope: scope, Query: "bleed", DryRun: true}); !errors.Is(err, errWikiModelMissing) {
+	if _, err = f.svc.BuildWikiFromMemories(testCtx, f.human, WikiMemoryBuildInput{Scope: scope, Query: "bleed", DryRun: true}); !errors.Is(err, ErrModelNotConfigured) {
 		t.Fatalf("no model: %v", err)
 	}
-	if code, status := errorResponse(errWikiModelMissing); code != "model_not_configured" || status != 503 {
+	if code, status := errorResponse(ErrModelNotConfigured); code != "model_not_configured" || status != 503 {
 		t.Fatalf("error code: %s %d", code, status)
 	}
 }

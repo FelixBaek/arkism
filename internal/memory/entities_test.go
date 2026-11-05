@@ -327,7 +327,7 @@ func TestApprovalSucceedsWhenEntityExtractionFails(t *testing.T) {
 	}
 }
 
-// The trigger in 0010 reads these exact stored shapes; keep the SQL and the codec in step.
+// The trigger in 0006 reads these exact stored shapes; keep the SQL and the codec in step.
 func TestEntitySQLMatchesStoredForms(t *testing.T) {
 	doc := map[string]any{}
 	b, err := storeMarshal(Record{ID: "m", Status: statusActive, ContentErased: true, PrivacyQuarantined: true})
@@ -367,7 +367,7 @@ func TestSupersedeMovesMentionsToReplacement(t *testing.T) {
 	if _, err := f.svc.ExtractEntities(testCtx, f.human, EntityExtractInput{Scope: scopeA}); err != nil {
 		t.Fatal(err)
 	}
-	// The fake repo has no trigger; drop the old edges the way 0010 does on leaving 'active'.
+	// The fake repo has no trigger; drop the old edges the way 0006 does on leaving 'active'.
 	repo.edges = slices.DeleteFunc(repo.edges, func(m EntityMention) bool { return m.MemoryID == old.ID })
 	repo.edges = slices.DeleteFunc(repo.edges, func(m EntityMention) bool { return m.MemoryID == next.ID })
 	if _, err := f.svc.Supersede(testCtx, f.human, old.ID, SupersedeInput{Scope: scopeA, ExpectedRevision: old.Revision, Reason: "edit", ReplacementMemoryID: next.ID, ReplacementExpectedRevision: next.Revision}); err != nil {

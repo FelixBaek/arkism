@@ -12,7 +12,6 @@ package memory
 import (
 	"context"
 	"errors"
-	"fmt"
 	"regexp"
 	"slices"
 	"strings"
@@ -25,9 +24,6 @@ const (
 	wikiMemoryMaxRecall = 40
 	wikiMemoryMaxQuery  = 512
 )
-
-// errWikiModelMissing: no wiki model is configured on this server.
-var errWikiModelMissing = fmt.Errorf("%w: model_not_configured", ErrUnavailable)
 
 var wikiCitationPattern = regexp.MustCompile(`\[mem:([0-9A-Za-z_.:-]{1,256})\]`)
 
@@ -101,7 +97,7 @@ func (s *Service) BuildWikiFromMemories(ctx context.Context, token string, in Wi
 		return WikiMemoryBuildResult{}, err
 	}
 	if s.Wiki == nil {
-		return WikiMemoryBuildResult{}, errWikiModelMissing
+		return WikiMemoryBuildResult{}, ErrModelNotConfigured
 	}
 	budget := in.MaxTotalTokens
 	if budget == 0 {

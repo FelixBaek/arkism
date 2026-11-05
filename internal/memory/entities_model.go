@@ -2,9 +2,7 @@ package memory
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 )
 
@@ -13,8 +11,6 @@ const (
 	entityModelMax       = 50
 	entityModelTextRunes = 2000
 )
-
-var errEntityModelMissing = fmt.Errorf("model not configured: %w", ErrUnavailable)
 
 const entityModelSystem = `You list the named entities in short notes. Entity types: person, project, repo, tool, product, file, service, place, organization, concept.
 Copy each name exactly as written in its note. Skip generic words, secrets, e-mail addresses and URLs.
@@ -34,7 +30,7 @@ type entityModelAnswer struct {
 // Names must occur in the memory text; the budget gate is the wiki's.
 func (s *Service) modelEntityFinds(ctx context.Context, token string, scope Scope, d Decision, memories []Record) ([]memoryEntities, int, error) {
 	if s.Wiki == nil {
-		return nil, 0, errEntityModelMissing
+		return nil, 0, ErrModelNotConfigured
 	}
 	job := &WikiJob{MaxTotalTokens: wikiDefaultJobTokens}
 	var out []memoryEntities
@@ -76,9 +72,7 @@ func entityModelPrompt(batch []Record) (string, []Record) {
 		if r.Sensitivity == "private" || r.Sensitivity == "restricted" || !safeTransfer(text) {
 			continue
 		}
-		if rs := []rune(text); len(rs) > entityModelTextRunes {
-			text = string(rs[:entityModelTextRunes])
-		}
+		text = runeCutString(text, entityModelTextRunes)
 		notes = append(notes, note{I: len(sent), Text: text})
 		sent = append(sent, r)
 	}
@@ -87,8 +81,7 @@ func entityModelPrompt(batch []Record) (string, []Record) {
 
 func parseEntityModelAnswer(answer string, sent []Record) []memoryEntities {
 	var parsed entityModelAnswer
-	begin, end := strings.Index(answer, "{"), strings.LastIndex(answer, "}")
-	if begin < 0 || end < begin || json.Unmarshal([]byte(answer[begin:end+1]), &parsed) != nil {
+	if !decodeModelJSON(answer, &parsed) {
 		return nil
 	}
 	var out []memoryEntities

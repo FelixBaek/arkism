@@ -4,7 +4,6 @@ import (
 	"context"
 	"sort"
 	"time"
-	"unicode/utf8"
 )
 
 // Recall lanes beyond exact/keyword/vector/relation, and the rerank stage.
@@ -182,10 +181,7 @@ func (s *Service) rerankRows(ctx context.Context, in SearchInput, d Decision, ro
 func rerankTexts(head []ScoredHit) ([]string, []int) {
 	texts, at := []string{}, []int{}
 	for i, r := range head {
-		text := r.Text
-		if utf8.RuneCountInString(text) > rerankTextMax {
-			text = string([]rune(text)[:rerankTextMax])
-		}
+		text := runeCutString(r.Text, rerankTextMax)
 		if r.Sensitivity != "restricted" && text != "" && safeTransfer(text) {
 			texts, at = append(texts, text), append(at, i)
 		}
