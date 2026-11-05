@@ -95,3 +95,16 @@ test("the rail folds to icons, says where you are, and stays folded after a relo
   await app.click(fold, 20);
   assert.equal(root.classList.contains("rail-collapsed"), false);
 });
+
+test("a 모아보기 page keeps ← 기억 but no title repeating its open tab", async () => {
+  await app.click(app.$('.nav-item[data-menu="memory"]'), 50);
+  await app.click(app.$$("#table .ov-chip").find((c) => /확인해 주세요/.test(app.dom.text(c))), 50);
+  await app.click(app.$("#mem-back"), 50); // ← 기억: the main list with its 모아보기 chips
+  const past = app.$$("button.chip").find((c) => app.dom.text(c) === "과거 시점");
+  assert.ok(past, "the 과거 시점 chip");
+  await app.click(past, 50);
+  assert.equal(app.dom.text(app.$("#controls .mem-seg .tab.active")), "과거 시점");
+  assert.equal(app.$("#title").textContent, "과거 시점", "screen readers keep the heading");
+  assert.ok(app.$("#title").classList.contains("sr-only"), "the title does not repeat the open tab");
+  assert.equal(app.$("#mem-back").hidden, false);
+});

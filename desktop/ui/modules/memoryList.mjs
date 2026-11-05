@@ -52,6 +52,9 @@ export function createMemoryList(deps) {
     return ["기억", `AI가 답할 때 참고하는 내용이에요.${rate === null ? "" : ` 전달한 기억 중 ${rate}%에서 기억이 답에 보였어요. 실제 활용 여부는 측정하지 않았어요.`}`, `${deps.catalogQuery.snapshot("memories").total ?? deps.memoryCount()}개`];
   }
 
+  // A 모아보기 panel draws its tabs (mem-seg) under the head, so the title would only repeat the open tab: app.js hides it.
+  const titleIsTab = () => Object.hasOwn(memPanels(), deps.memory.memTab);
+
   const catalogName = () => ({ candidate: "candidates", conflicted: "conflicted" }[deps.memory.memTab] || "memories");
   function memorySource() { deps.catalogQuery.ensure(catalogName()); return deps.catalogQuery.snapshot(catalogName()).items; }
 
@@ -422,6 +425,7 @@ export function createMemoryList(deps) {
     get restore() { return restore; },
     get memSelect() { return memSelect; },
     get memTitle() { return memTitle; },
+    get titleIsTab() { return titleIsTab; },
     get reloadMemories() { return reloadMemories; },
     get renderMemories() { return renderMemories; },
     get resolveConflict() { return resolveConflict; },

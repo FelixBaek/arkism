@@ -81,6 +81,11 @@ test("memTitle names each tab and counts from the catalog or local data", async 
   env.deps.memory.memTab = "provenance"; assert.equal(api.memTitle()[0], "승인 기록");
   env.deps.memory.memTab = "digests"; assert.deepEqual(api.memTitle()[2], "주제 3개");
   env.deps.memory.memTab = "traits"; assert.equal(api.memTitle()[0], "사용자 특성");
+  // a 모아보기 panel draws its own tab strip, so its title (the tab name) is hidden; pages without that strip keep theirs
+  assert.equal(api.titleIsTab(), true);
+  for (const tab of ["past", "relations", "entities"]) { env.deps.memory.memTab = tab; assert.equal(api.titleIsTab(), true, tab); }
+  for (const tab of ["active", "candidate", "provenance", "removed", "digests"]) { env.deps.memory.memTab = tab; assert.equal(api.titleIsTab(), false, tab); }
+  env.deps.memory.memTab = "traits";
   env.state.usageDone = false; env.snap("memories").total = undefined; env.snap("candidates").total = undefined;
   assert.equal(api.checkTotal().text, "3+"); // idle use counts still loading: at least the 3 known, not exactly 3 (#465)
   env.state.usageDone = true; env.deps.digests.mergeCount = () => false; // the merge proposal read failed (#465)

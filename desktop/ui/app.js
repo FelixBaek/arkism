@@ -713,7 +713,7 @@ export function startApp() {
   let shell = null; // shell.js: left menus and area tabs, set up once the screens exist
   const views = {
     todo: { title: () => todoTitle(), sub: () => todoSub(), count: () => todoCount() },
-    memories: { title: () => memoryList.memTitle()[0], sub: () => memoryList.memTitle()[1], count: () => memoryList.memTitle()[2] },
+    memories: { title: () => memoryList.memTitle()[0], sub: () => memoryList.memTitle()[1], count: () => memoryList.memTitle()[2], titleIsTab: () => memoryList.titleIsTab() },
     skills: { title: () => (state.skillPage?.kind === "improve" ? `${(catalogQuery.record(`skill:${state.skillPage.id}`) || state.data.skills.find((x) => x.id === state.skillPage.id))?.name || "스킬"} 개선하기` : { install: "GitHub에서 스킬 설치" }[state.skillPage?.kind] || "스킬"),
       sub: () => ({ improve: "개선안 만들기 → 기존 버전과 비교 → 검토·승인 → 실제 작업에 시험 적용 순서로 진행해요.",
         install: "저장소 주소를 넣으면 안에 있는 스킬을 보여 줘요. 받은 파일은 실행하지 않아요." }[state.skillPage?.kind] || "에이전트가 일할 때 꺼내 쓰는 작업 방법이에요.") },
@@ -1242,7 +1242,7 @@ export function startApp() {
     renderStatusCard();
     const v = views[state.view];
     $("#title").textContent = typeof v.title === "function" ? v.title() : v.title;
-    $("#title").classList.toggle("sr-only", $("#title").textContent === $("#area-tabs").dataset.active); // the tab already names it; screen readers keep the heading
+    $("#title").classList.toggle("sr-only", $("#title").textContent === $("#area-tabs").dataset.active || !!v.titleIsTab?.()); // the tab already names it; screen readers keep the heading
     $("#title-count").textContent = typeof v.count === "function" && !state.loading && !$("#title").classList.contains("sr-only") ? v.count() : ""; // a hidden title takes its count along; the tab badge shows it
     const bare = !state.loading && (typeof v.bare === "function" ? v.bare() : !!v.bare); // the rail and tabs already name the screen
     $(".main > .page-head").classList.toggle("bare", bare);
