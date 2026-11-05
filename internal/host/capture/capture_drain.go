@@ -15,7 +15,7 @@ import (
 // ---------------------------------------------------------------- extraction
 
 const extractPrompt = `You extract durable memory claims from a user's own messages to an AI coding agent.
-Return JSON only: {"claims":[{"subject":"...","text":"...","kind":"user|decision|procedural|lesson","quote":"...","reason":"...","confidence":0.0,"supersedes_id":null,"risk":"high|medium|low","risk_reasons":["..."],"dup_hint":""}]}
+Return JSON only: {"claims":[{"subject":"...","text":"...","kind":"user|decision|procedural|lesson|person|episodic","quote":"...","reason":"...","confidence":0.0,"supersedes_id":null,"risk":"high|medium|low","risk_reasons":["..."],"dup_hint":"","rule":"","decision_status":"","temporary":false,"entities":[],"relations":[]}]}
 Rules:
 - Keep ONLY what the USER explicitly stated that should still hold in future sessions: lasting preferences, standing
   instructions ("앞으로/항상/하지 마"), project goals, decisions, facts about their own systems, corrections of facts.
@@ -27,7 +27,8 @@ Rules:
   Keep supported standing project rules from mixed turns and omit only their temporary task requests.
   A commit-size constraint is a procedural rule, not a spending permission. Keep explicit lasting dislikes and
   ongoing system/account facts, including a stated monthly API grant; retain any tentative wording in text.
-- text: one standalone Korean sentence, faithful to the user's meaning, understandable without this chat. Add nothing.
+- text: one standalone sentence in MEMORY_LANGUAGE (given in the user message; auto = the language the user wrote it in, never
+  translated), faithful to the user's meaning, understandable without this chat. Add nothing.
   It must name what it is about (the product, project, screen or tool). A rule whose subject only this chat knows is not a claim.
   Retain the explicitly named project in every extracted rule; never turn a project-specific rule into a global one.
 - Record the content itself, not the user's action: not "the user asked for X" but what X is.
@@ -51,14 +52,27 @@ Rules:
   Never supply evidence_kind or observed_at: those are not model declarations.
 - quote: an exact contiguous substring copied from the user's message that supports the claim.
 - kind: user = personal preference/working style; decision = project/product decision or fact about their systems;
-  procedural = standing how-to rule; lesson = a mistake to avoid that the user pointed out.
+  procedural = standing how-to rule; lesson = a mistake to avoid that the user pointed out;
+  person = a lasting fact the user states about another person (their role, team, who they report to, how to work with them);
+  episodic = something that happened that the user will want to recall later (what happened, when, who was there), with
+  occurred_from/occurred_to set when the user gives or implies the day.
+- rule: "always" or "never" when the claim is a standing rule the user states with always/never wording ("항상", "앞으로 꼭",
+  "절대 하지 마", "never", "always"); else "". A person approves it before it becomes a rule agents must follow.
+- decision_status (kind decision only, else ""): proposed = being considered, not settled; confirmed = the user settled it;
+  dropped = the user abandoned it (keep what was dropped in text).
+- temporary: true when the user limits the statement to now ("이번만", "이번 주만", "당분간", "this time", "for now");
+  such a claim expires on its own. A one-off task request is still not a claim.
+- entities: the people, teams and projects the claim names, as {"name": as written, "type": person|organization|project|product|tool|place};
+  [] when none. relations: lasting links between two of those names the user states, as {"source", "relation", "target"},
+  relation a lowercase snake_case label such as has_role, member_of, reports_to, works_on; [] when none. A role name used as a
+  relation target is an entity too.
 - subject: 1-4 words naming the topic.
 - Skip anything EXISTING MEMORIES already say. If a claim corrects one of them, set supersedes_id to that memory id.
 ` + riskRules + `
 - Never output secrets, tokens, passwords or keys. If nothing qualifies, return {"claims":[]}.`
 
 // Enforced by the CLI (structured outputs); the prompts only explain the fields.
-const claimsSchema = `{"type": "object", "additionalProperties": false, "required": ["claims"], "properties": {"claims": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["subject", "text", "kind", "quote", "reason", "confidence", "supersedes_id", "risk", "risk_reasons", "dup_hint", "occurred_from", "occurred_to"], "properties": {"subject": {"type": "string"}, "text": {"type": "string"}, "kind": {"type": "string", "enum": ["user", "decision", "procedural", "lesson"]}, "quote": {"type": "string"}, "reason": {"type": "string"}, "confidence": {"type": "number"}, "supersedes_id": {"anyOf": [{"type": "string"}, {"type": "null"}]}, "occurred_from": {"type": "string", "maxLength": 64}, "occurred_to": {"type": "string", "maxLength": 64}, ` + riskProps + `, ` + claimContextSchema + `}}}}}`
+const claimsSchema = `{"type": "object", "additionalProperties": false, "required": ["claims"], "properties": {"claims": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["subject", "text", "kind", "quote", "reason", "confidence", "supersedes_id", "risk", "risk_reasons", "dup_hint", "occurred_from", "occurred_to", "rule", "decision_status", "temporary", "entities", "relations"], "properties": {"subject": {"type": "string"}, "text": {"type": "string"}, "kind": {"type": "string", "enum": ["user", "decision", "procedural", "lesson", "person", "episodic"]}, ` + labelProps + `, "quote": {"type": "string"}, "reason": {"type": "string"}, "confidence": {"type": "number"}, "supersedes_id": {"anyOf": [{"type": "string"}, {"type": "null"}]}, "occurred_from": {"type": "string", "maxLength": 64}, "occurred_to": {"type": "string", "maxLength": 64}, ` + riskProps + `, ` + claimContextSchema + `}}}}}`
 
 // riskRules and riskProps ask the extraction call for a risk call too (ADR-0022): it only orders the review
 // list, a person approves. Asked here so classifying costs no extra model call.
@@ -103,7 +117,9 @@ func riskFields(c map[string]any, basis, quote string) host.Obj {
 // The retained review evidence, shared with the optional context grounding check.
 func claimEvidenceSpan(quote string) string { return head(pyStrip(quote), 2000) }
 
-var claimKinds = map[any]bool{"user": true, "decision": true, "procedural": true, "lesson": true}
+// claimKinds maps the extractor's kind to the server's: a fact about another person is a semantic
+// memory carrying that person as an entity.
+var claimKinds = map[any]string{"user": "user", "decision": "decision", "procedural": "procedural", "lesson": "lesson", "person": "semantic", "episodic": "episodic"}
 
 // messageDay is the TODAY the extraction resolves "yesterday" and "next week" against: the date of
 // the last queued message, not the drain's own run (a queued job can be drained hours or days later).
@@ -176,8 +192,8 @@ func buildClaims(raw []any, userText string, related []map[string]any, users []a
 
 func buildClaim(c map[string]any, text, userText string, related []map[string]any, users []any) (map[string]any, error) {
 	quote := str(or(c["quote"], ""))
-	kind := c["kind"]
-	if !claimKinds[hashable(kind)] {
+	kind, known := claimKinds[hashable(c["kind"])]
+	if !known {
 		kind = "decision"
 	}
 	matches, err := claimQuoteMatches(quote, users)
@@ -203,6 +219,7 @@ func buildClaim(c map[string]any, text, userText string, related []map[string]an
 		claim["confidence"] = min(max(f, 0), 1)
 	}
 	claimEventDates(c, claim)
+	claimExtractionLabels(c, claim)
 	var sup map[string]any
 	for _, r := range related { // {r["id"]: r} keeps the last row per id
 		if id := hashable(c["supersedes_id"]); id != nil && eq(r["id"], id) {
@@ -537,7 +554,7 @@ func prepareCapture(job map[string]any, cued []any, sid, origin string, checkPol
 	if err != nil {
 		return nil, err
 	}
-	out, err := privateModel(redactPrivate(withGuidance(extractPrompt)), fmt.Sprintf("TODAY: %s\n\nEXISTING MEMORIES:\n%s\n\nUSER MESSAGES:\n%s", messageDay(cued), existing, userText),
+	out, err := privateModel(redactPrivate(withGuidance(extractPrompt)), fmt.Sprintf("TODAY: %s\nMEMORY_LANGUAGE: %s\n\nEXISTING MEMORIES:\n%s\n\nUSER MESSAGES:\n%s", messageDay(cued), memoryLanguage(), existing, userText),
 		capModel, 120*time.Second, claimsSchema, "claims", str(or(job["cwd"], "")))
 	if err != nil {
 		return nil, err

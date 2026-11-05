@@ -2377,7 +2377,7 @@
   },
   {
     "name": "propose_invalidation",
-    "description": "Report that a memory looks outdated or incorrect. Opens a question in the memory maintenance queue; nothing changes unless a person decides to forget the memory. Duplicate reports for the same memory come back as duplicate.",
+    "description": "Report that a memory looks outdated or incorrect, or that the files a procedure names are gone (path_missing; recall opens this one itself for procedures). Opens a question in the memory maintenance queue; nothing changes unless a person decides to forget the memory. Duplicate reports for the same memory come back as duplicate.",
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -2396,7 +2396,8 @@
           "type": "string",
           "enum": [
             "outdated",
-            "incorrect"
+            "incorrect",
+            "path_missing"
           ],
           "default": "outdated"
         }

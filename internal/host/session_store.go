@@ -50,21 +50,23 @@ type StableMemoryRef struct {
 }
 
 type StableBlock struct {
-	ProjectKey   string            `json:"project_key,omitempty"`
-	Renderer     string            `json:"renderer,omitempty"`
-	BlockHash    string            `json:"block_hash,omitempty"`
-	Fingerprint  string            `json:"fingerprint,omitempty"`
-	Refs         []StableMemoryRef `json:"refs,omitempty"`
-	WorkAgent    string            `json:"work_agent,omitempty"`
-	PinHash      string            `json:"pin_hash,omitempty"`
-	DigestHash   string            `json:"digest_hash,omitempty"`
-	SkillHash    string            `json:"skill_hash,omitempty"`
-	Full         string            `json:"full"`
-	Meta         string            `json:"meta"`
-	IDs          []string          `json:"ids"`
-	Memories     []MemoryDelivery  `json:"memories,omitempty"`
-	DeliveryForm string            `json:"delivery_form,omitempty"`
-	Scope        map[string]string `json:"scope,omitempty"`
+	ProjectKey  string            `json:"project_key,omitempty"`
+	Renderer    string            `json:"renderer,omitempty"`
+	BlockHash   string            `json:"block_hash,omitempty"`
+	Fingerprint string            `json:"fingerprint,omitempty"`
+	Refs        []StableMemoryRef `json:"refs,omitempty"`
+	WorkAgent   string            `json:"work_agent,omitempty"`
+	PinHash     string            `json:"pin_hash,omitempty"`
+	DigestHash  string            `json:"digest_hash,omitempty"`
+	SkillHash   string            `json:"skill_hash,omitempty"`
+	// DirectiveHash binds the directives section at the head of the block.
+	DirectiveHash string            `json:"directive_hash,omitempty"`
+	Full          string            `json:"full"`
+	Meta          string            `json:"meta"`
+	IDs           []string          `json:"ids"`
+	Memories      []MemoryDelivery  `json:"memories,omitempty"`
+	DeliveryForm  string            `json:"delivery_form,omitempty"`
+	Scope         map[string]string `json:"scope,omitempty"`
 }
 
 // MemoryDelivery records an observed hook output, never confirmed behavioral use.

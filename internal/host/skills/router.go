@@ -788,6 +788,11 @@ func searchExtras(res map[string]any) host.Obj {
 			out = append(out, host.KV{Key: k, Value: res[k]})
 		}
 	}
+	// The opt-in session-archive lane: raw past messages, kept apart from reviewed memories.
+	if sessions := asList(res["sessions"]); len(sessions) > 0 {
+		out = append(out, host.KV{Key: "sessions", Value: sessions},
+			host.KV{Key: "sessions_note", Value: "지난 세션 원문 일부입니다. 사람이 검토한 기억이 아니니 사건 확인용으로만 쓰세요."})
+	}
 	return out
 }
 
@@ -995,10 +1000,20 @@ func recallShape(found []any) ([]any, error) {
 		}
 		if missing := host.MissingPaths(cwd, memoryPathTexts(m)...); len(missing) > 0 {
 			kept = append(kept, host.KV{Key: "path_check", Value: "missing"}, host.KV{Key: "missing_paths", Value: missing})
+			proposePathMissing(m)
 		}
 		memories = append(memories, kept)
 	}
 	return memories, nil
+}
+
+// proposePathMissing asks a person whether a procedure whose files are gone should be forgotten.
+// Best effort: the server keeps one proposal per memory, so a repeat recall adds nothing.
+func proposePathMissing(m map[string]any) {
+	if str(m["kind"]) != "procedural" {
+		return
+	}
+	_, _ = proposeInvalidation(map[string]any{"memory_id": m["id"], "revision": m["revision"], "reason": "path_missing"})
 }
 
 // memoryPathTexts is what a recalled memory may point at a file with: its text, source_ref and source locators.

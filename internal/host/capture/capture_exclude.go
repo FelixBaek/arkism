@@ -74,15 +74,30 @@ func withGuidance(prompt string) string {
 	return prompt + userGuidance(note)
 }
 
-// spaceCaptureNote is the extraction mode and instructions a person set for this
-// space on the server, read once per process; "" when the server has none or cannot be asked.
-var spaceCaptureNote = sync.OnceValue(func() string {
+// spaceConfig is this space's effective settings on the server, read once per process;
+// empty when the server cannot be asked.
+var spaceConfig = sync.OnceValue(func() map[string]any {
 	scope := host.Scope()
 	res, err := host.Get("/v1/spaces/"+url.PathEscape(strField(scope["workspace_id"]))+"/"+url.PathEscape(strField(scope["project_id"]))+"/config/effective", 5*time.Second)
 	if err != nil {
-		return ""
+		return map[string]any{}
 	}
 	config, _ := res["config"].(map[string]any)
+	return config
+})
+
+// memoryLanguage is the language this space writes memories in: "auto" (the person's own) unless set.
+func memoryLanguage() string {
+	if l := strField(spaceConfig()["memory_language"]); l != "" {
+		return l
+	}
+	return "auto"
+}
+
+// spaceCaptureNote is the extraction mode and instructions a person set for this
+// space on the server; "" when the server has none or cannot be asked.
+func spaceCaptureNote() string {
+	config := spaceConfig()
 	note := strField(config["extraction_instructions"])
 	switch strField(config["extraction_mode"]) {
 	case "verbose":
@@ -91,7 +106,7 @@ var spaceCaptureNote = sync.OnceValue(func() string {
 		note = "Keep the user's own words: write each claim as an exact quote, never a paraphrase or summary.\n" + note
 	}
 	return note
-})
+}
 
 func captureSettingsPath() string {
 	return host.Env("ARKISM_CAPTURE_SETTINGS", filepath.Join(host.Home, ".config", "arkism", "capture.json"))

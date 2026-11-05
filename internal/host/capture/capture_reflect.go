@@ -28,7 +28,7 @@ A lesson is the reusable rule that would have prevented that mistake, or the rec
 Rules:
 - Only what this log shows, and only rules that will matter again in other tasks. Skip one-off facts, task progress,
   things that went fine the first time, and tool mechanics the tools already enforce (read before edit, exact paths).
-- text: one standalone Korean sentence: <when it applies>, <what to do> (<what went wrong>). Understandable without this log.
+- text: one standalone sentence in MEMORY_LANGUAGE (given in the user message; auto = the language of the session log): <when it applies>, <what to do> (<what went wrong>). Understandable without this log.
 - quote: an exact contiguous substring of the log that shows the mistake; prefer the user's own objection.
 - action, checked against EXISTING LESSONS (A = in use, C = waiting for more evidence):
   new = no existing lesson covers it;
@@ -744,7 +744,7 @@ func reflectSession(c chat, start int64, existing existingLessons, dryRun bool, 
 	}
 	lines, _ := privateData(r.lines).([]string)
 	kept := tail(lines, reflectMaxChars)
-	out, err := privateModel(redactPrivate(withGuidance(reflectPrompt)), "EXISTING LESSONS:\n"+redactPrivate(existing.known)+"\n\nSESSION LOG:\n"+strings.Join(kept, "\n"), reflectModel,
+	out, err := privateModel(redactPrivate(withGuidance(reflectPrompt)), "MEMORY_LANGUAGE: "+memoryLanguage()+"\n\nEXISTING LESSONS:\n"+redactPrivate(existing.known)+"\n\nSESSION LOG:\n"+strings.Join(kept, "\n"), reflectModel,
 		600*time.Second, reflectSchema, "claims")
 	if err != nil {
 		return 0, false, err

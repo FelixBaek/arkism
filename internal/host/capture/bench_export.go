@@ -49,7 +49,7 @@ func ExtractClaims(userText, today string, related []map[string]any, guidance, p
 	if existing == "" {
 		existing = "(none)"
 	}
-	out, err := privateModel(extractPrompt+userGuidance(guidance), fmt.Sprintf("TODAY: %s\n\nEXISTING MEMORIES:\n%s\n\nUSER MESSAGES:\n%s", today, existing, userText),
+	out, err := privateModel(extractPrompt+userGuidance(guidance), fmt.Sprintf("TODAY: %s\nMEMORY_LANGUAGE: auto\n\nEXISTING MEMORIES:\n%s\n\nUSER MESSAGES:\n%s", today, existing, userText),
 		capModel, 180*time.Second, claimsSchema, "claims")
 	if err != nil {
 		return BenchExtraction{}, err

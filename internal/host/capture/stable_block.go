@@ -157,8 +157,8 @@ func skillSectionFrom(get func(string, time.Duration) (map[string]any, error), s
 }
 
 // stableBlock reuses a currently verified SessionStart snapshot, else builds
-// pins + memory index + user digest + skills within sessionMaxChars.
-// Pins take up to 2/5, the digest 1/4 and skills 1/5; the index gets what is left. A pinned
+// directives + pins + memory index + user digest + skills within sessionMaxChars.
+// Directives take up to 1/5, pins up to 2/5, the digest 1/4 and skills 1/5; the index gets what is left. A pinned
 // memory is not repeated in the index; per-turn recall skips only the same revision.
 func stableBlock(sid, cwd string) (host.Part, *stableOutput, error) {
 	store := sessionStore()
@@ -199,10 +199,11 @@ func stableBlock(sid, cwd string) (host.Part, *stableOutput, error) {
 		metric(kv("event", "hook_error"), kv("hook", "SessionStart:pins"), kv("error", pyType(err)))
 		pins = indexBlock{}
 	}
+	directives := directiveSection(sessionMaxChars / 5)
 	digest := digestSection(sessionMaxChars / 4)
 	skills := skillSection(sid, sessionMaxChars/5)
 	limit := sessionMaxChars
-	for _, p := range []string{pins.Full, digest, skills.Full} {
+	for _, p := range []string{directives, pins.Full, digest, skills.Full} {
 		if p != "" {
 			limit -= host.Len(p) + 2 // the part and its separator
 		}
@@ -213,18 +214,18 @@ func stableBlock(sid, cwd string) (host.Part, *stableOutput, error) {
 	}
 	idx, err := sessionIndexSkipping(sid, cwd, limit, pinned)
 	if err != nil {
-		if pins.Full == "" && digest == "" && skills.Full == "" {
+		full := joinNonEmpty(directives, pins.Full, digest, skills.Full)
+		if full == "" {
 			return host.Part{}, nil, err
 		}
 		// Partial: inject it but do not fix it for the session, so the next start retries.
 		metric(kv("event", "hook_error"), kv("hook", "SessionStart"), kv("error", pyType(err)))
-		full := joinNonEmpty(pins.Full, digest, skills.Full)
-		part := host.Part{Full: full, Meta: joinNonEmpty(pins.Meta, digest, skills.Meta), Stable: true}
+		part := host.Part{Full: full, Meta: joinNonEmpty(directives, pins.Meta, digest, skills.Meta), Stable: true}
 		return part, &stableOutput{Part: part, Items: pins.Items, Memories: memoryDeliveries(pins.Items, "unknown")}, nil
 	}
 	b := host.StableBlock{
-		Full:  joinNonEmpty(pins.Full, idx.Full, digest, skills.Full),
-		Meta:  joinNonEmpty(pins.Meta, idx.Meta, digest, skills.Meta),
+		Full:  joinNonEmpty(directives, pins.Full, idx.Full, digest, skills.Full),
+		Meta:  joinNonEmpty(directives, pins.Meta, idx.Meta, digest, skills.Meta),
 		IDs:   append(append([]string{}, pins.IDs...), idx.IDs...),
 		Scope: stableScope(),
 	}
@@ -236,6 +237,7 @@ func stableBlock(sid, cwd string) (host.Part, *stableOutput, error) {
 	b.Renderer, b.WorkAgent, b.Refs = stableRenderer, pinAgent(), refs
 	b.ProjectKey = host.ProjectKey(cwd)
 	b.PinHash, b.DigestHash, b.SkillHash = stablePartHash(pins.Full, pins.Meta), stablePartHash(digest, digest), stablePartHash(skills.Full, skills.Meta)
+	b.DirectiveHash = stablePartHash(directives, directives)
 	b.BlockHash = stableBlockHash(b)
 	if err = validateStableSnapshot(&b, time.Now().Add(2*time.Second)); err != nil {
 		return host.Part{}, nil, err
@@ -315,7 +317,7 @@ func stableBlockHash(b host.StableBlock) string {
 		IDs      []string
 		Scope    map[string]string
 		Refs     []host.StableMemoryRef
-	}{[]string{b.Renderer, b.Full, b.Meta, b.WorkAgent, b.PinHash, b.DigestHash, b.SkillHash, b.ProjectKey}, b.IDs, b.Scope, refs})
+	}{[]string{b.Renderer, b.Full, b.Meta, b.WorkAgent, b.PinHash, b.DigestHash, b.SkillHash, b.ProjectKey, b.DirectiveHash}, b.IDs, b.Scope, refs})
 }
 func stableSHA(s string) bool {
 	raw, err := hex.DecodeString(s)
@@ -526,6 +528,16 @@ func validateStableReplay(sid string, b host.StableBlock) error {
 	}
 	if stablePartHash(skills.Full, skills.Meta) != b.SkillHash {
 		return runtimeErr("session_context_skills_changed")
+	}
+	if d, err = stableRemaining(deadline); err != nil {
+		return err
+	}
+	directives, err := directiveSectionFrom(capGet, sessionMaxChars/5, d)
+	if err != nil {
+		return err
+	}
+	if stablePartHash(directives, directives) != b.DirectiveHash {
+		return &stableSealMismatchError{} // a newly approved or removed rule: rebuild the block once
 	}
 	return validateStableSnapshot(&b, deadline)
 }

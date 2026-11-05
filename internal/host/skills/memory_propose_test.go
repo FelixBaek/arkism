@@ -2,6 +2,7 @@ package skills
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"regexp"
 	"strings"
 	"testing"
@@ -148,5 +149,47 @@ func TestProposeChangeSendsAChangeProposal(t *testing.T) {
 	}
 	if field(out, "note") != proposalNote {
 		t.Fatal(out)
+	}
+}
+
+// A recalled procedure that names a file no longer there is flagged and proposed for a person
+// to forget (reason path_missing); other kinds are only flagged.
+func TestRecallProposesForgettingProcedureWithMissingPath(t *testing.T) {
+	swapRouter(t)
+	t.Chdir(t.TempDir())
+	calls := fakeRequest(t, `{"id":"p1","status":"proposed"}`)
+	found := []any{
+		map[string]any{"id": "m1", "revision": json.Number("2"), "kind": "procedural", "text": "Run /nonexistent/arkism/deploy-old.sh before release."},
+		map[string]any{"id": "m2", "revision": json.Number("1"), "kind": "user", "text": "Keep notes in /nonexistent/arkism/notes.md"},
+	}
+	out, err := recallShape(found)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range out {
+		if v, _ := m.(host.Obj).Get("path_check"); v != "missing" {
+			t.Fatal("missing path not flagged", m)
+		}
+	}
+	if len(*calls) != 1 || (*calls)[0].path != "/v1/maintenance_proposals" {
+		t.Fatalf("calls = %+v", *calls)
+	}
+	p := (*calls)[0].payload.(map[string]any)["proposal"].(map[string]any)
+	if p["type"] != "invalidation" || p["reason"] != "path_missing" {
+		t.Fatalf("proposal = %+v", p)
+	}
+}
+
+// The session-archive lane reaches the agent beside the memories, labelled as unreviewed.
+func TestSearchExtrasKeepsSessionLaneApart(t *testing.T) {
+	out := searchExtras(map[string]any{"sessions": []any{map[string]any{"text": "결제 장애 때 롤백했다"}}})
+	if v, _ := out.Get("sessions"); len(asList(v)) != 1 {
+		t.Fatal(out)
+	}
+	if note, _ := out.Get("sessions_note"); !strings.Contains(str(note), "검토한 기억이 아니") {
+		t.Fatal(out)
+	}
+	if empty := searchExtras(map[string]any{}); len(empty) != 0 {
+		t.Fatal(empty)
 	}
 }

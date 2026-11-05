@@ -41,6 +41,8 @@ func stableFake(t *testing.T) *[]any {
 			}}, nil
 		case strings.HasPrefix(path, "/v1/digests/user/context?"):
 			return map[string]any{"text": "", "authority": "data_only_untrusted"}, nil
+		case strings.HasPrefix(path, "/v1/directives?"):
+			return map[string]any{"items": []any{}}, nil
 		}
 		t.Fatalf("unexpected get %s", path)
 		return nil, nil
@@ -241,5 +243,37 @@ func TestSkillListNeverDescribesADifferentPinnedVersion(t *testing.T) {
 	pin, _ := sessionStore().SkillPin("version-mismatch", "synthetic-skill")
 	if pin.VersionID != "approved-old-version" || strings.Contains(part.Full, "synthetic new version description") {
 		t.Fatal("latest metadata was paired with an immutable old version pin")
+	}
+}
+
+// A person's approved directives open the SessionStart block, ahead of the memory hints, and a
+// directive changed mid-session makes the next compact rebuild the block instead of replaying it.
+func TestSessionStartDirectivesFirstAndRebuiltOnChange(t *testing.T) {
+	t.Chdir(t.TempDir())
+	stableFake(t)
+	directives := []any{
+		map[string]any{"id": "d1", "title": "배포", "rule": "배포는 항상 금요일 전에 끝낸다.", "active": true, "applies_to": "both"},
+		map[string]any{"id": "d2", "title": "review only", "rule": "not for context", "active": true, "applies_to": "review"},
+		map[string]any{"id": "d3", "title": "proposed", "rule": "not active yet", "active": false, "applies_to": "context"},
+	}
+	inner := capGet
+	capGet = func(path string, d time.Duration) (map[string]any, error) {
+		if strings.HasPrefix(path, "/v1/directives?") {
+			return map[string]any{"items": directives}, nil
+		}
+		return inner(path, d)
+	}
+	start := hookText(t, `{"hook_event_name": "SessionStart", "session_id": "d1", "source": "startup"}`)
+	at, hint := strings.Index(start, directivesHeader), strings.Index(start, "보고는 짧게")
+	if at < 0 || hint < 0 || at > hint || !strings.Contains(start, "- 배포: 배포는 항상 금요일 전에 끝낸다.") ||
+		strings.Contains(start, "not for context") || strings.Contains(start, "not active yet") {
+		t.Fatal(start)
+	}
+	if again := hookText(t, `{"hook_event_name": "SessionStart", "session_id": "d1", "source": "compact"}`); again != start {
+		t.Fatal("unchanged directives did not replay", again)
+	}
+	directives = append(directives, map[string]any{"id": "d4", "title": "Never", "rule": "Never force-push main.", "active": true, "applies_to": "context"})
+	if rebuilt := hookText(t, `{"hook_event_name": "SessionStart", "session_id": "d1", "source": "compact"}`); !strings.Contains(rebuilt, "Never force-push main.") {
+		t.Fatal("changed directive was not rebuilt", rebuilt)
 	}
 }

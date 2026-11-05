@@ -120,8 +120,8 @@ func memoryRef(args map[string]any) (map[string]any, bool) {
 func proposeInvalidation(args map[string]any) (any, error) {
 	ref, ok := memoryRef(args)
 	reason := argStr(args, "reason", "outdated")
-	if !ok || reason != "outdated" && reason != "incorrect" {
-		return nil, errors.New("memory_id, revision and reason outdated|incorrect are required")
+	if !ok || !containsStr([]string{"outdated", "incorrect", "path_missing"}, reason) {
+		return nil, errors.New("memory_id, revision and reason outdated|incorrect|path_missing are required")
 	}
 	res, err := routerRequest("/v1/maintenance_proposals", map[string]any{"scope": host.Scope(),
 		"proposal": map[string]any{"type": "invalidation", "memory": ref, "reason": reason}})
