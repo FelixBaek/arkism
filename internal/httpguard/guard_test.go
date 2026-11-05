@@ -2,6 +2,7 @@ package httpguard
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -49,5 +50,21 @@ func TestLimiterBoundsAttempts(t *testing.T) {
 	refilled, exhausted := l.Allow(), l.Allow()
 	if !refilled || exhausted {
 		t.Fatal("refill unbounded")
+	}
+}
+
+func TestLoopbackClientRefusesRemoteAfterDNS(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer server.Close()
+	client := LoopbackClient(5 * time.Second)
+	resp, err := client.Get(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	// The check runs on the dialled address, so any name that resolves off this machine is refused the same way.
+	var blocked *BlockedAddress
+	if _, err := client.Get("http://192.0.2.1:9/"); !errors.As(err, &blocked) || blocked.Class != ClassRemote {
+		t.Fatalf("remote address: %v", err)
 	}
 }

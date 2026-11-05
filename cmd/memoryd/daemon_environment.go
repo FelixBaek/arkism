@@ -71,7 +71,7 @@ func validateSyntheticDatabase() error {
 	return nil
 }
 func validateSyntheticSecrets() error {
-	for _, key := range []string{"SKILL_LLM_API_KEY", "TYPESAFE_API_KEY", "LANGSMITH_API_KEY", "OTEL_EXPORTER_OTLP_ENDPOINT"} {
+	for _, key := range []string{"SKILL_LLM_API_KEY", "SKILL_LLM_PRESET", "SKILL_LLM_BASE_URL", "TYPESAFE_API_KEY", "LANGSMITH_API_KEY", "OTEL_EXPORTER_OTLP_ENDPOINT"} {
 		if os.Getenv(key) != "" {
 			return memory.ErrInvalid
 		}

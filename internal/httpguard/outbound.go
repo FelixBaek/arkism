@@ -13,6 +13,7 @@ const (
 	ClassReserved   = "reserved"   // link-local, multicast, unspecified, 0.0.0.0/8, never
 	ClassPrivate    = "private"    // loopback, private and CGNAT, only when allowed
 	ClassUnresolved = "unresolved" // the dialler did not get an IP address
+	ClassRemote     = "remote"     // not loopback, refused by LoopbackClient
 )
 
 // BlockedAddress is the refusal of one outbound destination address.
@@ -64,16 +65,33 @@ func PrivateIP(ip net.IP) bool {
 // DNS answer cannot move it), ignores proxy settings so the check sees the real destination, and never
 // follows a redirect. mapErr (optional) rewrites a refusal for the caller's own messages.
 func OutboundClient(allowPrivate bool, timeout time.Duration, mapErr func(error) error) *http.Client {
+	return guardedClient(timeout, func(ip net.IP) error {
+		err := CheckOutboundIP(ip, allowPrivate)
+		if err != nil && mapErr != nil {
+			return mapErr(err)
+		}
+		return err
+	})
+}
+
+// LoopbackClient is OutboundClient that connects to loopback addresses only, checked after DNS,
+// so a host name that resolves elsewhere cannot carry an unauthenticated call off this machine.
+func LoopbackClient(timeout time.Duration) *http.Client {
+	return guardedClient(timeout, func(ip net.IP) error {
+		if ip == nil || !ip.IsLoopback() {
+			return &BlockedAddress{IP: ip.String(), Class: ClassRemote}
+		}
+		return nil
+	})
+}
+
+func guardedClient(timeout time.Duration, check func(net.IP) error) *http.Client {
 	d := &net.Dialer{Timeout: 10 * time.Second, Control: func(_, address string, _ syscall.RawConn) error {
 		h, _, err := net.SplitHostPort(address)
 		if err != nil {
 			h = ""
 		}
-		err = CheckOutboundIP(net.ParseIP(h), allowPrivate)
-		if err != nil && mapErr != nil {
-			return mapErr(err)
-		}
-		return err
+		return check(net.ParseIP(h))
 	}}
 	tr := &http.Transport{Proxy: nil, DialContext: d.DialContext, TLSHandshakeTimeout: 10 * time.Second, MaxIdleConns: 4, IdleConnTimeout: 30 * time.Second}
 	return &http.Client{Timeout: timeout, Transport: tr, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}

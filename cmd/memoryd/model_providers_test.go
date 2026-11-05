@@ -18,7 +18,7 @@ import (
 
 // TestSidecarHelperProcess is the fake model server the sidecar test starts.
 func TestSidecarHelperProcess(t *testing.T) {
-	addr := os.Getenv("ARKISM_TEST_SIDECAR_ADDR")
+	addr := os.Getenv("SIDECAR_TEST_ADDR")
 	if addr == "" {
 		t.Skip("helper process only")
 	}
@@ -43,8 +43,8 @@ func TestModelSidecarStartsWaitsAndStops(t *testing.T) {
 	argv, _ := json.Marshal([]string{os.Args[0], "-test.run=^TestSidecarHelperProcess$"})
 	t.Setenv("ARKISM_MODEL_SIDECAR", string(argv))
 	t.Setenv("ARKISM_MODEL_SIDECAR_READY_URL", "http://"+addr+"/health")
-	t.Setenv("ARKISM_MODEL_SIDECAR_ENV", "ARKISM_TEST_SIDECAR_ADDR")
-	t.Setenv("ARKISM_TEST_SIDECAR_ADDR", addr)
+	t.Setenv("ARKISM_MODEL_SIDECAR_ENV", "SIDECAR_TEST_ADDR")
+	t.Setenv("SIDECAR_TEST_ADDR", addr)
 	t.Setenv("MEMORY_DATABASE_URL", "postgres://secret")
 	t.Setenv("ARKISM_MODEL_SIDECAR_WAIT", "30s")
 	stop, err := startModelSidecar(context.Background())
@@ -71,6 +71,7 @@ func TestModelSidecarStartsWaitsAndStops(t *testing.T) {
 }
 
 func TestModelSidecarRefusesBadSettings(t *testing.T) {
+	t.Setenv("ARKISM_MODEL_SIDECAR_ENV", "")
 	t.Setenv("ARKISM_MODEL_SIDECAR", "")
 	if stop, err := startModelSidecar(context.Background()); err != nil || stop == nil {
 		t.Fatal("unset is off", err)
@@ -82,6 +83,16 @@ func TestModelSidecarRefusesBadSettings(t *testing.T) {
 			t.Fatal(c, err)
 		}
 	}
+	// Names that could carry a server secret are refused, whatever the case.
+	for _, name := range []string{"SKILL_LLM_API_KEY", "MEMORY_DATABASE_URL", "HF_TOKEN", "my_secret", "PGPASSWORD"} {
+		t.Setenv("ARKISM_MODEL_SIDECAR", `["x"]`)
+		t.Setenv("ARKISM_MODEL_SIDECAR_READY_URL", "http://127.0.0.1:1/")
+		t.Setenv("ARKISM_MODEL_SIDECAR_ENV", "CUDA_VISIBLE_DEVICES, "+name)
+		if _, err := startModelSidecar(context.Background()); !errors.Is(err, memory.ErrInvalid) {
+			t.Fatal(name, err)
+		}
+	}
+	t.Setenv("ARKISM_MODEL_SIDECAR_ENV", "")
 	// A command that exits at once is reported, not waited on.
 	t.Setenv("ARKISM_MODEL_SIDECAR", `["`+os.Args[0]+`","-test.run=^$"]`)
 	t.Setenv("ARKISM_MODEL_SIDECAR_READY_URL", "http://"+freeLoopbackAddr(t)+"/")

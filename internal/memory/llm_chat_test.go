@@ -156,8 +156,8 @@ func TestApplyLLMPreset(t *testing.T) {
 	if err != nil || resp.Endpoint != server.URL+"/v1/responses" {
 		t.Fatalf("base url: %+v %v", resp, err)
 	}
-	if c, _ := ApplyLLMPreset(LLMConfig{Model: "q"}, "ollama", "", ""); c.Endpoint != "http://127.0.0.1:11434/v1/chat/completions" || c.Model != "q" {
-		t.Fatalf("ollama preset: %+v", c)
+	if c, _ := ApplyLLMPreset(LLMConfig{Model: "q"}, "runner", "", ""); c.Endpoint != "http://127.0.0.1:11434/v1/chat/completions" || c.Model != "q" {
+		t.Fatalf("runner preset: %+v", c)
 	}
 	if c, _ := ApplyLLMPreset(LLMConfig{Protocol: llmProtocolMessages}, "proxy", "", ""); c.Endpoint != "http://127.0.0.1:4000/v1/messages" {
 		t.Fatalf("proxy preset: %+v", c)
@@ -170,7 +170,8 @@ func TestApplyLLMPreset(t *testing.T) {
 	for _, bad := range []struct {
 		c            LLMConfig
 		preset, base string
-	}{{LLMConfig{}, "other", ""}, {LLMConfig{Endpoint: server.URL}, "", server.URL}, {LLMConfig{Protocol: "other"}, "", ""}, {LLMConfig{}, "", "http://models.example.com/v1"}} {
+	}{{LLMConfig{}, "other", ""}, {LLMConfig{Endpoint: server.URL}, "", server.URL}, {LLMConfig{Protocol: "other"}, "", ""}, {LLMConfig{}, "", "http://models.example.com/v1"},
+		{LLMConfig{APIKey: "tok"}, "gateway", "https://models.example.com/v1"}} {
 		if _, err := ApplyLLMPreset(bad.c, bad.preset, bad.base, ""); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("%+v: %v", bad, err)
 		}

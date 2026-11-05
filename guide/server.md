@@ -219,7 +219,7 @@ wiki. What a person approves and how is described in
    | `SKILL_LLM_ENDPOINT_URL`, `SKILL_LLM_API_KEY`, `SKILL_LLM_MODEL` | Chat model the server calls |
    | `SKILL_LLM_PROTOCOL` | Empty for the common chat-completions protocol, `messages` for the messages protocol, `responses` for the responses protocol (see [Model providers](#model-providers)). Any other value stops startup |
    | `SKILL_LLM_BASE_URL` | Base URL instead of `SKILL_LLM_ENDPOINT_URL` (for example `https://api.example.com/v1`); the protocol's path (`/chat/completions`, `/messages`, `/responses`) is added. Setting both stops startup |
-   | `SKILL_LLM_PRESET` | `local`, `ollama`, `proxy` or `gateway`: a known kind of server, so no endpoint is needed (see [Server model presets](#server-model-presets)). Unset by default |
+   | `SKILL_LLM_PRESET` | `local`, `runner`, `proxy` or `gateway`: a known kind of server, so no endpoint is needed (see [Server model presets](#server-model-presets)). Unset by default |
    | `ARKISM_WIKI` | `on` turns the server model on for the features above. Off by default |
    | `ARKISM_LLM_TRACE_CONTENT` | `1` keeps redacted prompt text in model call traces. Off by default |
 
@@ -376,12 +376,14 @@ address; `SKILL_LLM_PROTOCOL` still picks the protocol and its path.
 | Preset | Address | Key | Default model |
 |---|---|---|---|
 | `local` | `http://127.0.0.1:8080/v1` (a single-model inference server on this machine) | none | `local` |
-| `ollama` | `http://127.0.0.1:11434/v1` (the local model runner) | none | set `SKILL_LLM_MODEL` |
+| `runner` | `http://127.0.0.1:11434/v1` (a local runner that serves many models) | none | set `SKILL_LLM_MODEL` |
 | `proxy` | `http://127.0.0.1:4000/v1` (a chat-completions proxy gateway in front of many hosted models) | `SKILL_LLM_API_KEY` if the proxy wants one | set `SKILL_LLM_MODEL` |
 | `gateway` | this host's model gateway, `http://` + `ARKISM_GATEWAY_LISTEN` (default `127.0.0.1:8099`) + `/v1` | the gateway's local token, sent as `x-arkism-gateway-token`: `SKILL_LLM_API_KEY`, else `ARKISM_GATEWAY_TOKEN`, else the token file (`ARKISM_GATEWAY_TOKEN_FILE`) | `group/auto` |
 
-A preset without a key is accepted only on a loopback address, so a key-free
-call never leaves the machine. Hosted APIs that speak one of the three
+A preset without a key is accepted only on a loopback address, and the
+connection is checked again after name resolution, so a key-free call never
+leaves the machine even if a name resolves elsewhere. The `gateway` preset
+likewise refuses a base URL that is not loopback: its token is this host's own. Hosted APIs that speak one of the three
 protocols need no preset: set `SKILL_LLM_BASE_URL` (or the full
 `SKILL_LLM_ENDPOINT_URL`), `SKILL_LLM_API_KEY` and `SKILL_LLM_MODEL`.
 
@@ -407,7 +409,7 @@ yourself or as a sidecar memoryd manages:
 | `ARKISM_MODEL_SIDECAR` | JSON argv array of the server to start, for example `["/opt/models/server","--model","/opt/models/embed.gguf","--embedding","--port","8089"]`. Started without a shell |
 | `ARKISM_MODEL_SIDECAR_READY_URL` | Loopback `http` URL that answers 200 once the server is ready (for example `http://127.0.0.1:8089/health`). Required with the sidecar |
 | `ARKISM_MODEL_SIDECAR_WAIT` | How long startup waits for it (Go duration, default `2m`, at most `30m`) |
-| `ARKISM_MODEL_SIDECAR_ENV` | Comma-separated names of extra environment variables the sidecar may see. It otherwise gets only `PATH`, `HOME`, `TMPDIR`, `LANG` (and the Windows equivalents), never the server's secrets |
+| `ARKISM_MODEL_SIDECAR_ENV` | Comma-separated names of extra environment variables the sidecar may see. It otherwise gets only `PATH`, `HOME`, `TMPDIR`, `LANG` (and the Windows equivalents), never the server's secrets: a name starting with `ARKISM_`, `MEMORY_`, `SKILL_` or `TEI_`, or containing `KEY`, `TOKEN`, `SECRET`, `PASS`, `AUTH`, `DATABASE` or the like, stops startup |
 
 memoryd starts the command only when the ready URL does not answer yet (so the
 API server and the worker can share one environment file), stops it on exit,

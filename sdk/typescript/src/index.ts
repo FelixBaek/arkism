@@ -646,6 +646,8 @@ export interface RetryOptions {
   baseDelayMs?: number;
   /** Longest single wait, a longer Retry-After included (default 30000 ms). */
   maxDelayMs?: number;
+  /** Also retry POST and PATCH answers that carry no Retry-After. Off by default: such a 503 may come after the server already did part of the work. */
+  retryUnsafe?: boolean;
   /** Test seam: how to wait. */
   sleep?: (ms: number) => Promise<void>;
 }
@@ -725,7 +727,9 @@ export class ArkismClient {
     const maxDelay = Math.max(0, retry.maxDelayMs ?? 30000);
     const sleep = retry.sleep ?? ((ms: number) => new Promise<void>((done) => setTimeout(done, ms)));
     let res = await (this.opts.fetch ?? fetch)(url, init);
-    for (let attempt = 0; attempt < retries && (res.status === 429 || res.status === 503); attempt++) {
+    // GET, PUT, DELETE and the like repeat safely; POST and PATCH only when Retry-After says the request was turned away.
+    const safe = retry.retryUnsafe || !["POST", "PATCH"].includes(method.toUpperCase());
+    for (let attempt = 0; attempt < retries && (res.status === 429 || res.status === 503) && (safe || res.headers.has("Retry-After")); attempt++) {
       const wait = retryAfterMs(res.headers.get("Retry-After")) ?? (retry.baseDelayMs ?? 500) * 2 ** attempt;
       await res.body?.cancel();
       await sleep(Math.min(wait, maxDelay));

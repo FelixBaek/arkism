@@ -17,7 +17,9 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -50,6 +52,10 @@ func startModelSidecar(ctx context.Context) (func(), error) {
 	if json.Unmarshal([]byte(raw), &argv) != nil || len(argv) == 0 || argv[0] == "" {
 		return nil, fmt.Errorf(`ARKISM_MODEL_SIDECAR must be a JSON array such as ["/opt/model/server","--port","8089"]: %w`, memory.ErrInvalid)
 	}
+	extra, err := sidecarExtraEnv(os.Getenv("ARKISM_MODEL_SIDECAR_ENV"))
+	if err != nil {
+		return nil, err
+	}
 	ready := os.Getenv("ARKISM_MODEL_SIDECAR_READY_URL")
 	if u, err := url.Parse(ready); err != nil || u.Scheme != "http" || !memory.LoopbackHost(u.Hostname()) {
 		return nil, fmt.Errorf("ARKISM_MODEL_SIDECAR_READY_URL must be a loopback http URL: %w", memory.ErrInvalid)
@@ -66,16 +72,35 @@ func startModelSidecar(ctx context.Context) (func(), error) {
 	if sidecarReady(ctx, ready) {
 		return func() {}, nil
 	}
-	return launchSidecar(ctx, argv, ready, wait)
+	return launchSidecar(ctx, argv, extra, ready, wait)
 }
 
-func launchSidecar(ctx context.Context, argv []string, ready string, wait time.Duration) (func(), error) {
+// sidecarSecretName matches names the server keeps to itself: its own settings
+// and anything shaped like a credential or a database address.
+var sidecarSecretName = regexp.MustCompile(`(?i)^(ARKISM|MEMORY|SKILL|TEI)_|KEY|TOKEN|SECRET|PASS|CREDENTIAL|AUTH|DSN|DATABASE|COOKIE|SESSION`)
+
+// sidecarExtraEnv reads ARKISM_MODEL_SIDECAR_ENV and refuses any name that could hand the sidecar a server secret.
+func sidecarExtraEnv(raw string) ([]string, error) {
+	var names []string
+	for _, name := range strings.Split(raw, ",") {
+		if name = strings.TrimSpace(name); name == "" {
+			continue
+		}
+		if sidecarSecretName.MatchString(name) {
+			return nil, fmt.Errorf("ARKISM_MODEL_SIDECAR_ENV may not pass %s to the sidecar: %w", name, memory.ErrInvalid)
+		}
+		names = append(names, name)
+	}
+	return names, nil
+}
+
+func launchSidecar(ctx context.Context, argv, extra []string, ready string, wait time.Duration) (func(), error) {
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
-	names := append(sidecarEnv, strings.Split(os.Getenv("ARKISM_MODEL_SIDECAR_ENV"), ",")...)
-	for _, name := range names {
-		if v, ok := os.LookupEnv(strings.TrimSpace(name)); ok && name != "" {
-			cmd.Env = append(cmd.Env, strings.TrimSpace(name)+"="+v)
+	cmd.Env = []string{} // never nil: a nil Env would inherit everything
+	for _, name := range append(slices.Clone(sidecarEnv), extra...) {
+		if v, ok := os.LookupEnv(name); ok {
+			cmd.Env = append(cmd.Env, name+"="+v)
 		}
 	}
 	if err := cmd.Start(); err != nil {

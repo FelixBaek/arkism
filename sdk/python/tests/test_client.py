@@ -71,7 +71,7 @@ class ClientTest(unittest.TestCase):
         waits = []
         client = ArkismClient(server.url, retries=3, base_delay=0.01, sleep=waits.append)
         with self.assertRaises(ArkismError) as caught:
-            client.request("POST", "/v1/search", None, {})
+            client.request("GET", "/v1/ping")
         self.assertEqual((caught.exception.status, caught.exception.body), (503, {"code": "busy"}))
         self.assertEqual(waits, [0.01, 0.02, 0.04])
         self.assertEqual(len(server.calls), 4)
@@ -83,6 +83,18 @@ class ClientTest(unittest.TestCase):
             with self.assertRaises(ArkismError):
                 client.request("GET", "/v1/ping")
             self.assertEqual(len(server.calls), 1)
+
+    def test_post_is_retried_only_when_turned_away_or_opted_in(self):
+        server = self.serve([(503, {"code": "dependency_unavailable"}, None)])
+        with self.assertRaises(ArkismError):
+            ArkismClient(server.url, sleep=lambda s: self.fail("slept")).request("POST", "/v1/capture", None, {})
+        self.assertEqual(len(server.calls), 1)
+        server = self.serve([(429, None, {"Retry-After": "1"}), (200, {"ok": True}, None)])
+        self.assertEqual(ArkismClient(server.url, sleep=lambda s: None).request("POST", "/v1/capture", None, {}), {"ok": True})
+        self.assertEqual(len(server.calls), 2)
+        server = self.serve([(503, None, None), (200, {"ok": True}, None)])
+        self.assertEqual(ArkismClient(server.url, retry_unsafe=True, sleep=lambda s: None).request("POST", "/v1/search", None, {}), {"ok": True})
+        self.assertEqual(len(server.calls), 2)
 
     def test_retry_after_reads_seconds_and_dates(self):
         now = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)

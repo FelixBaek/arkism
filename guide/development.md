@@ -245,7 +245,11 @@ Both clients retry `429` and `503` answers: up to 2 extra attempts by default,
 waiting what `Retry-After` asks (seconds or an HTTP date) or a doubling delay
 from 500 ms, never longer than 30 s at once. Set it per client: TypeScript
 `retry: {retries, baseDelayMs, maxDelayMs}`, Python `retries=`, `base_delay=`,
-`max_delay=` (seconds); `retries` 0 turns it off. Besides the per-route methods
+`max_delay=` (seconds); `retries` 0 turns it off. `POST` and `PATCH` are
+retried only when the answer carries `Retry-After` (the request was turned
+away before any work); a bare `503` may follow partial work, so those surface
+unless the caller sets TypeScript `retryUnsafe: true` / Python
+`retry_unsafe=True`. Besides the per-route methods
 they have helpers: `recall(scope, query, options)` (`POST /v1/search`),
 `reflect(scope, query, options)` (`POST /v1/reflect`), `remember(scope, text,
 options)` (one `explicit_remember` capture; it stays a candidate until a person

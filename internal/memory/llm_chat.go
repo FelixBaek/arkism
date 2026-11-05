@@ -20,6 +20,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/FelixBaek/arkism/internal/httpguard"
 )
 
 const (
@@ -70,8 +72,12 @@ func (c LLMConfig) usable(req chatRequest) bool {
 	if c.APIKey != "" || req.keyless {
 		return true
 	}
-	parsed, err := url.Parse(c.Endpoint)
-	return c.Keyless && err == nil && isLoopbackHost(parsed.Hostname())
+	return c.Keyless && loopbackURL(c.Endpoint)
+}
+
+func loopbackURL(raw string) bool {
+	parsed, err := url.Parse(raw)
+	return err == nil && isLoopbackHost(parsed.Hostname())
 }
 
 func (c LLMConfig) chat(ctx context.Context, req chatRequest) (chatReply, error) {
@@ -82,7 +88,12 @@ func (c LLMConfig) chat(ctx context.Context, req chatRequest) (chatReply, error)
 	if err != nil || len(encoded) > defaultRequestMax {
 		return chatReply{}, ErrInvalid
 	}
-	body, status, err := postBody(ctx, providerClient(nil, req.timeout), c.Endpoint, c.header(), encoded, defaultResponseMax)
+	client := providerClient(nil, req.timeout)
+	if c.APIKey == "" && !req.keyless {
+		// A keyless preset: the connection itself, after DNS, must stay on this machine.
+		client.Transport = httpguard.LoopbackClient(req.timeout).Transport
+	}
+	body, status, err := postBody(ctx, client, c.Endpoint, c.header(), encoded, defaultResponseMax)
 	if err != nil {
 		return chatReply{}, err
 	}
@@ -237,7 +248,7 @@ func (req chatRequest) checkUsage(u ProviderUsage) (ProviderUsage, bool) {
 // LLM presets: a named kind of server whose address and auth are known, so an
 // operator sets one name (SKILL_LLM_PRESET) instead of a URL and key shape.
 // "local" is a single-model inference server on this machine (the common
-// style on port 8080), "ollama" the local model runner on 11434, "proxy" a
+// style on port 8080), "runner" a local multi-model runner on 11434, "proxy" a
 // chat-completions proxy gateway on 4000 (it routes to many hosted models), and
 // "gateway" this host's own model gateway, which reaches the subscription
 // accounts signed in on this host (the caller passes its address and token).
@@ -247,7 +258,7 @@ var llmPresets = map[string]struct {
 	model     string
 }{
 	"local":   {base: "http://127.0.0.1:8080/v1", model: "local"},
-	"ollama":  {base: "http://127.0.0.1:11434/v1"},
+	"runner":  {base: "http://127.0.0.1:11434/v1"},
 	"proxy":   {base: "http://127.0.0.1:4000/v1"},
 	"gateway": {keyHeader: "x-arkism-gateway-token", model: "group/auto"},
 }
@@ -267,7 +278,7 @@ func ApplyLLMPreset(c LLMConfig, preset, base, gatewayBase string) (LLMConfig, e
 	if preset != "" {
 		p, ok := llmPresets[preset]
 		if !ok {
-			return c, fmt.Errorf("SKILL_LLM_PRESET %q is not local, ollama, proxy or gateway: %w", preset, ErrInvalid)
+			return c, fmt.Errorf("SKILL_LLM_PRESET %q is not local, runner, proxy or gateway: %w", preset, ErrInvalid)
 		}
 		if base == "" {
 			base = p.base
@@ -279,6 +290,10 @@ func ApplyLLMPreset(c LLMConfig, preset, base, gatewayBase string) (LLMConfig, e
 		if c.Model == "" {
 			c.Model = p.model
 		}
+	}
+	if preset == "gateway" && !loopbackURL(base) {
+		// The gateway token is this host's own secret: it never goes to another machine.
+		return c, fmt.Errorf("SKILL_LLM_PRESET=gateway needs a loopback base URL: %w", ErrInvalid)
 	}
 	if base != "" {
 		if c.Endpoint != "" {

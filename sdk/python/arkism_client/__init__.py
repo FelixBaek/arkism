@@ -46,9 +46,12 @@ class BaseClient:
 
     429 and 503 answers are retried up to retries extra times (0 turns it off),
     waiting what Retry-After asks or base_delay doubled per attempt, never longer
-    than max_delay seconds at once."""
+    than max_delay seconds at once. POST and PATCH are retried only when the answer
+    carries Retry-After (the request was turned away), unless retry_unsafe is set:
+    a bare 503 may come after the server already did part of the work."""
 
-    def __init__(self, base_url, token=None, timeout=30, headers=None, retries=2, base_delay=0.5, max_delay=30.0, sleep=time.sleep):
+    def __init__(self, base_url, token=None, timeout=30, headers=None, retries=2, base_delay=0.5, max_delay=30.0, sleep=time.sleep,
+                 retry_unsafe=False):
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.timeout = timeout
@@ -57,6 +60,7 @@ class BaseClient:
         self.base_delay = base_delay
         self.max_delay = max_delay
         self._sleep = sleep
+        self.retry_unsafe = retry_unsafe
 
     def request(self, method, path, query=None, body=None, headers=None, form=None):
         """Any route, including ones newer than this client. form is a list of
@@ -82,9 +86,11 @@ class BaseClient:
             except urllib.error.HTTPError as err:
                 raw = err.read()
                 err.close()
-                if err.code not in RETRY_STATUSES or attempt == self.retries:
+                after = err.headers.get("Retry-After")
+                safe = self.retry_unsafe or method.upper() not in ("POST", "PATCH") or after is not None
+                if err.code not in RETRY_STATUSES or attempt == self.retries or not safe:
                     raise ArkismError(err.code, _decode(raw)) from None
-                wait = retry_after_seconds(err.headers.get("Retry-After"))
+                wait = retry_after_seconds(after)
                 self._sleep(min(self.max_delay, wait if wait is not None else self.base_delay * 2 ** attempt))
 
     def recall(self, scope, query, **options):

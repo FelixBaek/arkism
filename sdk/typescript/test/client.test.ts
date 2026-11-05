@@ -31,7 +31,7 @@ test("without Retry-After the wait doubles; after the last retry the error surfa
   const { calls, fetchFn } = fake([{ status: 503, body: { code: "busy" } }]);
   const waits: number[] = [];
   const client = new ArkismClient({ baseUrl: "http://x", fetch: fetchFn, retry: { retries: 3, baseDelayMs: 10, sleep: async (ms) => { waits.push(ms); } } });
-  await assert.rejects(client.request("POST", "/v1/search", undefined, {}), (e: unknown) => e instanceof ArkismError && e.status === 503 && (e.body as { code: string }).code === "busy");
+  await assert.rejects(client.request("GET", "/v1/ping"), (e: unknown) => e instanceof ArkismError && e.status === 503 && (e.body as { code: string }).code === "busy");
   assert.equal(calls.length, 4);
   assert.deepEqual(waits, [10, 20, 40]);
 });
@@ -43,6 +43,19 @@ test("other errors and retries: 0 are not retried", async () => {
     await assert.rejects(client.request("GET", "/v1/ping"), ArkismError);
     assert.equal(calls.length, 1);
   }
+});
+
+test("POST is retried only when turned away (Retry-After) or with retryUnsafe", async () => {
+  const bare = fake([{ status: 503, body: { code: "dependency_unavailable" } }]);
+  const noSleep = { sleep: async () => {} };
+  await assert.rejects(new ArkismClient({ baseUrl: "http://x", fetch: bare.fetchFn, retry: noSleep }).request("POST", "/v1/capture", undefined, {}), ArkismError);
+  assert.equal(bare.calls.length, 1);
+  const turned = fake([{ status: 429, headers: { "Retry-After": "1" } }, { status: 200, body: { ok: true } }]);
+  assert.deepEqual(await new ArkismClient({ baseUrl: "http://x", fetch: turned.fetchFn, retry: noSleep }).request("POST", "/v1/capture", undefined, {}), { ok: true });
+  assert.equal(turned.calls.length, 2);
+  const optIn = fake([{ status: 503 }, { status: 200, body: { ok: true } }]);
+  assert.deepEqual(await new ArkismClient({ baseUrl: "http://x", fetch: optIn.fetchFn, retry: { ...noSleep, retryUnsafe: true } }).request("POST", "/v1/search", undefined, {}), { ok: true });
+  assert.equal(optIn.calls.length, 2);
 });
 
 test("retryAfterMs reads seconds and HTTP dates", () => {
