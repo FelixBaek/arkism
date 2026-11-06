@@ -316,6 +316,7 @@
 .mem-provisional { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.5rem 0; padding: 0 1rem; }
 .mem-provisional ul { margin: 0; padding: 0; list-style: none; }
 .mem-provisional li { display: flex; flex-wrap: wrap; gap: 0 0.5rem; }
+.insight-conversation li { flex-direction: column; margin-bottom: 0.375rem; } /* each turn: date line, then the words */
 
 /* ---------------------------------------------------------------- 목록 · 타임라인 (modules/memoryViews.mjs) */
 .mem-tools > .segment.mem-view-seg { align-self: center; flex-wrap: nowrap; }

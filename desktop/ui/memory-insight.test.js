@@ -321,6 +321,36 @@ test("search 살펴보기 sends explain with the 자세히 options and shows lan
   assert.equal(JSON.parse(copied).response.items[0].id, "m4");
 });
 
+test("search 살펴보기 shows the split questions and the raw conversation turns as their own parts", async () => {
+  const hit = { id: "m4", collection: "memories", kind: "episodic", status: "active", text: "Caroline went to the LGBTQ support group on 7 May 2023.", score: 0.7, lanes: ["vector"] };
+  const t = setup("search", [["/v1/search", () => ({ authority: "data_only_untrusted", items: [hit],
+    conversation: [{ id: "s1", collection: "sources", text: "Caroline: I went to a LGBTQ support group yesterday and it was so powerful.", collected_at: "2023-05-08T13:56:00Z" },
+      { id: "s2", collection: "sources", summary: "Melanie: That's great, how did it feel?" }, { id: "s3", collection: "sources" }],
+    explain: { lanes: ["vector"], expand: "applied", expand_queries: ["Caroline support group date", "Caroline LGBTQ group visit", 7, ""] } })]]);
+  t.view.draw();
+  t.h.$("#chips input").value = "When did Caroline go to the support group?"; dom.fire(t.h.$("#chips form"), "submit"); await dom.flush();
+  const table = t.h.$("#table");
+  assert.match(table.textContent, /질문 나눠 찾기서버 AI가 나눠서 같이 찾았어요/);
+  const heads = [...table.querySelectorAll("h3")].map((n) => n.textContent);
+  assert.ok(heads.includes("나눠서 찾은 질문") && heads.includes("대화 원문"), heads.join());
+  const split = [...table.querySelectorAll(".insight-ask li")].map((n) => n.textContent);
+  assert.deepEqual(split, ["Caroline support group date", "Caroline LGBTQ group visit"], "only non-empty strings");
+  const talk = table.querySelector(".insight-conversation");
+  assert.equal(talk.querySelectorAll("li").length, 2, "a turn without text is skipped");
+  assert.match(talk.textContent, /사람이 확인한 기억이 아니에요/);
+  assert.match(talk.textContent, /support group yesterday/); assert.match(talk.textContent, /how did it feel/);
+  assert.equal(table.querySelectorAll(".original-row").length, 1, "turns are never ranked among the memories");
+});
+
+test("search 살펴보기 says why the question was not split, and draws no empty parts", async () => {
+  const t = setup("search", [["/v1/search", () => ({ authority: "data_only_untrusted", items: [], explain: { lanes: ["keyword"], expand: "budget_exceeded" } })]]);
+  t.view.draw();
+  t.h.$("#chips input").value = "배포"; dom.fire(t.h.$("#chips form"), "submit"); await dom.flush();
+  const table = t.h.$("#table");
+  assert.match(table.textContent, /모델 예산을 넘어 나누지 않았어요/);
+  assert.doesNotMatch(table.textContent, /나눠서 찾은 질문|대화 원문/);
+});
+
 test("search 살펴보기 sends only explain by default and says when the server refuses the options", async () => {
   const t = setup("search", [["/v1/search", () => { throw err("invalid_request", 400); }]]);
   t.view.draw();

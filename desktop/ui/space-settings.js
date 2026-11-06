@@ -565,6 +565,9 @@
       const qsw = (k, title, hint, on) => kit.line(title, hint, edit ? kit.sw(on, title, (next) => setBlock("recall_quality", { [k]: next })) : onOff(on));
       g.append(kit.more("자세히 · 찾은 결과 거르기",
         qsw("relevance_gate", "관련 없는 결과 빼기", "낱말만 우연히 맞고 뜻이 먼 기억을 빼요. 처음에는 켜져 있어요.", q.relevance_gate !== false),
+        qsw("diversity", "거의 같은 결과는 하나만", "같은 내용이 여러 개 걸리면 하나만 두고 그 자리에 다른 내용을 보여 줘요. 처음에는 켜져 있어요.", q.diversity !== false),
+        qsw("expand", "질문을 나눠서도 찾기", "서버 AI가 질문을 작은 질문 몇 개로 나눠 같이 찾아요. 처음에는 꺼져 있어요.", !!q.expand),
+        ...(q.expand ? [el("p", "pg-hint warn", "켜져 있어요. 찾을 때마다 서버 AI를 한 번 불러 모델 예산을 써요.")] : []),
         kit.line("정정을 기다리는 기억", "고쳐 달라는 후보가 있는 기억을 어떻게 보여 줄지예요.",
           edit ? select(CONFLICT, q.conflict_pending || "attach", "정정을 기다리는 기억", (v) => setBlock("recall_quality", { conflict_pending: v === "attach" ? undefined : v })) : readOnly(CONFLICT.find(([k]) => k === (q.conflict_pending || "attach"))[1])),
         qsw("provisional", "승인 전 후보도 보여 주기", "아직 승인하지 않은 후보를 ‘승인 전’ 표시와 함께 몇 개 보여 줘요. 확정된 기억처럼 쓰이지 않아요. 처음에는 켜져 있어요.", q.provisional !== false),

@@ -6359,7 +6359,20 @@
  "주제 지우기": "Supprimer le sujet",
  "공간 설정 바꾸기": "Modifier les réglages de l'espace",
  "새 공간 만들기": "Créer un nouvel espace",
- "에이전트 제안": "Suggestion de l'agent"
+ "에이전트 제안": "Suggestion de l'agent",
+ "서버 AI가 나눠서 같이 찾았어요": "L’IA du serveur l’a découpée et a aussi cherché les parties",
+ "서버 AI가 없어 나누지 못했어요": "Pas d’IA sur le serveur, donc pas découpée",
+ "이 질문은 서버 AI에 보낼 수 없어 나누지 않았어요": "Cette question ne peut pas être envoyée à l’IA du serveur, donc pas découpée",
+ "모델 예산을 넘어 나누지 않았어요": "Budget du modèle dépassé, donc pas découpée",
+ "나누지 못해 질문 그대로 찾았어요": "Découpage impossible, la question a été cherchée telle quelle",
+ "나눠서 찾은 질문": "Questions cherchées séparément",
+ "저장해 둔 대화 그대로예요. 사람이 확인한 기억이 아니에요.": "La conversation telle qu’elle a été enregistrée. Ce n’est pas un souvenir vérifié par une personne.",
+ "질문 나눠 찾기": "Découper la question",
+ "거의 같은 결과는 하나만": "Résultats presque identiques une seule fois",
+ "같은 내용이 여러 개 걸리면 하나만 두고 그 자리에 다른 내용을 보여 줘요. 처음에는 켜져 있어요.": "Quand plusieurs résultats disent la même chose, un seul reste et autre chose s’affiche à leur place. Activé au départ.",
+ "질문을 나눠서도 찾기": "Chercher aussi en découpant la question",
+ "서버 AI가 질문을 작은 질문 몇 개로 나눠 같이 찾아요. 처음에는 꺼져 있어요.": "L’IA du serveur découpe la question en quelques questions plus petites et les cherche ensemble. Désactivé au départ.",
+ "켜져 있어요. 찾을 때마다 서버 AI를 한 번 불러 모델 예산을 써요.": "Activé. Chaque recherche appelle une fois l’IA du serveur et consomme du budget du modèle."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} mémoires sources",

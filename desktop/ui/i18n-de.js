@@ -6359,7 +6359,20 @@
  "주제 지우기": "Thema löschen",
  "공간 설정 바꾸기": "Space-Einstellungen ändern",
  "새 공간 만들기": "Neuen Space erstellen",
- "에이전트 제안": "Vorschlag vom Agent"
+ "에이전트 제안": "Vorschlag vom Agent",
+ "서버 AI가 나눠서 같이 찾았어요": "Die Server-KI hat sie aufgeteilt und die Teile mitgesucht",
+ "서버 AI가 없어 나누지 못했어요": "Keine Server-KI, daher nicht aufgeteilt",
+ "이 질문은 서버 AI에 보낼 수 없어 나누지 않았어요": "Diese Frage darf nicht an die Server-KI gehen, daher nicht aufgeteilt",
+ "모델 예산을 넘어 나누지 않았어요": "Modellbudget überschritten, daher nicht aufgeteilt",
+ "나누지 못해 질문 그대로 찾았어요": "Aufteilen fehlgeschlagen, daher wurde die Frage unverändert gesucht",
+ "나눠서 찾은 질문": "Einzeln gesuchte Fragen",
+ "저장해 둔 대화 그대로예요. 사람이 확인한 기억이 아니에요.": "Das Gespräch genau so, wie es gespeichert ist. Keine von einer Person geprüfte Erinnerung.",
+ "질문 나눠 찾기": "Frage aufteilen",
+ "거의 같은 결과는 하나만": "Fast gleiche Ergebnisse nur einmal",
+ "같은 내용이 여러 개 걸리면 하나만 두고 그 자리에 다른 내용을 보여 줘요. 처음에는 켜져 있어요.": "Sagen mehrere Ergebnisse dasselbe, bleibt eines und an ihrer Stelle erscheint etwas anderes. Anfangs an.",
+ "질문을 나눠서도 찾기": "Auch mit aufgeteilter Frage suchen",
+ "서버 AI가 질문을 작은 질문 몇 개로 나눠 같이 찾아요. 처음에는 꺼져 있어요.": "Die Server-KI teilt die Frage in einige kleinere auf und sucht sie gemeinsam. Anfangs aus.",
+ "켜져 있어요. 찾을 때마다 서버 AI를 한 번 불러 모델 예산을 써요.": "An. Jede Suche ruft die Server-KI einmal auf und verbraucht Modellbudget."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} Quell-Memories",

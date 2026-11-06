@@ -6359,7 +6359,20 @@
  "주제 지우기": "Eliminar tema",
  "공간 설정 바꾸기": "Cambiar ajustes del espacio",
  "새 공간 만들기": "Crear espacio nuevo",
- "에이전트 제안": "Sugerencia del agente"
+ "에이전트 제안": "Sugerencia del agente",
+ "서버 AI가 나눠서 같이 찾았어요": "La IA del servidor la dividió y buscó también las partes",
+ "서버 AI가 없어 나누지 못했어요": "No hay IA en el servidor, así que no se dividió",
+ "이 질문은 서버 AI에 보낼 수 없어 나누지 않았어요": "Esta pregunta no se puede enviar a la IA del servidor, así que no se dividió",
+ "모델 예산을 넘어 나누지 않았어요": "Se superó el presupuesto del modelo, así que no se dividió",
+ "나누지 못해 질문 그대로 찾았어요": "No se pudo dividir, así que se buscó la pregunta tal cual",
+ "나눠서 찾은 질문": "Preguntas buscadas por separado",
+ "저장해 둔 대화 그대로예요. 사람이 확인한 기억이 아니에요.": "La conversación tal como se guardó. No es un recuerdo revisado por una persona.",
+ "질문 나눠 찾기": "Dividir la pregunta",
+ "거의 같은 결과는 하나만": "Resultados casi iguales, solo una vez",
+ "같은 내용이 여러 개 걸리면 하나만 두고 그 자리에 다른 내용을 보여 줘요. 처음에는 켜져 있어요.": "Si varios resultados dicen lo mismo, se queda uno y en su lugar aparece algo distinto. Activado al principio.",
+ "질문을 나눠서도 찾기": "Buscar también dividiendo la pregunta",
+ "서버 AI가 질문을 작은 질문 몇 개로 나눠 같이 찾아요. 처음에는 꺼져 있어요.": "La IA del servidor divide la pregunta en algunas más pequeñas y las busca juntas. Desactivado al principio.",
+ "켜져 있어요. 찾을 때마다 서버 AI를 한 번 불러 모델 예산을 써요.": "Activado. Cada búsqueda llama una vez a la IA del servidor y usa presupuesto del modelo."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} recuerdos de origen",

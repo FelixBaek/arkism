@@ -193,6 +193,12 @@ test("recall defaults, capture mode and density and the consolidation decision m
   assert.match(box.textContent, /판정할 때마다/, "a decision model on carries its budget note");
   sws["후보도 뜻으로 찾기"](true);
   assert.match(box.textContent, /임베딩을 만들어 모델 예산을 써요/);
+  assert.match(box.textContent, /sw:거의 같은 결과는 하나만:true/, "diversity is on by default");
+  assert.match(box.textContent, /sw:질문을 나눠서도 찾기:false/, "expansion is opt-in");
+  assert.doesNotMatch(box.textContent, /서버 AI를 한 번 불러/);
+  sws["거의 같은 결과는 하나만"](false);
+  sws["질문을 나눠서도 찾기"](true);
+  assert.match(box.textContent, /찾을 때마다 서버 AI를 한 번 불러 모델 예산을 써요/, "expansion carries its budget note");
   sws["다시 고를 때 겹치는 것 합치기"](true);
   sws["관찰을 먼저 보여 주기"](true);
   const sel = (label) => box.querySelectorAll("select").find((n) => n.getAttribute("aria-label") === label);
@@ -210,7 +216,7 @@ test("recall defaults, capture mode and density and the consolidation decision m
   const chunks = box.querySelectorAll("input").find((n) => n.getAttribute("aria-label") === "원문 조각 양"); chunks.value = "800"; dom.fire(chunks, "change");
   box.querySelectorAll("button").find((b) => b.textContent === "저장").click(); await dom.flush();
   assert.deepEqual(sent[0], ["/v1/spaces/w/p/config", { expected_revision: 2, capture_mode: "", capture_density: "dense", decision_models: {},
-    recall_quality: { conflict_pending: "attach", provisional_vectors: true, rerank_options: { dedup: true }, prefer_observations: true, chunks_max_tokens: 800 } }]);
+    recall_quality: { conflict_pending: "attach", provisional_vectors: true, diversity: false, expand: true, rerank_options: { dedup: true }, prefer_observations: true, chunks_max_tokens: 800 } }]);
 });
 
 test("recall budget, extraction sizes and document text: set in 자세히, saved as one block or a value, and handed back", async () => {

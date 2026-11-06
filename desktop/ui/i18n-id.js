@@ -6359,7 +6359,20 @@
  "주제 지우기": "Hapus topik",
  "공간 설정 바꾸기": "Ubah pengaturan ruang",
  "새 공간 만들기": "Buat ruang baru",
- "에이전트 제안": "Usulan agen"
+ "에이전트 제안": "Usulan agen",
+ "서버 AI가 나눠서 같이 찾았어요": "AI server memecahnya dan ikut mencari bagian-bagiannya",
+ "서버 AI가 없어 나누지 못했어요": "Tidak ada AI server, jadi tidak dipecah",
+ "이 질문은 서버 AI에 보낼 수 없어 나누지 않았어요": "Pertanyaan ini tidak boleh dikirim ke AI server, jadi tidak dipecah",
+ "모델 예산을 넘어 나누지 않았어요": "Melebihi anggaran model, jadi tidak dipecah",
+ "나누지 못해 질문 그대로 찾았어요": "Gagal dipecah, jadi pertanyaan dicari apa adanya",
+ "나눠서 찾은 질문": "Pertanyaan yang dicari terpisah",
+ "저장해 둔 대화 그대로예요. 사람이 확인한 기억이 아니에요.": "Percakapan persis seperti yang disimpan. Bukan memori yang sudah diperiksa orang.",
+ "질문 나눠 찾기": "Pecah pertanyaan",
+ "거의 같은 결과는 하나만": "Hasil yang hampir sama cukup sekali",
+ "같은 내용이 여러 개 걸리면 하나만 두고 그 자리에 다른 내용을 보여 줘요. 처음에는 켜져 있어요.": "Jika beberapa hasil menyatakan hal yang sama, satu disimpan dan tempatnya diisi hal lain. Awalnya aktif.",
+ "질문을 나눠서도 찾기": "Cari juga dengan memecah pertanyaan",
+ "서버 AI가 질문을 작은 질문 몇 개로 나눠 같이 찾아요. 처음에는 꺼져 있어요.": "AI server memecah pertanyaan menjadi beberapa pertanyaan kecil dan mencarinya bersama. Awalnya nonaktif.",
+ "켜져 있어요. 찾을 때마다 서버 AI를 한 번 불러 모델 예산을 써요.": "Aktif. Setiap pencarian memanggil AI server sekali dan memakai anggaran model."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memori sumber",

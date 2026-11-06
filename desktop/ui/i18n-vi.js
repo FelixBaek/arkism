@@ -6359,7 +6359,20 @@
  "주제 지우기": "Xóa chủ đề",
  "공간 설정 바꾸기": "Đổi cài đặt không gian",
  "새 공간 만들기": "Tạo không gian mới",
- "에이전트 제안": "Đề xuất của agent"
+ "에이전트 제안": "Đề xuất của agent",
+ "서버 AI가 나눠서 같이 찾았어요": "AI máy chủ đã tách câu hỏi và tìm cả các phần",
+ "서버 AI가 없어 나누지 못했어요": "Không có AI máy chủ nên không tách",
+ "이 질문은 서버 AI에 보낼 수 없어 나누지 않았어요": "Câu hỏi này không được gửi tới AI máy chủ nên không tách",
+ "모델 예산을 넘어 나누지 않았어요": "Vượt ngân sách mô hình nên không tách",
+ "나누지 못해 질문 그대로 찾았어요": "Không tách được nên đã tìm nguyên câu hỏi",
+ "나눠서 찾은 질문": "Các câu hỏi đã tìm riêng",
+ "저장해 둔 대화 그대로예요. 사람이 확인한 기억이 아니에요.": "Cuộc trò chuyện đúng như đã lưu. Không phải ký ức đã được người kiểm tra.",
+ "질문 나눠 찾기": "Tách câu hỏi",
+ "거의 같은 결과는 하나만": "Kết quả gần giống chỉ hiện một lần",
+ "같은 내용이 여러 개 걸리면 하나만 두고 그 자리에 다른 내용을 보여 줘요. 처음에는 켜져 있어요.": "Khi nhiều kết quả nói cùng một điều, giữ một cái và hiện nội dung khác vào chỗ đó. Lúc đầu bật.",
+ "질문을 나눠서도 찾기": "Tìm cả bằng cách tách câu hỏi",
+ "서버 AI가 질문을 작은 질문 몇 개로 나눠 같이 찾아요. 처음에는 꺼져 있어요.": "AI máy chủ tách câu hỏi thành vài câu nhỏ hơn và tìm cùng lúc. Lúc đầu tắt.",
+ "켜져 있어요. 찾을 때마다 서버 AI를 한 번 불러 모델 예산을 써요.": "Đang bật. Mỗi lần tìm sẽ gọi AI máy chủ một lần và dùng ngân sách mô hình."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} bộ nhớ làm căn cứ",

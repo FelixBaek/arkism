@@ -7638,3 +7638,17 @@ Object.assign(window.ArkismI18nEN.strings, {
   "공간 설정 바꾸기": "Change space settings",
   "새 공간 만들기": "Create new space",
   "에이전트 제안": "Agent suggestion" });
+Object.assign(window.ArkismI18nEN.strings, {
+  "서버 AI가 나눠서 같이 찾았어요": "The server AI split it and searched the parts too",
+  "서버 AI가 없어 나누지 못했어요": "No server AI, so it was not split",
+  "이 질문은 서버 AI에 보낼 수 없어 나누지 않았어요": "This question can't be sent to the server AI, so it was not split",
+  "모델 예산을 넘어 나누지 않았어요": "Over the model budget, so it was not split",
+  "나누지 못해 질문 그대로 찾았어요": "Could not split it, so the question was searched as is",
+  "나눠서 찾은 질문": "Questions searched separately",
+  "저장해 둔 대화 그대로예요. 사람이 확인한 기억이 아니에요.": "The conversation exactly as stored. Not a memory a person has checked.",
+  "질문 나눠 찾기": "Split the question",
+  "거의 같은 결과는 하나만": "Show near-duplicates once",
+  "같은 내용이 여러 개 걸리면 하나만 두고 그 자리에 다른 내용을 보여 줘요. 처음에는 켜져 있어요.": "When several results say the same thing, keep one and show something different in their place. On at first.",
+  "질문을 나눠서도 찾기": "Also search by splitting the question",
+  "서버 AI가 질문을 작은 질문 몇 개로 나눠 같이 찾아요. 처음에는 꺼져 있어요.": "The server AI splits the question into a few smaller ones and searches them together. Off at first.",
+  "켜져 있어요. 찾을 때마다 서버 AI를 한 번 불러 모델 예산을 써요.": "On. Every search calls the server AI once and uses the model budget." });

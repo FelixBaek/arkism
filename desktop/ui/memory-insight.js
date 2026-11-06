@@ -442,7 +442,8 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   }
   // Lane names joined by "," or next to a number have no pattern to match whole, so each is translated here.
   const tr = (s) => globalThis.ArkismI18n?.translate(s) ?? s;
-  const laneName = (l) => tr(l === "rerank" ? "순서 다시 매김" : window.ArkismMemoryTime.FOUND[l] || l);
+  const LANE_EXTRA = { rerank: "순서 다시 매김", expand: "질문 나눠 찾기" }; // timing-only lanes: not search methods
+  const laneName = (l) => tr(LANE_EXTRA[l] || window.ArkismMemoryTime.FOUND[l] || l);
   const lanesText = (lanes) => (lanes || []).map(laneName).join(", ");
   // lane_ms: whole milliseconds per lane (and rerank), slowest first
   const laneTimes = (ms) => Object.entries(isGroup(ms) ? ms : {}).filter(([, v]) => Number.isFinite(v)).sort((a, b) => b[1] - a[1])
@@ -476,13 +477,37 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     })];
   }
   const DROPS = { semantic: "비슷한 뜻 하한", keyword: "단어 하한", reranker: "다시 매긴 점수 하한", prune: "주제와 멂", dedup: "겹침" };
+  // explain.expand: whether the server model split the question (recall_expand.go), and why not
+  const EXPAND = { applied: "서버 AI가 나눠서 같이 찾았어요", model_not_configured: "서버 AI가 없어 나누지 못했어요", denied: "이 질문은 서버 AI에 보낼 수 없어 나누지 않았어요",
+    budget_exceeded: "모델 예산을 넘어 나누지 않았어요", failed: "나누지 못해 질문 그대로 찾았어요" };
+  // The sub-queries the expansion searched beside the question (explain.expand_queries).
+  function expandQueries() {
+    const qs = (Array.isArray(answer.explain?.expand_queries) ? answer.explain.expand_queries : []).filter((s) => typeof s === "string" && s);
+    if (!qs.length) return [];
+    const ul = el("ul", "inject-list");
+    for (const s of qs) ul.append(raw(el("li", "", s)));
+    return [el("h3", "insight-head", "나눠서 찾은 질문"), ul];
+  }
+  // Raw conversation turns the space keeps (answer.conversation): shown apart, never ranked among memories.
+  function conversationTurns() {
+    const rows = Array.isArray(answer.conversation) ? answer.conversation.filter((h) => h?.text || h?.summary) : [];
+    if (!rows.length) return null;
+    const box = el("div", "mem-provisional insight-conversation"), ul = el("ul");
+    for (const h of rows) {
+      const li = el("li");
+      li.append(el("span", "meta", h.collected_at ? day(h.collected_at) : "—"), raw(el("span", "", h.text || h.summary)));
+      ul.append(li);
+    }
+    box.append(el("h3", "insight-head", "대화 원문"), el("p", "meta", "저장해 둔 대화 그대로예요. 사람이 확인한 기억이 아니에요."), ul);
+    return box;
+  }
   function searchSummary() {
     const x = answer.explain || {}, tw = x.time_window;
     const range = tw ? `‘${tw.phrase}’ → ${day(tw.from)} ~ ${day(new Date(Date.parse(tw.to) - 1).toISOString())}` : "";
     const w = sent?.temporal_window, weights = Object.entries(isGroup(x.lane_weights) ? x.lane_weights : {}).map(([l, v]) => `${laneName(l)} ×${v}`).join(" · ");
     const dropped = Object.entries(isGroup(x.dropped) ? x.dropped : {}).filter(([, v]) => v > 0).map(([k, v]) => `${tr(DROPS[k] || k)} ${v}`).join(" · ");
     return facts([["쓴 방법", lanesText(x.lanes) || "—"], ["걸린 시간", laneTimes(x.lane_ms)], ["때를 읽은 말", range],
-      ["앞에 둔 기간", w ? `${day(w.from)} ~ ${day(w.to)}` : ""], ["방법마다 무게", weights], ["순서 다시 매김", x.reranked ? "AI로 다시 매겼어요" : "하지 않았어요"],
+      ["앞에 둔 기간", w ? `${day(w.from)} ~ ${day(w.to)}` : ""], ["방법마다 무게", weights], ["순서 다시 매김", x.reranked ? "AI로 다시 매겼어요" : "하지 않았어요"], ["질문 나눠 찾기", EXPAND[x.expand] || ""],
       ["점수가 낮아 뺀 기억", x.min_score_dropped ? `${x.min_score_dropped}개` : ""], ["단계별 제외", dropped], ["못 쓴 방법", (answer.degraded || []).join(", ")]]);
   }
   function searchError(e) {
@@ -500,8 +525,10 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     if (failure) { table.append(searchError(failure)); return; }
     if (!answer) return;
     const card = el("div", "insight-ask");
-    card.append(searchSummary(), ...laneLists());
+    card.append(searchSummary(), ...expandQueries(), ...laneLists());
     table.append(card);
+    const talk = conversationTurns();
+    if (talk) table.append(talk);
     const pending = window.ArkismMemoryLabels?.provisionalBlock(answer, { el, raw }); // pending candidates the answer carries apart
     if (pending) table.append(pending);
     items.forEach((h, i) => table.append(listRow(h, h.text || h.summary || h.id, hitMeta(h), score(h.explain?.rerank_score ?? h.score) || `${i + 1}위`)));

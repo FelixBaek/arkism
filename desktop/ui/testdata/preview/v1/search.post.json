@@ -7,7 +7,8 @@
    "vector": 18,
    "relation": 4,
    "temporal": 3,
-   "rerank": 41
+   "rerank": 41,
+   "expand": 620
   },
   "lanes": [
    "exact",
@@ -83,7 +84,13 @@
      "revision": 1
     }
    ]
-  }
+  },
+  "expand": "applied",
+  "expand_queries": [
+   "Orbit 결제 흐름 스테이징 확인",
+   "10월 Orbit 배포 롤백 원인",
+   "배포 전 점검 순서"
+  ]
  },
  "items": [
   {
@@ -243,5 +250,23 @@
    "authority": "data_only_untrusted"
   }
  ],
- "provisional_notice": "승인 전 후보입니다. 확정된 기억이 아니며 사람이 검토하기 전입니다."
+ "provisional_notice": "승인 전 후보입니다. 확정된 기억이 아니며 사람이 검토하기 전입니다.",
+ "conversation": [
+  {
+   "id": "src-c1",
+   "collection": "sources",
+   "kind": "conversation",
+   "text": "민지: 10월 14일 배포 때 결제 버튼이 스테이징에선 됐는데 운영에선 멈췄잖아요. 다음엔 카드 결제까지 끝까지 눌러 보고 올려요.",
+   "collected_at": "2026-10-14T09:12:00Z",
+   "authority": "data_only_untrusted"
+  },
+  {
+   "id": "src-c2",
+   "collection": "sources",
+   "kind": "conversation",
+   "text": "준호: 좋아요. 배포 체크리스트 맨 위에 ‘스테이징 결제 끝까지’ 넣어 둘게요.",
+   "collected_at": "2026-10-14T09:13:00Z",
+   "authority": "data_only_untrusted"
+  }
+ ]
 }
