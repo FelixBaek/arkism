@@ -19,17 +19,32 @@ const defaultCaptureMergeSimilarity = 0.92
 // mistake pile up, so every approved lesson this close joins one proposal a person decides once.
 const lessonNearDuplicateSimilarity = 0.85
 
+// defaultCaptureGateBudget is how long one capture request may wait on the embedder for
+// the merge gate, over all its claims. A busy embedder answers slowly; without a bound a
+// 32-claim request outlives the server's request timeout and the whole capture fails.
+const defaultCaptureGateBudget = 15 * time.Second
+
+func (s *Service) captureGateBudget() time.Duration {
+	return cmp.Or(s.CaptureGateBudget, defaultCaptureGateBudget)
+}
+
 // captureMergeGate opens a merge proposal when the new candidate's text sits
 // within CaptureMergeSimilarity of an approved memory's stored vector, and
 // reports whether it did. It never fails a capture: no embedder, a refused or
-// failed embedding, or no embedded memory nearby leaves the candidate on the
-// ordinary review path. A person decides the proposal; nothing is merged or
-// deleted here.
+// failed embedding, a request past its gate budget (in.gateUntil), or no embedded
+// memory nearby leaves the candidate on the ordinary review path. A person decides
+// the proposal; nothing is merged or deleted here.
 func (s *Service) captureMergeGate(ctx context.Context, token string, in CaptureInput, scope Scope, cand Record) bool {
 	actor, ok := ctx.Value(requestActorKey{}).(Decision)
 	if s.Embedder == nil || !ok {
 		return false
 	}
+	if !time.Now().Before(in.gateUntil) {
+		slog.Info("capture merge gate skipped: budget spent", "candidate_id", cand.ID)
+		return false
+	}
+	ctx, cancel := context.WithDeadline(ctx, in.gateUntil)
+	defer cancel()
 	similar, vec, space, _, err := s.similarMemories(ctx, token, actor, scope, cand, mergePoolK)
 	if err != nil || len(vec) == 0 {
 		return false

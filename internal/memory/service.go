@@ -69,9 +69,12 @@ type Service struct {
 	// claim gets a merge proposal toward the closest approved memory instead of a
 	// plain review entry; 0 means defaultCaptureMergeSimilarity.
 	CaptureMergeSimilarity float64
-	Analyzer               SkillAnalyzer
-	Drafter                SkillDrafter
-	Router                 SkillJudge
+	// CaptureGateBudget bounds how long one capture request waits on the embedder for the
+	// merge gate; 0 means defaultCaptureGateBudget.
+	CaptureGateBudget time.Duration
+	Analyzer          SkillAnalyzer
+	Drafter           SkillDrafter
+	Router            SkillJudge
 	// SkillCandidates is how many skills the search hands the judge (1–8); 0 means 8.
 	SkillCandidates int
 	// ModelPicker picks a model for 라우팅 (Clef-flash); nil sends every task to the fixed or first model.

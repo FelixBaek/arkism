@@ -21,13 +21,9 @@ func newDaemonService(ctx context.Context, pg *memory.Postgres, cfg daemonOption
 			return nil, memory.ErrInvalid
 		}
 	}
-	mergeSimilarity := 0.0
-	if raw := os.Getenv("MEMORY_CAPTURE_MERGE_SIMILARITY"); raw != "" {
-		var e error
-		mergeSimilarity, e = strconv.ParseFloat(raw, 64)
-		if e != nil || mergeSimilarity <= 0 || mergeSimilarity > 1 {
-			return nil, memory.ErrInvalid
-		}
+	mergeSimilarity, gateBudget, e := captureGateFromEnv()
+	if e != nil {
+		return nil, e
 	}
 	costRates, e := costRatesFromEnv()
 	if e != nil {
@@ -45,7 +41,7 @@ func newDaemonService(ctx context.Context, pg *memory.Postgres, cfg daemonOption
 	if err != nil {
 		return nil, err
 	}
-	svc := &memory.Service{BlobObjects: objects, GoogleLogin: google, SyntheticHandoff: syntheticHandoff == "1", BlobDirectory: os.Getenv("MEMORY_BLOB_DIRECTORY"), Repo: pg, Auth: auth, Embedder: embed, CandidateDailyLimit: candidateLimit, CaptureMergeSimilarity: mergeSimilarity, CostRates: costRates,
+	svc := &memory.Service{BlobObjects: objects, GoogleLogin: google, SyntheticHandoff: syntheticHandoff == "1", BlobDirectory: os.Getenv("MEMORY_BLOB_DIRECTORY"), Repo: pg, Auth: auth, Embedder: embed, CandidateDailyLimit: candidateLimit, CaptureMergeSimilarity: mergeSimilarity, CaptureGateBudget: gateBudget, CostRates: costRates,
 		Reranker: reranker, RecallGraph: os.Getenv("ARKISM_RECALL_GRAPH") == "1"}
 
 	if !cfg.Recovery {
@@ -249,4 +245,25 @@ func envList(name string) []string {
 		}
 	}
 	return out
+}
+
+// captureGateFromEnv reads the capture merge gate's MEMORY_CAPTURE_MERGE_SIMILARITY and
+// MEMORY_CAPTURE_GATE_BUDGET; 0 (unset) is the service default for each.
+func captureGateFromEnv() (float64, time.Duration, error) {
+	similarity, budget := 0.0, time.Duration(0)
+	if raw := os.Getenv("MEMORY_CAPTURE_MERGE_SIMILARITY"); raw != "" {
+		var err error
+		similarity, err = strconv.ParseFloat(raw, 64)
+		if err != nil || similarity <= 0 || similarity > 1 {
+			return 0, 0, memory.ErrInvalid
+		}
+	}
+	if raw := os.Getenv("MEMORY_CAPTURE_GATE_BUDGET"); raw != "" {
+		var err error
+		budget, err = time.ParseDuration(raw)
+		if err != nil || budget <= 0 || budget > 40*time.Second { // under the 45s request timeout
+			return 0, 0, memory.ErrInvalid
+		}
+	}
+	return similarity, budget, nil
 }

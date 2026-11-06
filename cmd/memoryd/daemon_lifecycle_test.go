@@ -215,6 +215,7 @@ func TestDaemonRefusesInvalidServiceSettings(t *testing.T) {
 		"topic digest":            {db.env("MEMORY_TOPIC_DIGEST_MAX", "0"), nil},
 		"candidate limit":         {db.env("MEMORY_CANDIDATE_DAILY_LIMIT", "-1"), nil},
 		"merge similarity":        {db.env("MEMORY_CAPTURE_MERGE_SIMILARITY", "1.5"), nil},
+		"capture gate budget":     {db.env("MEMORY_CAPTURE_GATE_BUDGET", "1m"), nil},
 		"cost rates":              {db.env("SKILL_LLM_INPUT_USD_PER_MILLION_TOKENS", "0.5"), nil},
 		"partial google login":    {db.env("MEMORY_GOOGLE_CLIENT_ID", "id"), nil},
 		"review classifier":       {db.env("MEMORY_REVIEW_CLASSIFIER", missing), nil},

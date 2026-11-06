@@ -3,6 +3,7 @@ package memory
 import (
 	"errors"
 	"testing"
+	"time"
 )
 
 // embedText stores the memory's vector for its own text, as the worker would.
@@ -78,5 +79,27 @@ func TestCaptureWithoutEmbeddingsKeepsTheOldPath(t *testing.T) {
 				t.Fatal("a proposal was stored without an embedding", err)
 			}
 		})
+	}
+}
+
+// A slow embedder spends the request's gate budget: the later claims skip the merge check
+// and are still stored as ordinary candidates instead of the request running out of time.
+func TestCaptureGateBudgetBoundsTheWaitOnASlowEmbedder(t *testing.T) {
+	f := newFixture(t)
+	f.emb.semantic = true
+	f.embedText(f.activeMemory("응답은 항상 쉬운 한국어로 짧게 쓴다"))
+	f.svc.CaptureGateBudget = 60 * time.Millisecond
+	f.emb.onEmbed = func() { time.Sleep(40 * time.Millisecond) }
+	before := len(f.emb.calls)
+	claims := []CaptureClaim{explicit("첫째 규칙은 커밋을 작게 나눈다"), explicit("둘째 규칙은 테스트를 먼저 쓴다"),
+		explicit("셋째 규칙은 로그에 비밀을 남기지 않는다"), explicit("넷째 규칙은 브랜치 이름을 짧게 짓는다")}
+	got := f.capture(f.human, captureInput(scopeA, "evt-slow", claims...))
+	for _, item := range got {
+		if item.Status != "candidate" || item.Reason != "review_required" || item.CandidateID == "" {
+			t.Fatal("a claim past the budget was not kept as a candidate", got)
+		}
+	}
+	if calls := len(f.emb.calls) - before; calls == 0 || calls >= len(claims) {
+		t.Fatalf("gate embedded %d of %d claims, want the budget to stop it early", calls, len(claims))
 	}
 }

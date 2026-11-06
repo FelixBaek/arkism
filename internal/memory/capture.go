@@ -105,6 +105,8 @@ type CaptureInput struct {
 	Generator *Generator     `json:"generator"`
 	// zone reads the claims' relative dates; the space's default time zone when unset.
 	zone *time.Location
+	// gateUntil ends the merge gate's wait on the embedder for the whole request (captureGateBudget).
+	gateUntil time.Time
 }
 
 type CaptureItem struct {
@@ -250,6 +252,7 @@ func (s *Service) capture(ctx context.Context, token string, in CaptureInput) (C
 		return CaptureResult{}, err
 	}
 	in.zone = cmp.Or(in.zone, settings.zone())
+	in.gateUntil = started.Add(s.captureGateBudget())
 	out := CaptureResult{Items: make([]CaptureItem, len(in.Claims))}
 	transient := false
 	for i, c := range in.Claims {
