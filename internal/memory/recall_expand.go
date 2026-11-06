@@ -57,7 +57,7 @@ func (s *Service) expandRecall(ctx context.Context, token string, in *SearchInpu
 	if queries == nil {
 		return
 	}
-	vectors, space := s.expansionVectors(ctx, *in, d, queries)
+	vectors, space := s.expansionVectors(ctx, token, *in, d, queries)
 	for i, q := range queries {
 		sub := *in
 		sub.Query, sub.retrievalQuery = q, ""
@@ -119,11 +119,15 @@ func parseExpansion(out, question string) ([]string, bool) {
 	return queries, len(queries) > 0
 }
 
-// expansionVectors embeds the sub-queries in one call when the vector lane may run; on any
+// expansionVectors embeds the sub-queries in one call when the vector lane may run and the
+// caller may send their text to the embedder (checked like the question's own text); on any
 // refusal or failure every sub-query searches without a vector (the other lanes still run).
-func (s *Service) expansionVectors(ctx context.Context, in SearchInput, d Decision, queries []string) ([][]float64, string) {
+func (s *Service) expansionVectors(ctx context.Context, token string, in SearchInput, d Decision, queries []string) ([][]float64, string) {
 	vectors := make([][]float64, len(queries))
 	if !searchModeEnabled(in.Modes, "vector") || in.querySpace == "" || !d.ExternalTransfer || !d.ContentSafe || s.Embedder == nil {
+		return vectors, ""
+	}
+	if sd, err := s.authorize(ctx, token, "search:"+colMemories, in.Scope, "", strings.Join(queries, "\n")); err != nil || !sd.ExternalTransfer || !sd.ContentSafe {
 		return vectors, ""
 	}
 	batch, callErr, err := s.meteredEmbed(ctx, in.Scope, "embedding_query", queries, "query")

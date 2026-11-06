@@ -112,7 +112,7 @@ func TestCaptureGateBudgetDefersTheCheckToTheWorker(t *testing.T) {
 	}
 	// Queueing a revision again (a retried request) keeps one job.
 	last := f.get(f.human, "memory_candidates", scopeA, got[3].CandidateID)
-	f.svc.deferMergeGate(testCtx, scopeA, last, *last.Generator)
+	f.svc.deferMergeGate(testCtx, f.human, scopeA, last, *last.Generator)
 	if again := f.mergeGateJobs(); len(again) != len(deferred) {
 		t.Fatal("a second deferral queued a second job", len(again), len(deferred))
 	}
@@ -149,7 +149,7 @@ func TestDeferredMergeGateSkipsDecidedCandidatesAndRetriesTheEmbedder(t *testing
 		t.Fatal(err)
 	}
 	job := func() Record {
-		f.svc.deferMergeGate(testCtx, scopeA, cand, *cand.Generator)
+		f.svc.deferMergeGate(testCtx, f.human, scopeA, cand, *cand.Generator)
 		return f.mergeGateJobs()[0]
 	}
 	f.emb.err = errors.New("embedder down")
@@ -157,6 +157,20 @@ func TestDeferredMergeGateSkipsDecidedCandidatesAndRetriesTheEmbedder(t *testing
 		t.Fatal("an unavailable embedder did not keep the job for a retry", err)
 	}
 	f.emb.err = nil
+	// A caller that may not send the claim to the embedder queues nothing for the worker either.
+	queued := f.mergeGateJobs()[0].ID
+	f.repo.mu.Lock()
+	delete(f.repo.store["jobs"], recKey(scopeA, queued))
+	f.repo.mu.Unlock()
+	who := f.auth.actors[f.human]
+	who.external = false
+	f.auth.actors[f.human] = who
+	f.svc.deferMergeGate(testCtx, f.human, scopeA, cand, *cand.Generator)
+	if jobs := f.mergeGateJobs(); len(jobs) != 0 {
+		t.Fatal("a caller without external transfer queued a check", jobs)
+	}
+	who.external = true
+	f.auth.actors[f.human] = who
 	stale := job()
 	stale.Target.Revision++
 	if err := f.svc.runDeferredMergeGate(testCtx, f.work, stale); err != nil {

@@ -295,12 +295,15 @@ func appendMissing(list, values []string) []string {
 	return list
 }
 
+// mergeQueryText is the part of a candidate's text a merge check searches and embeds.
+func mergeQueryText(cand Record) string { return runeCutString(strings.TrimSpace(cand.Text), 1000) }
+
 // similarMemories is search's lanes over approved memories for one candidate's
 // text, rechecked against the records and read with the caller's context permission.
 // similarMemories returns the k approved memories closest to the candidate's
 // text, with the query vector and its space (empty when the text was not embedded).
 func (s *Service) similarMemories(ctx context.Context, token string, d Decision, scope Scope, cand Record, k int) ([]Record, []float64, string, []string, error) {
-	query := runeCutString(strings.TrimSpace(cand.Text), 1000)
+	query := mergeQueryText(cand)
 	sd, err := s.authorize(ctx, token, "search:"+colMemories, scope, "", query)
 	if err != nil {
 		return nil, nil, "", nil, err

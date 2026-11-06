@@ -48,14 +48,14 @@ func (s *Service) captureMergeGate(ctx context.Context, token string, in Capture
 		return false
 	}
 	if !time.Now().Before(in.gateUntil) {
-		s.deferMergeGate(ctx, scope, cand, *in.Generator)
+		s.deferMergeGate(ctx, token, scope, cand, *in.Generator)
 		return false
 	}
 	gateCtx, cancel := context.WithDeadline(ctx, in.gateUntil)
 	defer cancel()
 	proposed, err := s.mergeGateCheck(gateCtx, token, actor, scope, cand, *in.Generator)
 	if err != nil && gateCtx.Err() != nil {
-		s.deferMergeGate(ctx, scope, cand, *in.Generator)
+		s.deferMergeGate(ctx, token, scope, cand, *in.Generator)
 	}
 	return proposed
 }
@@ -107,8 +107,14 @@ func (s *Service) mergeGateCheck(ctx context.Context, token string, actor Decisi
 var errMergeGateUnembedded = fmt.Errorf("%w: candidate not embedded", ErrUnavailable)
 
 // deferMergeGate queues one captureMergeGateKind job per candidate revision; a second
-// queueing of the same revision (a retried request) finds the job already there.
-func (s *Service) deferMergeGate(ctx context.Context, scope Scope, cand Record, gen Generator) {
+// queueing of the same revision (a retried request) finds the job already there. Only a
+// check the caller may run itself is queued: the worker sends the candidate's text to the
+// embedder under its own permission, so the caller must be allowed to send it too.
+func (s *Service) deferMergeGate(ctx context.Context, token string, scope Scope, cand Record, gen Generator) {
+	query := mergeQueryText(cand)
+	if sd, err := s.authorize(ctx, token, "search:"+colMemories, scope, "", query); err != nil || !sd.ExternalTransfer || !sd.ContentSafe || !safeTransfer(query) {
+		return
+	}
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	job := Record{ID: "mgq_" + strings.TrimPrefix(mergeProposalID(scope, cand.ID, cand.Revision), "mg_"), Scope: scope, Kind: captureMergeGateKind,
 		Status: JobStatusPending, Revision: 1, CreatedAt: now, UpdatedAt: now, Generator: &gen,
@@ -123,14 +129,15 @@ func (s *Service) deferMergeGate(ctx context.Context, scope Scope, cand Record, 
 }
 
 // runDeferredMergeGate is the worker's merge check for a deferred candidate, with the
-// worker's credentials. A candidate already decided, changed or gone, a refused worker,
+// worker's credentials. A candidate decided, changed, unsafe to send or gone, a refused worker,
 // or a proposal already stored ends the job; an embedder that is still unavailable retries it.
 func (s *Service) runDeferredMergeGate(ctx context.Context, workerToken string, job Record) error {
 	if job.Target == nil || job.Generator == nil || s.Embedder == nil {
 		return nil
 	}
 	cand, err := s.Repo.Get(ctx, job.Target.Collection, job.Scope, job.Target.ID)
-	if errors.Is(err, ErrNotFound) || err == nil && (cand.Status != "candidate" || cand.Revision != job.Target.Revision) {
+	// Decided, changed, quarantined, restricted or erased since: nothing to check.
+	if errors.Is(err, ErrNotFound) || err == nil && (cand.Revision != job.Target.Revision || !poolCandidate(ctx, s.Repo, cand, time.Now())) {
 		slog.Info("capture merge gate deferred check", "candidate_id", job.Target.ID, "outcome", "stale")
 		return nil
 	}
