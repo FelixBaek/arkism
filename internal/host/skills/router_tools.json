@@ -1280,6 +1280,10 @@
           "type": "boolean",
           "description": "Leave out memories that a returned approved observation was written from"
         },
+        "expand": {
+          "type": "boolean",
+          "description": "true lets the server model add a few sub-queries for a question that needs several facts (opt-in, one model call, any failure keeps plain recall)"
+        },
         "tags": {
           "type": "array",
           "maxItems": 32,

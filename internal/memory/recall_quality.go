@@ -40,6 +40,8 @@ import (
 //     score lowered by diversityPenalty times its highest embedding similarity to a row
 //     already picked (selectDiverse). Near-duplicates of one fact then give way to the next
 //     distinct fact instead of filling the result; the count never exceeds the limit.
+//   - expand (opt-in, spends one server model call per recall): the model's sub-queries
+//     search beside the question and join its fusion (recall_expand.go).
 //   - recall defaults a request leaves unset: rerank_options (the model rerank's prune and
 //     dedup), prefer_observations, include_chunks (include "sources") and chunks_max_tokens
 //     (include_options.sources.max_tokens). A request that sets one keeps its own value.
@@ -60,6 +62,7 @@ type SpaceRecallQuality struct {
 	ProvisionalVectors    bool   `json:"provisional_vectors,omitempty" bson:"provisional_vectors,omitempty"`
 	AutoCloseOnCorrection bool   `json:"auto_close_on_correction,omitempty" bson:"auto_close_on_correction,omitempty"`
 	Diversity             *bool  `json:"diversity,omitempty" bson:"diversity,omitempty"`
+	Expand                bool   `json:"expand,omitempty" bson:"expand,omitempty"`
 	// Recall defaults (applyRecallDefaults).
 	RerankOptions      *RerankOptions `json:"rerank_options,omitempty" bson:"rerank_options,omitempty"`
 	PreferObservations bool           `json:"prefer_observations,omitempty" bson:"prefer_observations,omitempty"`

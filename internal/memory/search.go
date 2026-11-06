@@ -50,6 +50,9 @@ type SearchInput struct {
 	// PreferObservations leaves out memories an approved observation in the result was written from.
 	// Unset takes the space's recall_quality.prefer_observations.
 	PreferObservations *bool `json:"prefer_observations,omitempty"`
+	// Expand lets the server model add sub-queries to a plain memory recall (recall_expand.go).
+	// Unset takes the space's recall_quality.expand.
+	Expand *bool `json:"expand,omitempty"`
 	// Include attaches "sources" (bounded source excerpts) and "entities" (names) to memory hits.
 	Include []string `json:"include,omitempty"`
 	// IncludeOptions bounds each include part by tokens (recall_include.go).
@@ -78,6 +81,10 @@ type SearchInput struct {
 	// queryVector and querySpace are the recall's embedded query, reused by the provisional lane.
 	queryVector []float64
 	querySpace  string
+	// expanded are the sub-queries' lanes, expandStatus and expandQueries the explain outcome (recall_expand.go).
+	expanded      []expandedQuery
+	expandStatus  string
+	expandQueries []string
 }
 
 func searchModeEnabled(modes []string, mode string) bool {
@@ -321,6 +328,7 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 		return one[0], err
 	}
 	in.queryVector, in.querySpace = queryVector, querySpace
+	s.expandRecall(ctx, token, &in, d, collection, run, &out)
 	if e = s.recallItems(ctx, token, in, d, collection, lists, clean, &out); e != nil {
 		return ContextBundle{}, Decision{}, e
 	}

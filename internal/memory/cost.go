@@ -139,7 +139,7 @@ type callCap struct {
 }
 
 // operationCap is the daily cap a metered operation reserves under: the server model's
-// wiki_ operations (wiki, extraction, media) share one; reflect and model rerank have their own.
+// wiki_ operations (wiki, extraction, media) share one; reflect, model rerank and recall expansion have their own.
 func operationCap(operation string) callCap {
 	switch {
 	case strings.HasPrefix(operation, "wiki_"):
@@ -148,6 +148,8 @@ func operationCap(operation string) callCap {
 		return callCap{prefix: reflectOperation, limit: reflectDailyCallLimit}
 	case operation == modelRerankOperation:
 		return callCap{prefix: modelRerankOperation, limit: modelRerankDailyCalls}
+	case operation == recallExpandOperation:
+		return callCap{prefix: recallExpandOperation, limit: recallExpandDailyCalls}
 	}
 	return callCap{}
 }

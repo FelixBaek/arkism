@@ -814,7 +814,7 @@ func recallByIDs(ids []string, project string) ([]any, error) {
 // recallSearchOptions checks the search-only recall options before any request.
 func recallSearchOptions(opts map[string]any) (map[string]any, error) {
 	out := map[string]any{}
-	for _, key := range []string{"explain", "expand_causal", "prefer_observations"} {
+	for _, key := range []string{"explain", "expand_causal", "prefer_observations", "expand"} {
 		if v, ok := opts[key]; ok && v != nil {
 			b, isBool := v.(bool)
 			if !isBool {

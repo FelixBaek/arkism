@@ -52,6 +52,10 @@ type RecallExplain struct {
 	Reranked   bool              `json:"reranked"`
 	// ModelRerank is set when the model rerank was asked for: applied, or why the fused order was kept.
 	ModelRerank string `json:"model_rerank,omitempty"`
+	// Expand is set when query expansion was on: applied, or why plain recall ran (recall_expand.go);
+	// ExpandQueries are the model's sub-queries that were searched.
+	Expand        string   `json:"expand,omitempty"`
+	ExpandQueries []string `json:"expand_queries,omitempty"`
 	// MinScoreDropped counts hits the request's min_score removed.
 	MinScoreDropped int `json:"min_score_dropped,omitempty"`
 	// Dropped counts hits each stage removed: the semantic, keyword and reranker floors
@@ -96,10 +100,13 @@ type recallTrace struct {
 	// modelRerank is the model rerank outcome (recall_model_rerank.go); modelRank its 1-based order.
 	modelRerank string
 	modelRank   map[string]int
-	dropped     int
-	dropStages  map[string]int
-	weights     map[string]float64
-	clock       *laneClock
+	// expand and expandQueries are the query expansion outcome (recall_expand.go).
+	expand        string
+	expandQueries []string
+	dropped       int
+	dropStages    map[string]int
+	weights       map[string]float64
+	clock         *laneClock
 	// boosts are each memory hit's recency factor and outcome weight (noteBoosts).
 	boosts map[string][2]float64
 }
@@ -183,13 +190,16 @@ func hitKey(h Hit) string { return h.Origin + ":" + h.Collection + ":" + h.ID }
 // recallLanes appends the temporal and graph lanes to plain memory recall. Lanes
 // chosen explicitly (in.Modes) and history searches keep exactly the lanes asked for.
 func (s *Service) recallLanes(ctx context.Context, in SearchInput, collection string, lists [][]Hit, clean func([]Hit) ([]Hit, error)) ([][]Hit, *recallTrace, error) {
-	trace := &recallTrace{explain: in.Explain, fused: map[string]float64{}, rerank: map[string]float64{}, clock: laneClockOf(ctx), weights: in.laneWeights()}
+	trace := &recallTrace{explain: in.Explain, fused: map[string]float64{}, rerank: map[string]float64{}, clock: laneClockOf(ctx), weights: in.laneWeights(), expand: in.expandStatus, expandQueries: in.expandQueries}
 	for i := range lists {
 		trace.lanes = append(trace.lanes, []string{"exact", "keyword", "vector", "relation"}[min(i, 3)])
 	}
 	lists = laneFloors(in, lists, trace)
 	if collection == colMemories {
 		lists = relevanceGate(in, lists, trace)
+		for _, hits := range expandedLanes(in, trace) {
+			lists, trace.lanes = append(lists, hits), append(trace.lanes, "expanded")
+		}
 	}
 	if collection != colMemories || in.IncludeInactive || len(in.Modes) > 0 && !in.spaceModes {
 		return lists, trace, nil
@@ -493,7 +503,7 @@ func (t *recallTrace) annotate(out *ContextBundle, lists [][]Hit) {
 		}
 		out.Items[i].Explain = e
 	}
-	out.Explain = &RecallExplain{Lanes: t.lanes, Reranked: t.reranked, ModelRerank: t.modelRerank, MinScoreDropped: t.dropped,
+	out.Explain = &RecallExplain{Lanes: t.lanes, Reranked: t.reranked, ModelRerank: t.modelRerank, Expand: t.expand, ExpandQueries: t.expandQueries, MinScoreDropped: t.dropped,
 		Dropped: t.dropStages, LaneWeights: t.weights, LaneMS: t.clock.millis(), RerankChain: t.chain, LaneHits: t.laneHits(lists)}
 	if t.window != nil {
 		out.Explain.TimeWindow = &RecallTimeWindow{Phrase: t.window.Phrase, From: t.window.From, To: t.window.To}
