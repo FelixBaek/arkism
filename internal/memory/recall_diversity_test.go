@@ -82,3 +82,31 @@ func (r nearestFirstRepo) SearchCollection(_ context.Context, col string, in Sea
 func (r nearestFirstRepo) embedding(h Hit) []float64 {
 	return r.store[h.Collection][recKey(h.Scope, h.ID)].Embedding.Vector
 }
+
+// A single-fact question keeps its best match first: the penalty only reorders the rows
+// after it, so diversity cannot move the one fact a single-step answer needs off the top.
+func TestRecallDiversityKeepsTheSingleFactFirst(t *testing.T) {
+	f := newFixture(t)
+	f.emb.semantic = true
+	f.svc.Repo = nearestFirstRepo{f.repo}
+	for _, text := range []string{"caroline went to the support group on 7 may", "caroline went to the support group on 20 may",
+		"caroline went to the support group with melanie", "caroline painted a sunrise", "caroline moved from sweden"} {
+		f.embedText(f.activeMemory(text))
+	}
+	query := SearchInput{Scope: scopeA, Query: "when did caroline go to the support group on 7 may", Modes: []string{"vector"}, Limit: 3}
+	off := false
+	setRecallQuality(t, f, SpaceRecallQuality{Diversity: &off})
+	plain := f.search(f.human, query)
+	setRecallQuality(t, f, SpaceRecallQuality{})
+	diverse := f.search(f.human, query)
+	if len(plain.Items) != 3 || len(diverse.Items) != 3 || plain.Items[0].ID != diverse.Items[0].ID || diverse.Items[0].Text != "caroline went to the support group on 7 may" {
+		t.Fatal(plain.Items, diverse.Items)
+	}
+	// Any pool: the best row is the first pick and nothing beyond the limit comes back.
+	rows := []ScoredHit{diverseRow("a", 0.9, 1, 0), diverseRow("b", 0.89, 1, 0), diverseRow("c", 0.2, 0, 1), diverseRow("d", 0.1)}
+	for limit := 1; limit <= 4; limit++ {
+		if got := selectDiverse(slices.Clone(rows), limit); len(got) != limit || got[0].ID != "a" {
+			t.Fatal(limit, got)
+		}
+	}
+}
