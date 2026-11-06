@@ -636,7 +636,7 @@ func (s *Service) spaceSettings(ctx context.Context, scope Scope) (SpaceConfig, 
 func (s *Service) spaceSettingsFrom(ctx context.Context, r interface {
 	Get(context.Context, string, Scope, string) (Record, error)
 }, scope Scope) (SpaceConfig, error) {
-	rec, err := r.Get(ctx, colSpaceConfigs, spaceScope(scope), spaceConfigID)
+	rec, err := spaceConfigDoc(ctx, r, spaceScope(scope))
 	view, err := spaceView(spaceScope(scope), rec, err)
 	if err != nil {
 		return SpaceConfig{}, err
@@ -666,7 +666,7 @@ func (s *Service) EffectiveSpaceConfig(ctx context.Context, token string, scope 
 	if err != nil {
 		return SpaceEffectiveView{}, err
 	}
-	rec, err := s.Repo.Get(ctx, colSpaceConfigs, scope, spaceConfigID)
+	rec, err := spaceConfigDoc(ctx, s.Repo, scope)
 	view, err := spaceView(scope, rec, err)
 	if err != nil {
 		return SpaceEffectiveView{}, err

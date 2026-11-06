@@ -181,7 +181,7 @@ func TestDigestCapAndMergeProposal(t *testing.T) {
 	db := f.approveDigest("topic", f.proposeTopic("로그 보관", "로그는 30일 보관한다.", memRefs(b1, b2)))
 	// Heat: da is used, db is cold.
 	now := time.Now().UTC()
-	if err := f.repo.Insert(testCtx, colAgentTools, Record{ID: scopedAgentToolsID(scopeA), Scope: scopeA, Revision: 1, Status: "active", CreatedAt: now, UpdatedAt: now,
+	if err := f.repo.Insert(testCtx, colAgentTools, Record{ID: scopedSingletonID(agentToolsID, scopeA), Scope: scopeA, Revision: 1, Status: "active", CreatedAt: now, UpdatedAt: now,
 		AgentTools: &AgentTools{MemoryUse30: &MemoryUseStats{Days: 30, Items: []MemoryUseStat{{ID: a1.ID, Injected: 9, Used: 4}}}}}); err != nil {
 		t.Fatal(err)
 	}

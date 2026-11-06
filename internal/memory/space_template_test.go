@@ -91,7 +91,7 @@ func TestSpaceTemplateAutoApply(t *testing.T) {
 
 func (s *Service) mustSpace(t *testing.T, scope Scope) SpaceConfig {
 	t.Helper()
-	r, err := s.Repo.Get(testCtx, colSpaceConfigs, scope, spaceConfigID)
+	r, err := spaceConfigDoc(testCtx, s.Repo, scope)
 	if err != nil || r.SpaceConfig == nil {
 		t.Fatalf("space config: %v", err)
 	}

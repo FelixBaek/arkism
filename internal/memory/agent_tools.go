@@ -510,24 +510,30 @@ func (s *Service) AgentTools(ctx context.Context, token string, scope Scope) (Re
 	}
 	r, err := agentToolsDoc(ctx, s.Repo, scope)
 	if errors.Is(err, ErrNotFound) {
-		return Record{ID: scopedAgentToolsID(scope), Scope: scope, AgentTools: &AgentTools{Servers: []AgentToolEntry{}, Plugins: []AgentToolEntry{}, Requests: []AgentToolRequest{}}}, nil
+		return Record{ID: scopedSingletonID(agentToolsID, scope), Scope: scope, AgentTools: &AgentTools{Servers: []AgentToolEntry{}, Plugins: []AgentToolEntry{}, Requests: []AgentToolRequest{}}}, nil
 	}
 	return r, err
 }
 
-// The primary key is (collection,id), so each scope needs its own id. The one scope
-// that already owns the legacy shared id keeps using it.
-func scopedAgentToolsID(scope Scope) string {
-	return agentToolsID + "-" + ContentHash(structuredText(scope))
+// The primary key is (collection,id), so a per-scope singleton needs its own id
+// in each scope. The one scope that already owns the legacy shared id (base)
+// keeps reading and writing it; Get matches the scope, so no other scope sees it.
+func scopedSingletonID(base string, scope Scope) string {
+	return base + "-" + ContentHash(structuredText(scope))
+}
+func scopedSingletonDoc(ctx context.Context, repo interface {
+	Get(context.Context, string, Scope, string) (Record, error)
+}, col, base string, scope Scope) (Record, error) {
+	r, err := repo.Get(ctx, col, scope, scopedSingletonID(base, scope))
+	if errors.Is(err, ErrNotFound) {
+		return repo.Get(ctx, col, scope, base)
+	}
+	return r, err
 }
 func agentToolsDoc(ctx context.Context, repo interface {
 	Get(context.Context, string, Scope, string) (Record, error)
 }, scope Scope) (Record, error) {
-	r, err := repo.Get(ctx, colAgentTools, scope, scopedAgentToolsID(scope))
-	if errors.Is(err, ErrNotFound) {
-		return repo.Get(ctx, colAgentTools, scope, agentToolsID)
-	}
-	return r, err
+	return scopedSingletonDoc(ctx, repo, colAgentTools, agentToolsID, scope)
 }
 
 // updateAgentTools applies change to the scope's document inside one transaction.
@@ -542,7 +548,7 @@ func (s *Service) updateAgentTools(ctx context.Context, scope Scope, change func
 			return err
 		}
 		if fresh {
-			r = Record{ID: scopedAgentToolsID(scope), Scope: scope, Kind: colAgentTools, Status: statusActive, Revision: 1, CreatedAt: now, Text: "agent tools"}
+			r = Record{ID: scopedSingletonID(agentToolsID, scope), Scope: scope, Kind: colAgentTools, Status: statusActive, Revision: 1, CreatedAt: now, Text: "agent tools"}
 		}
 		// Work on a copy: a record read earlier must not change under its reader.
 		tools := AgentTools{}

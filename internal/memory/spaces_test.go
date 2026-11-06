@@ -395,3 +395,34 @@ func TestSpaceTemplateCarriesDefinitionsForHumansOnly(t *testing.T) {
 		t.Fatalf("imported mental model = %+v", models)
 	}
 }
+
+// Settings rows share one collection keyed by (collection,id): every space
+// writes its own id, and a space saved under the legacy shared id keeps it.
+func TestSpaceConfigKeyedPerSpaceWithLegacyRow(t *testing.T) {
+	f := newFixture(t)
+	legacy := defaultSpaceConfig()
+	legacy.DisplayName = "old A"
+	f.put(colSpaceConfigs, Record{ID: spaceConfigID, Scope: scopeA, Kind: "space_config", Status: statusActive, Revision: 3, SpaceConfig: &legacy})
+	if v, err := f.svc.GetSpaceConfig(testCtx, f.human, scopeA); err != nil || v.Config.DisplayName != "old A" || v.Revision != 3 {
+		t.Fatalf("legacy read = %+v %v", v, err)
+	}
+	if v, err := f.svc.GetSpaceConfig(testCtx, f.human, scopeB); err != nil || v.Config.DisplayName != "" || v.Revision != 0 {
+		t.Fatalf("legacy row leaked to B = %+v %v", v, err)
+	}
+	for scope, name := range map[Scope]string{scopeA: "new A", scopeB: "B"} {
+		if _, err := f.svc.PutSpaceConfig(testCtx, f.human, scope, SpaceConfigInput{ExpectedRevision: -1, DisplayName: &name}, false); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+	a, errA := f.repo.Get(testCtx, colSpaceConfigs, scopeA, spaceConfigID)
+	b, errB := f.repo.Get(testCtx, colSpaceConfigs, scopeB, scopedSingletonID(spaceConfigID, scopeB))
+	if errA != nil || a.SpaceConfig.DisplayName != "new A" || a.Revision != 4 || errB != nil || b.SpaceConfig.DisplayName != "B" {
+		t.Fatalf("rows a=%+v %v b=%+v %v", a.SpaceConfig, errA, b.SpaceConfig, errB)
+	}
+	if _, err := f.repo.Get(testCtx, colSpaceConfigs, scopeA, scopedSingletonID(spaceConfigID, scopeA)); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("legacy space got a second row: %v", err)
+	}
+	if scopedSingletonID(spaceConfigID, scopeA) == scopedSingletonID(spaceConfigID, scopeB) {
+		t.Fatal("two spaces share one settings id")
+	}
+}

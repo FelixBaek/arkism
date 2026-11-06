@@ -456,7 +456,7 @@ func (s *Service) getSpaceConfig(ctx context.Context, token string, scope Scope)
 	if err != nil {
 		return SpaceView{}, err
 	}
-	rec, err := s.Repo.Get(ctx, colSpaceConfigs, scope, spaceConfigID)
+	rec, err := spaceConfigDoc(ctx, s.Repo, scope)
 	view, err := spaceView(scope, rec, err)
 	view.Config = shownSpaceConfig(view.Config, d.Role)
 	return view, err
@@ -539,11 +539,19 @@ func validSpaceConfig(c SpaceConfig) error {
 	return validSpaceSettings(c)
 }
 
+// spaceConfigDoc reads a space's settings row: its own scoped id, or the legacy
+// shared id a space saved before settings were keyed per space.
+func spaceConfigDoc(ctx context.Context, repo interface {
+	Get(context.Context, string, Scope, string) (Record, error)
+}, scope Scope) (Record, error) {
+	return scopedSingletonDoc(ctx, repo, colSpaceConfigs, spaceConfigID, scope)
+}
+
 // changeSpaceConfig applies change to the stored (or default) config under a revision check.
 func (s *Service) changeSpaceConfig(ctx context.Context, scope Scope, d Decision, expected int64, change func(*SpaceConfig) error) (SpaceView, error) {
 	var out Record
 	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		rec, err := tx.Get(ctx, colSpaceConfigs, scope, spaceConfigID)
+		rec, err := spaceConfigDoc(ctx, tx, scope)
 		fresh := errors.Is(err, ErrNotFound)
 		if err != nil && !fresh {
 			return err
@@ -561,7 +569,7 @@ func (s *Service) changeSpaceConfig(ctx context.Context, scope Scope, d Decision
 			return err
 		}
 		if fresh {
-			rec = Record{ID: spaceConfigID, Scope: scope, Kind: "space_config", Status: statusActive, CreatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role}
+			rec = Record{ID: scopedSingletonID(spaceConfigID, scope), Scope: scope, Kind: "space_config", Status: statusActive, CreatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role}
 		}
 		rec.SpaceConfig, rec.UpdatedAt, rec.Revision = &config, now, rec.Revision+1
 		if fresh {
@@ -793,7 +801,7 @@ func (s *Service) checkSpaceImport(ctx context.Context, scope Scope, in SpaceImp
 	if err != nil || !manifest.Template && !in.AsTemplate {
 		return manifest, err
 	}
-	_, err = s.Repo.Get(ctx, colSpaceConfigs, scope, spaceConfigID)
+	_, err = spaceConfigDoc(ctx, s.Repo, scope)
 	if err == nil {
 		return SpaceManifest{}, ErrConflict
 	}

@@ -96,7 +96,7 @@ func auditRecorded(ctx context.Context, tx Tx, scope Scope, action string) bool 
 	if auditMandatory(action) {
 		return true
 	}
-	r, err := tx.Get(ctx, colSpaceConfigs, spaceScope(scope), spaceConfigID)
+	r, err := spaceConfigDoc(ctx, tx, spaceScope(scope))
 	if err != nil || r.SpaceConfig == nil {
 		return true
 	}

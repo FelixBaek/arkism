@@ -41,7 +41,7 @@ func (p *Postgres) SpaceAliasOwners(ctx context.Context, workspace, alias string
 	if !scopeName(workspace) || !spaceAliasPattern.MatchString(alias) {
 		return nil, ErrInvalid
 	}
-	rows, err := p.q().Query(ctx, `SELECT payload FROM memory_records WHERE collection=$1 AND workspace_id=$2 AND user_id='' AND agent_id='' AND id=$3 AND doc->'space_config'->'aliases' ? $4 ORDER BY project_id LIMIT 2`, colSpaceConfigs, workspace, spaceConfigID, alias)
+	rows, err := p.q().Query(ctx, `SELECT payload FROM memory_records WHERE collection=$1 AND workspace_id=$2 AND user_id='' AND agent_id='' AND (id=$3 OR id LIKE ($3 || '-%')) AND doc->'space_config'->'aliases' ? $4 ORDER BY project_id LIMIT 2`, colSpaceConfigs, workspace, spaceConfigID, alias)
 	if err != nil {
 		return nil, pgErr(err)
 	}

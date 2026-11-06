@@ -164,7 +164,7 @@ func (s *Service) emitSpaceSection(ctx context.Context, token string, d Decision
 }
 
 func emitSpaceConfig(ctx context.Context, repo Repository, scope Scope, role string, emit func(spaceBundleLine) error) error {
-	rec, err := repo.Get(ctx, colSpaceConfigs, scope, spaceConfigID)
+	rec, err := spaceConfigDoc(ctx, repo, scope)
 	if errors.Is(err, ErrNotFound) || err == nil && rec.SpaceConfig == nil {
 		return nil
 	}

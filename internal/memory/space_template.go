@@ -54,7 +54,7 @@ func (s *Service) autoApplySpaceTemplate(ctx context.Context, token string, d De
 	if definitionsOnly {
 		lines = slices.DeleteFunc(lines, isConfig)
 	} else {
-		if _, err := s.Repo.Get(ctx, colSpaceConfigs, scope, spaceConfigID); !errors.Is(err, ErrNotFound) {
+		if _, err := spaceConfigDoc(ctx, s.Repo, scope); !errors.Is(err, ErrNotFound) {
 			return
 		}
 		if !slices.ContainsFunc(lines, isConfig) { // stored settings mark the space as set up

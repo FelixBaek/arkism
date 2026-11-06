@@ -37,6 +37,10 @@ func TestPostgresSpaceRenameMovesEveryRow(t *testing.T) {
 	if err := p.Insert(testCtx, colJobs, privacy); err != nil {
 		t.Fatal(err)
 	}
+	named := "before rename"
+	if _, err := f.svc.PutSpaceConfig(testCtx, f.human, scopeA, SpaceConfigInput{ExpectedRevision: -1, DisplayName: &named}, false); err != nil {
+		t.Fatal(err)
+	}
 	to := Scope{WorkspaceID: scopeA.WorkspaceID, ProjectID: "renamed"}
 	toSub := Scope{WorkspaceID: to.WorkspaceID, ProjectID: to.ProjectID, UserID: sub.UserID, AgentID: sub.AgentID}
 
@@ -61,6 +65,9 @@ func TestPostgresSpaceRenameMovesEveryRow(t *testing.T) {
 		t.Fatalf("memory under new name: %+v %v", got.Scope, err)
 	}
 	// Lookups by the recomputed ids work under the new name.
+	if _, err = p.Get(testCtx, colSpaceConfigs, to, scopedSingletonID(spaceConfigID, to)); err != nil {
+		t.Fatalf("space settings under new name: %v", err)
+	}
 	page, err := f.svc.GetWikiPage(testCtx, f.human, toSub, wikiPageID(toSub, "bleed"))
 	if err != nil || page.Revision != bleed.Revision {
 		t.Fatalf("page under new name: %+v %v", page, err)

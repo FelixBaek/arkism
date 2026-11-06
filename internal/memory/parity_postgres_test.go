@@ -5,6 +5,7 @@ package memory
 // Real-PostgreSQL checks for the entity, recall, ops, space, webhook, causal and file-delta SQL.
 // They skip when POSTGRES_TEST_DSN is not configured (see tools/check_postgres_local.sh).
 import (
+	"errors"
 	"net/http"
 	"slices"
 	"strings"
@@ -124,8 +125,8 @@ func TestPostgresSpacesListAliasAndBundle(t *testing.T) {
 	if got, err := f.svc.resolveSpace(testCtx, Scope{WorkspaceID: scopeA.WorkspaceID, ProjectID: "@front"}); err != nil || got != scopeA {
 		t.Fatalf("resolve = %+v %v", got, err)
 	}
-	if _, err := f.svc.SetSpaceAlias(testCtx, f.human, scopeB, "front", true); err == nil {
-		t.Fatal("duplicate alias accepted")
+	if _, err := f.svc.SetSpaceAlias(testCtx, f.human, scopeB, "front", true); !errors.Is(err, ErrHandleTaken) {
+		t.Fatalf("duplicate alias: %v", err)
 	}
 	page, err := f.svc.ListSpaces(testCtx, f.human, scopeA, "", 10)
 	if err != nil || len(page.Items) != 1 || !slices.Contains(page.Items[0].Config.Aliases, "front") || page.Items[0].Created == nil || page.Items[0].LastActivity == nil || page.Items[0].LastActivity.Before(*page.Items[0].Created) {
@@ -272,6 +273,44 @@ func TestPostgresTagFiltersAgreeWithGo(t *testing.T) {
 			if want := (SearchCriteria{Filters: &f}).matches("", have, time.Time{}, time.Time{}); got != want {
 				t.Errorf("%+v tags=%v: sql %v go %v", f, have, got, want)
 			}
+		}
+	}
+}
+
+// memory_records is keyed by (collection,id): every space saves settings under
+// its own id, and a space saved under the legacy shared id keeps reading it.
+func TestPostgresSpaceConfigPerSpace(t *testing.T) {
+	f, p := pgFixture(t)
+	old := Scope{WorkspaceID: scopeA.WorkspaceID, ProjectID: "legacy"}
+	cfg := defaultSpaceConfig()
+	cfg.DisplayName, cfg.Aliases = "Legacy", []string{"old"}
+	if err := p.Insert(testCtx, colSpaceConfigs, Record{ID: spaceConfigID, Scope: old, Kind: "space_config", Status: statusActive, Revision: 2, SpaceConfig: &cfg}); err != nil {
+		t.Fatal(err)
+	}
+	for _, sc := range []Scope{scopeA, scopeB, old} {
+		name := "name of " + sc.ProjectID
+		if _, err := f.svc.PutSpaceConfig(testCtx, f.human, sc, SpaceConfigInput{ExpectedRevision: -1, DisplayName: &name}, false); err != nil {
+			t.Fatalf("%s: %v", sc.ProjectID, err)
+		}
+	}
+	for _, sc := range []Scope{scopeA, scopeB, old} {
+		v, err := f.svc.GetSpaceConfig(testCtx, f.human, sc)
+		if err != nil || v.Config.DisplayName != "name of "+sc.ProjectID {
+			t.Fatalf("%s = %+v %v", sc.ProjectID, v, err)
+		}
+	}
+	if v, _ := f.svc.GetSpaceConfig(testCtx, f.human, old); v.Revision != 3 || !slices.Equal(v.Config.Aliases, []string{"old"}) {
+		t.Fatalf("legacy row not updated in place: %+v", v)
+	}
+	if _, err := p.Get(testCtx, colSpaceConfigs, old, scopedSingletonID(spaceConfigID, old)); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("legacy space got a second row: %v", err)
+	}
+	if _, err := f.svc.SetSpaceAlias(testCtx, f.human, scopeB, "bee", true); err != nil {
+		t.Fatal(err)
+	}
+	for alias, want := range map[string]Scope{"old": old, "bee": scopeB} {
+		if got, err := f.svc.resolveSpace(testCtx, Scope{WorkspaceID: scopeA.WorkspaceID, ProjectID: "@" + alias}); err != nil || got != want {
+			t.Fatalf("@%s = %+v %v", alias, got, err)
 		}
 	}
 }
