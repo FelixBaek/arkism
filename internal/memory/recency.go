@@ -80,6 +80,9 @@ func (s *Service) fuseRecallHits(ctx context.Context, token string, lists [][]Hi
 	if recall {
 		now, weights := s.recallClock(in), s.outcomeWeights(ctx, in.Scope, rows)
 		trace.noteBoosts(rows, now, weights)
+		if in.space.recallQuality().diversityOn() {
+			return selectDiverse(decayByRecency(rows, now, weights, len(rows)), in.Limit), nil
+		}
 		return decayByRecency(rows, now, weights, in.Limit), nil
 	}
 	return rows[:min(in.Limit, len(rows))], nil

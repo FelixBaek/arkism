@@ -485,6 +485,8 @@ type Hit struct {
 	// conflictID and keywords feed the pending-correction label and the relevance gate (recall_quality.go).
 	conflictID string
 	keywords   []string
+	// vector is the record's stored embedding in the query's space, for diverse selection (recall_quality.go).
+	vector []float64
 }
 type ContextBundle struct {
 	History       []HistoricalHit `json:"history,omitempty"`

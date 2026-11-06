@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -33,6 +34,12 @@ import (
 //   - auto_close_on_correction (opt-in): approving a correction kept next to the old memory
 //     ends the old one at the new one's effective time; off, the old one gets a
 //     valid_to_proposal a person accepts through the expiry route.
+//   - diversity (default on; false keeps the plain score order): each recall lane reads
+//     twice the limit (at most 50), and memory recall picks its
+//     limit rows from the fused, reranked and recency-weighted pool greedily, each pick's
+//     score lowered by diversityPenalty times its highest embedding similarity to a row
+//     already picked (selectDiverse). Near-duplicates of one fact then give way to the next
+//     distinct fact instead of filling the result; the count never exceeds the limit.
 //   - recall defaults a request leaves unset: rerank_options (the model rerank's prune and
 //     dedup), prefer_observations, include_chunks (include "sources") and chunks_max_tokens
 //     (include_options.sources.max_tokens). A request that sets one keeps its own value.
@@ -52,6 +59,7 @@ type SpaceRecallQuality struct {
 	Provisional           *bool  `json:"provisional,omitempty" bson:"provisional,omitempty"`
 	ProvisionalVectors    bool   `json:"provisional_vectors,omitempty" bson:"provisional_vectors,omitempty"`
 	AutoCloseOnCorrection bool   `json:"auto_close_on_correction,omitempty" bson:"auto_close_on_correction,omitempty"`
+	Diversity             *bool  `json:"diversity,omitempty" bson:"diversity,omitempty"`
 	// Recall defaults (applyRecallDefaults).
 	RerankOptions      *RerankOptions `json:"rerank_options,omitempty" bson:"rerank_options,omitempty"`
 	PreferObservations bool           `json:"prefer_observations,omitempty" bson:"prefer_observations,omitempty"`
@@ -97,6 +105,41 @@ func (c *SpaceConfig) recallQuality() SpaceRecallQuality {
 func (q SpaceRecallQuality) gateOn() bool { return q.RelevanceGate == nil || *q.RelevanceGate }
 
 func (q SpaceRecallQuality) provisionalOn() bool { return q.Provisional == nil || *q.Provisional }
+
+func (q SpaceRecallQuality) diversityOn() bool { return q.Diversity == nil || *q.Diversity }
+
+// diversityPenalty weighs a candidate's closest similarity to the rows already picked against
+// its score relative to the best row. At 0.5 a row that repeats a picked one (similarity near 1)
+// loses half the best score, while rows on distinct facts keep their order.
+const diversityPenalty = 0.5
+
+// selectDiverse picks limit rows from rows (best score first) one at a time by score/best
+// minus diversityPenalty times the row's highest cosine similarity to a picked row. A row
+// without a stored vector is never penalised. Scores are kept, so the score floors still
+// apply to the real values; the result is in pick order.
+func selectDiverse(rows []ScoredHit, limit int) []ScoredHit {
+	if len(rows) <= limit || limit <= 0 || rows[0].Score <= 0 {
+		return rows[:min(limit, len(rows))]
+	}
+	best, picked := rows[0].Score, make([]ScoredHit, 0, limit)
+	used, closest := make([]bool, len(rows)), make([]float64, len(rows))
+	for len(picked) < limit {
+		at, value := -1, math.Inf(-1)
+		for i, r := range rows {
+			if v := r.Score/best - diversityPenalty*closest[i]; !used[i] && v > value {
+				at, value = i, v
+			}
+		}
+		used[at] = true
+		picked = append(picked, rows[at])
+		for i := range rows {
+			if !used[i] && rows[at].vector != nil && rows[i].vector != nil {
+				closest[i] = max(closest[i], cosine(rows[at].vector, rows[i].vector))
+			}
+		}
+	}
+	return picked
+}
 
 // noticeLang is the language recall notices are written in.
 func (in SearchInput) noticeLang() string {

@@ -241,6 +241,18 @@ func (s *Service) authorizeSearch(ctx context.Context, token, collection string,
 	return d, err
 }
 
+// retrieval is what the search lanes read: the retrieval query when one was derived, and
+// for diverse memory recall twice the limit so selectDiverse has distinct facts to swap in.
+func (in SearchInput) retrieval(collection string) SearchInput {
+	if in.retrievalQuery != "" {
+		in.Query = in.retrievalQuery
+	}
+	if collection == colMemories && !in.IncludeInactive && in.space.recallQuality().diversityOn() {
+		in.Limit = min(2*in.Limit, 50)
+	}
+	return in
+}
+
 // Keep the search actor inside the service for multi-step consumers.
 func (s *Service) searchWithActor(ctx context.Context, token string, in SearchInput) (ContextBundle, Decision, error) {
 	searchContent, err := prepareSearchInput(&in)
@@ -275,11 +287,7 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 	if memoryErr != nil {
 		return out, Decision{}, ErrUnavailable
 	}
-	retrieval := in
-	if in.retrievalQuery != "" {
-		retrieval.Query = in.retrievalQuery
-	}
-	lists, memoryErr := s.searchLists(ctx, token, collection, retrieval, queryVector, querySpace)
+	lists, memoryErr := s.searchLists(ctx, token, collection, in.retrieval(collection), queryVector, querySpace)
 	if memoryErr != nil {
 		return out, Decision{}, ErrUnavailable
 	}
@@ -571,6 +579,9 @@ func (s *Service) cleanSearchHit(ctx context.Context, token string, in SearchInp
 	}
 	if slices.Contains(why, reasonVector) {
 		h.VectorMatch = verifiedSemanticMatch(r, queryVector, querySpace, distanceLimit)
+	}
+	if r.Embedding != nil && querySpace != "" && r.Embedding.Space == querySpace && len(r.Embedding.Vector) == len(queryVector) {
+		h.vector = r.Embedding.Vector
 	}
 	return h, true, nil
 }
