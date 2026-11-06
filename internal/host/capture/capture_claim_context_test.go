@@ -3,6 +3,7 @@ package capture
 import (
 	"encoding/json"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -76,7 +77,7 @@ func TestCaptureOptionalContextNilAndDomainRestriction(t *testing.T) {
 
 func TestCaptureOptionalContextInvalidItemDoesNotDiscardOtherClaims(t *testing.T) {
 	capFake(t)
-	for _, mode := range []string{"extra_authority", "model_observation", "unknown_key", "missing_key", "empty_domain", "unknown_domain", "duplicate_domain", "array_text", "null_text", "NUL", "invalid_utf8", "long_runes", "duplicate_object_key"} {
+	for _, mode := range []string{"extra_authority", "model_observation", "unknown_key", "missing_key", "empty_domain", "unknown_domain", "array_text", "null_text", "NUL", "invalid_utf8", "long_runes", "duplicate_object_key"} {
 		t.Run(mode, func(t *testing.T) {
 			context := optionalClaimContext()
 			var value any = context
@@ -93,8 +94,6 @@ func TestCaptureOptionalContextInvalidItemDoesNotDiscardOtherClaims(t *testing.T
 				context["domains"] = []any{}
 			case "unknown_domain":
 				context["domains"] = []any{"other"}
-			case "duplicate_domain":
-				context["domains"] = []any{"work", "work"}
 			case "array_text":
 				context["uncertainty"] = []any{"tentative"}
 			case "null_text":
@@ -208,5 +207,47 @@ func TestCaptureOptionalContextExportDoesNotReportWithheldAsEmptySuccess(t *test
 	empty, err := ExtractClaims("input", "2026-01-01", nil, "", "", "synthetic-context")
 	if err != nil || empty.ContextRejections != nil || !reflect.DeepEqual(empty.Claims, []any{}) {
 		t.Fatal("real empty extraction lost its distinction", err, empty)
+	}
+}
+
+// Structured output cannot ask for unique items, so a repeated domain is dropped, not the claim.
+func TestCaptureOptionalContextRepeatedDomainIsDropped(t *testing.T) {
+	capFake(t)
+	context := optionalClaimContext()
+	context["domains"] = []any{"work", "personal", "work"}
+	parsed, _, reason := parseClaimContext(context)
+	if parsed == nil || reason != "" || !slices.Equal(parsed.Domains, []string{"personal", "work"}) {
+		t.Fatal("repeated domain", parsed, reason)
+	}
+}
+
+// Every extraction schema is sent as structured output, which refuses these keywords with a 400;
+// the capture code checks the bounds itself.
+func TestExtractionSchemasUseOnlyStructuredOutputKeywords(t *testing.T) {
+	for name, schema := range map[string]string{"claims": claimsSchema, "claims_assistant": captureSchema(assistantResultsMode),
+		"reflect": reflectSchema, "review": reviewSchema, "sessions": siSchema, "autosave": autosaveSchema, "session_state": sessionSchemaJSON} {
+		var v any
+		if err := json.Unmarshal([]byte(schema), &v); err != nil {
+			t.Fatal(name, err)
+		}
+		var walk func(any)
+		walk = func(n any) {
+			switch x := n.(type) {
+			case map[string]any:
+				for _, k := range []string{"maxItems", "uniqueItems", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"} {
+					if _, bad := x[k]; bad {
+						t.Errorf("%s schema uses %s", name, k)
+					}
+				}
+				for _, c := range x {
+					walk(c)
+				}
+			case []any:
+				for _, c := range x {
+					walk(c)
+				}
+			}
+		}
+		walk(v)
 	}
 }

@@ -12,7 +12,8 @@ const claimContextMaxBytes = 16 << 10
 const claimContextBatchBytes = 64 << 10
 
 // The model supplies descriptions, never evidence authority or observation time.
-const claimContextSchema = `"memory_context":{"anyOf":[{"type":"null"},{"type":"object","additionalProperties":false,"required":["domains","applicability","uncertainty","valid_from","semantic_kind"],"properties":{"domains":{"type":"array","minItems":1,"maxItems":2,"uniqueItems":true,"items":{"type":"string","enum":["personal","work"]}},"applicability":{"type":"string","maxLength":2000},"uncertainty":{"type":"string","maxLength":512},"valid_from":{"type":"string","maxLength":256},"semantic_kind":{"type":"string","enum":["fact","preference","correction","lesson","failure_recovery"]}}}]}`
+// Structured output rejects maxItems and uniqueItems, so claimContextDomains enforces both.
+const claimContextSchema = `"memory_context":{"anyOf":[{"type":"null"},{"type":"object","additionalProperties":false,"required":["domains","applicability","uncertainty","valid_from","semantic_kind"],"properties":{"domains":{"type":"array","minItems":1,"items":{"type":"string","enum":["personal","work"]}},"applicability":{"type":"string","maxLength":2000},"uncertainty":{"type":"string","maxLength":512},"valid_from":{"type":"string","maxLength":256},"semantic_kind":{"type":"string","enum":["fact","preference","correction","lesson","failure_recovery"]}}}]}`
 
 type claimMemoryContext struct {
 	Domains       []string
@@ -68,19 +69,18 @@ func claimContextDomains(v any) ([]string, bool) {
 	default:
 		return nil, false
 	}
-	if len(values) < 1 || len(values) > 2 {
-		return nil, false
-	}
-	result := make([]string, 0, len(values))
+	result := make([]string, 0, 2)
 	for _, value := range values {
 		name, ok := value.(string)
-		if !ok || name != "personal" && name != "work" || slices.Contains(result, name) {
+		if !ok || name != "personal" && name != "work" {
 			return nil, false
 		}
-		result = append(result, name)
+		if !slices.Contains(result, name) { // a repeated domain is dropped: at most the two known ones remain
+			result = append(result, name)
+		}
 	}
 	slices.Sort(result)
-	return result, true
+	return result, len(result) > 0
 }
 
 func claimContextText(v any, limit int) (string, bool) {

@@ -561,3 +561,16 @@ func TestAutosaveExtractMatchesPythonGolden(t *testing.T) {
 		t.Fatal("outbox key differs")
 	}
 }
+
+// The schema cannot cap the claim count, so applying keeps the first autosaveClaimsMax.
+func TestAutosaveApplyClaimsKeepsAtMostTheCap(t *testing.T) {
+	messages := []any{map[string]any{"role": "user", "text": "목표 문장"}}
+	claims := []any{}
+	for range autosaveClaimsMax + 5 {
+		claims = append(claims, map[string]any{"field": "next_steps", "message_index": 0, "quote": "목표 문장"})
+	}
+	claims = append(claims, map[string]any{"field": "unknown", "message_index": 0, "quote": "x"}) // past the cap: never read
+	if _, err := autosaveApplyClaims(map[string]any{}, messages, claims); err != nil {
+		t.Fatal(err)
+	}
+}
