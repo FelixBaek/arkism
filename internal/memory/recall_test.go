@@ -121,19 +121,19 @@ func TestParseTimeIntent(t *testing.T) {
 		{"어제", time.Date(2027, 1, 1, 9, 0, 0, 0, seoul), day(2026, 12, 31), day(2027, 1, 1)},
 		{"in December", jan10, day(2026, 12, 1), day(2027, 1, 1)},
 	} {
-		w, ok := parseTimeIntent(tc.query, tc.now)
+		w, ok := parseTimeIntent(tc.query, "", tc.now)
 		if !ok || !w.From.Equal(tc.from) || !w.To.Equal(tc.to) {
 			t.Errorf("%q: got %v..%v ok=%v, want %v..%v", tc.query, w.From, w.To, ok, tc.from, tc.to)
 		}
 	}
 	for _, q := range []string{"deploy the build", "may I ask about march forward", "3개월 계획", "version 12", "2026-02-30 배포", "2월 30일", "february 30", "2026-13 plan"} {
-		if w, ok := parseTimeIntent(q, nov5); ok {
+		if w, ok := parseTimeIntent(q, "", nov5); ok {
 			t.Errorf("%q: unexpected window %v", q, w)
 		}
 	}
 	// The reader's zone moves the day boundary.
 	utcNow := time.Date(2026, 11, 4, 20, 0, 0, 0, time.UTC) // already Nov 5 in Seoul
-	if w, _ := parseTimeIntent("yesterday", utcNow); !w.From.Equal(time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)) {
+	if w, _ := parseTimeIntent("yesterday", "", utcNow); !w.From.Equal(time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)) {
 		t.Fatal(w)
 	}
 }

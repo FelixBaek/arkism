@@ -62,7 +62,7 @@ func TestParseTimeIntentNoFalsePositivesAcrossLanguages(t *testing.T) {
 		if w, ok := cldrTimeIntent(foldTimeText(q), now); ok {
 			t.Errorf("CLDR fallback read %q as time: %q", q, w.Phrase)
 		}
-		if w, ok := parseTimeIntent(q, now); ok {
+		if w, ok := parseTimeIntent(q, "", now); ok {
 			t.Errorf("parseTimeIntent read %q as time: %q", q, w.Phrase)
 		}
 	}

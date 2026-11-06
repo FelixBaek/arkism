@@ -353,10 +353,15 @@ func (r timeRule) foreignWord(phrase string, score []int) bool {
 
 // parseTimeIntent finds the first time phrase in query (numeric forms, then the
 // languages of timeLexicons, then the CLDR fallback) and resolves it against now, whose location is the
-// reader's calendar.
-func parseTimeIntent(query string, now time.Time) (timeWindow, bool) {
+// reader's calendar. locale (an Accept-Language value, may be empty) decides which way
+// a slash date like 03/04/2026 reads.
+func parseTimeIntent(query, locale string, now time.Time) (timeWindow, bool) {
 	q := foldTimeText(strings.Join(strings.Fields(query), " "))
 	score := timeLanguageScores(q)
+	if m := slashDateRe.FindStringSubmatch(q); m != nil {
+		from, to, ok := slashDateSpan(m, func() byte { return slashDateOrder(locale, score) }, now)
+		return timeWindow{From: from, To: to, Phrase: m[0]}, ok // never a wrong guess: unreadable ends here
+	}
 	for _, rule := range timeRules {
 		for _, m := range rule.re.FindAllStringSubmatch(q, -1) {
 			phrase := strings.TrimFunc(m[0], notTimeWordRune)

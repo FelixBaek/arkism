@@ -51,7 +51,7 @@ func TestParseTimeIntentLexicons(t *testing.T) {
 	}
 	for lang, table := range cases {
 		for query, want := range table {
-			w, ok := parseTimeIntent(query, nov5)
+			w, ok := parseTimeIntent(query, "", nov5)
 			if !ok || !w.From.Equal(want[0]) || !w.To.Equal(want[1]) {
 				t.Errorf("%s %q: got %v..%v ok=%v, want %v..%v", lang, query, w.From, w.To, ok, want[0], want[1])
 			}
@@ -66,13 +66,13 @@ func TestParseTimeIntentLexicons(t *testing.T) {
 func TestParseTimeIntentLanguageSafety(t *testing.T) {
 	now := time.Date(2026, 11, 5, 10, 0, 0, 0, recallLocation(""))
 	for _, q := range []string{"wat hebben we hier besloten", "die Notizen von hier", "ask ma about it", "에 대한 일 전부", "ekim planı", "in mars rover", "trong 3 tháng tới", "2026-W54", "1234년", "version 2.0.1"} {
-		if w, ok := parseTimeIntent(q, now); ok {
+		if w, ok := parseTimeIntent(q, "", now); ok {
 			t.Errorf("%q: unexpected window %v (%q)", q, w, w.Phrase)
 		}
 	}
 	// French "hier" still reads as yesterday when the sentence is French or has no other language.
 	for _, q := range []string{"hier", "qu'avons-nous décidé hier"} {
-		if w, ok := parseTimeIntent(q, now); !ok || w.Phrase != "hier" {
+		if w, ok := parseTimeIntent(q, "", now); !ok || w.Phrase != "hier" {
 			t.Errorf("%q: %v %v", q, w, ok)
 		}
 	}
@@ -101,14 +101,14 @@ func TestParseTimeIntentOrdinaryWords(t *testing.T) {
 	}
 	for lang, queries := range cases {
 		for _, q := range queries {
-			if w, ok := parseTimeIntent(q, now); ok {
+			if w, ok := parseTimeIntent(q, "", now); ok {
 				t.Errorf("%s %q: unexpected window %v..%v (%q)", lang, q, w.From, w.To, w.Phrase)
 			}
 		}
 	}
 	// Korean native numbers still count weeks and months; days and years need digits.
 	for q, from := range map[string]time.Time{"두 달 전": time.Date(2026, 9, 1, 0, 0, 0, 0, now.Location()), "세 주 전": time.Date(2026, 10, 12, 0, 0, 0, 0, now.Location()), "세일 전 어제 가격": time.Date(2026, 11, 4, 0, 0, 0, 0, now.Location())} {
-		if w, ok := parseTimeIntent(q, now); !ok || !w.From.Equal(from) {
+		if w, ok := parseTimeIntent(q, "", now); !ok || !w.From.Equal(from) {
 			t.Errorf("%q: %v %v", q, w, ok)
 		}
 	}
@@ -118,12 +118,12 @@ func TestParseTimeIntentOrdinaryWords(t *testing.T) {
 func TestParseTimeIntentNumericOrder(t *testing.T) {
 	now := time.Date(2026, 11, 5, 10, 0, 0, 0, recallLocation(""))
 	for q, want := range map[string]string{"03-04-2026": "2026-04-03", "03.04.2026": "2026-04-03", "2026-04-03": "2026-04-03", "31-10-2026": "2026-10-31"} {
-		if w, ok := parseTimeIntent(q, now); !ok || w.From.Format(time.DateOnly) != want {
+		if w, ok := parseTimeIntent(q, "", now); !ok || w.From.Format(time.DateOnly) != want {
 			t.Errorf("%q: %v %v, want %s", q, w.From, ok, want)
 		}
 	}
 	for _, q := range []string{"03/04/2026", "04/03/2026", "10-31-2026"} {
-		if w, ok := parseTimeIntent(q, now); ok {
+		if w, ok := parseTimeIntent(q, "", now); ok {
 			t.Errorf("%q: unexpected %v", q, w)
 		}
 	}
@@ -136,7 +136,7 @@ func TestParseTimeIntentLongQueryBounded(t *testing.T) {
 	for _, unit := range []string{"1 2 3 4 5 6 7 8 9 ", "세 일 전 ", "in mars under mai de ", "一二三四五六七八九十", "die hier wir "} {
 		q := []rune(strings.Repeat(unit, 1000))[:1000]
 		start := time.Now()
-		parseTimeIntent(string(q), now)
+		parseTimeIntent(string(q), "", now)
 		if d := time.Since(start); d > 2*time.Second {
 			t.Errorf("%q x1000: %v", unit, d)
 		}
@@ -149,7 +149,7 @@ func FuzzParseTimeIntent(f *testing.F) {
 	}
 	now := time.Date(2026, 11, 5, 10, 0, 0, 0, recallLocation(""))
 	f.Fuzz(func(t *testing.T, q string) {
-		if w, ok := parseTimeIntent(q, now); ok && !w.From.Before(w.To) {
+		if w, ok := parseTimeIntent(q, "", now); ok && !w.From.Before(w.To) {
 			t.Fatalf("%q: empty window %v..%v", q, w.From, w.To)
 		}
 	})
@@ -159,7 +159,7 @@ func BenchmarkParseTimeIntentMiss(b *testing.B) {
 	q := strings.Repeat("the deploy pipeline failed again because of the cache key ", 4)
 	now := time.Now()
 	for b.Loop() {
-		parseTimeIntent(q, now)
+		parseTimeIntent(q, "", now)
 	}
 }
 
@@ -190,13 +190,13 @@ func TestParseTimeIntentWeekends(t *testing.T) {
 	}
 	for _, now := range []time.Time{time.Date(2026, 11, 5, 10, 0, 0, 0, seoul), time.Date(2026, 11, 8, 22, 0, 0, 0, seoul)} { // Thursday, Sunday
 		for q, want := range queries {
-			if w, ok := parseTimeIntent(q, now); !ok || !w.From.Equal(want[0]) || !w.To.Equal(want[1]) {
+			if w, ok := parseTimeIntent(q, "", now); !ok || !w.From.Equal(want[0]) || !w.To.Equal(want[1]) {
 				t.Errorf("%s %q: got %v..%v ok=%v, want %v..%v", now.Weekday(), q, w.From, w.To, ok, want[0], want[1])
 			}
 		}
 	}
 	// The week words still read whole weeks.
-	if w, _ := parseTimeIntent("지난주 회의", time.Date(2026, 11, 5, 10, 0, 0, 0, seoul)); !w.From.Equal(time.Date(2026, 10, 26, 0, 0, 0, 0, seoul)) {
+	if w, _ := parseTimeIntent("지난주 회의", "", time.Date(2026, 11, 5, 10, 0, 0, 0, seoul)); !w.From.Equal(time.Date(2026, 10, 26, 0, 0, 0, 0, seoul)) {
 		t.Error("지난주 lost to the weekend rule", w)
 	}
 	// Every hand-tuned language reads both weekend words.

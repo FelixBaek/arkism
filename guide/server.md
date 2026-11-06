@@ -386,7 +386,14 @@ wiki. What a person approves and how is described in
       year, yesterday/last week words, "N days ago", last/this weekday) are read
       after the hand-tuned languages, which still decide first. A month name a
       hand-tuned language also uses now reads there too when it names the same
-      month ("enero 15, 2026" in Tagalog).
+      month ("enero 15, 2026" in Tagalog). Month names with a case ending
+      and numbers with a suffix read too when a year or a suffixed day is next
+      to them ("2026ko urtarrilaren 15a", "2026. gada 15. janvārī").
+    - Slash dates: `15/01/2026` and `01/15/2026` read the only way they can;
+      `03/04/2026` reads in the CLDR short date order of the request's
+      `Accept-Language` (en-GB day first, en-US month first), else of the
+      query's language when all its CLDR locales agree (German, French), and
+      is not read at all otherwise (English or Spanish without a region).
     - "Last weekend" and "this weekend" (Saturday and Sunday of the previous
       or current Monday-first week) in every hand-tuned language. CLDR has no
       weekend term, so the CLDR-only locales do not read weekend words.

@@ -133,5 +133,5 @@ func (in SearchInput) timeWindow(now time.Time) (timeWindow, bool) {
 	if w := in.TemporalWindow; w != nil {
 		return timeWindow{From: w.From, To: w.To, Phrase: "temporal_window"}, true
 	}
-	return parseTimeIntent(in.Query, now.In(recallLocation(in.Timezone)))
+	return parseTimeIntent(in.Query, in.locale, now.In(recallLocation(in.Timezone)))
 }

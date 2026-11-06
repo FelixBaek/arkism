@@ -27,7 +27,7 @@ func TestParseTimeIntentLanguages(t *testing.T) {
 		"de":      {"heute": today, "gestern": yesterday, "was haben wir hier gestern gemacht": yesterday, "vorgestern": before, "vor 3 Tagen": threeAgo, "letzte Woche": lastWeek, "diese Woche": thisWeek, "letzten Monat": lastMonth, "diesen Monat": thisMonth, "letztes Jahr": lastYear, "dieses Jahr": thisYear, "31. Oktober 2026": oct31, "31.10.2026": oct31, "im Oktober": october, "Ende Oktober": lateOct, "im März": {day(2026, 3, 1), day(2026, 4, 1)}},
 	} {
 		for query, want := range cases {
-			w, ok := parseTimeIntent(query, nov5)
+			w, ok := parseTimeIntent(query, "", nov5)
 			if !ok || !w.From.Equal(want[0]) || !w.To.Equal(want[1]) {
 				t.Errorf("%s %q: got %v..%v ok=%v, want %v..%v", lang, query, w.From, w.To, ok, want[0], want[1])
 			}
@@ -35,7 +35,7 @@ func TestParseTimeIntentLanguages(t *testing.T) {
 	}
 	// A bare month name that is also an ordinary word, and impossible dates, name no span.
 	for _, q := range []string{"mars rover", "31.02.2026", "3个月计划", "31 février", "was haben wir hier entschieden", "die Notizen von hier"} {
-		if w, ok := parseTimeIntent(q, nov5); ok {
+		if w, ok := parseTimeIntent(q, "", nov5); ok {
 			t.Errorf("%q: unexpected window %v", q, w)
 		}
 	}

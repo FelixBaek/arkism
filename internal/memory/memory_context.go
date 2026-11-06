@@ -141,14 +141,14 @@ func resolveOccurred(from, to, text string, ref time.Time) *RecallTimeWindow {
 	if to == "" {
 		to = from
 	}
-	if a, ok := parseTimeIntent(from, ref); ok {
-		if b, ok := parseTimeIntent(to, ref); ok {
+	if a, ok := parseTimeIntent(from, "", ref); ok {
+		if b, ok := parseTimeIntent(to, "", ref); ok {
 			if w := (&RecallTimeWindow{From: a.From, To: b.To}); validOccurred(w, ref) {
 				return w
 			}
 		}
 	}
-	if w, ok := parseTimeIntent(text, ref); ok {
+	if w, ok := parseTimeIntent(text, "", ref); ok {
 		if out := (&RecallTimeWindow{Phrase: runeCutString(w.Phrase, 64), From: w.From, To: w.To}); validOccurred(out, ref) {
 			return out
 		}
