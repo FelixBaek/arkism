@@ -75,14 +75,18 @@ func (s *Service) conversationTurns(ctx context.Context, token string, in Search
 // completeConversationTurn fills only unused excerpt space with an adjacent
 // captured batch from the same conversation. The ranked batches and their text
 // stay intact, and the lane shares only the unused character budget of its ranked batches.
+// conversationNeighborScan is how many batches captured at the same instant are read to find a neighbour.
+const conversationNeighborScan = 99 // one more is read to see truncation; source lists cap at 100
+
 func (s *Service) completeConversationTurn(ctx context.Context, token string, in SearchInput, h *Hit, selected map[string]Record, spare int) {
 	r := selected[h.ID]
 	if r.SourceRef == "" || r.CollectedAt == nil || spare <= 1 {
 		return
 	}
 	end := r.CollectedAt.Add(time.Millisecond)
-	rows, err := s.Repo.ListSources(ctx, SourceListInput{Scope: in.Scope, Kind: conversationSourceKind, OriginProduct: r.OriginProduct, CollectedFrom: r.CollectedAt, CollectedTo: &end, Limit: 100})
-	if err != nil || len(rows) > 100 {
+	rows, err := s.Repo.ListSources(ctx, SourceListInput{Scope: in.Scope, Kind: conversationSourceKind, OriginProduct: r.OriginProduct, CollectedFrom: r.CollectedAt, CollectedTo: &end, Limit: conversationNeighborScan + 1})
+	// A truncated list cannot say which batch is next; skip rather than guess.
+	if err != nil || len(rows) > conversationNeighborScan {
 		return
 	}
 	rows = slices.DeleteFunc(rows, func(other Record) bool {
