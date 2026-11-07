@@ -1794,7 +1794,7 @@
       "response": "MemorySignalExplanation",
       "summary": "Explain current memory signal policy and eligible evidence",
       "query": {},
-      "description": "Requires outcome visibility and read:usage. Returns current content/window/dimension sample counts and baseline factors; observations are not causal proof."
+      "description": "Requires outcome visibility and read:usage. Returns current content/window/dimension sample counts and baseline factors; observations are not causal proof. applicable refers only to the memory row being active for baseline weighting. Factors are conditional on later search admission; source validity, authorization, query relevance and transfer checks can still exclude the memory."
     }
   ]
 }
