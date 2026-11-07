@@ -68,7 +68,7 @@ const oauthService = "arkism-oauth"
 var (
 	oauthClient = &http.Client{Timeout: 30 * time.Second,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	oauthMu    sync.Mutex // one refresh at a time in this process; the lock file covers other processes
+	oauthMu    sync.Map // id → *sync.Mutex: one refresh per login in this process; the lock file covers other processes
 	oauthNow   = time.Now
 	oauthSleep = func(ctx context.Context, d time.Duration) error {
 		select {
@@ -81,6 +81,9 @@ var (
 	// ErrOAuthLogin means the provider has no usable login: sign in (again) with `arkism oauth login`.
 	ErrOAuthLogin = errors.New("oauth_login_required")
 )
+
+// CursorBin is the cursor CLI, which keeps its own login (`cursor-agent login`).
+func CursorBin() string { return host.Bin("ARKISM_CURSOR_BIN", "cursor-agent") }
 
 func oauthPath(id, ext string) string { return filepath.Join(host.AgentsState, "oauth", id+ext) }
 
@@ -159,18 +162,21 @@ func OAuthLogout(id string) error {
 }
 
 // oauthLock serialises refreshes and writes of one login, in this process and across processes.
+// A slow provider holds only its own login.
 func oauthLock(id string) (func(), error) {
-	oauthMu.Lock()
+	v, _ := oauthMu.LoadOrStore(id, &sync.Mutex{})
+	mu := v.(*sync.Mutex)
+	mu.Lock()
 	if err := os.MkdirAll(filepath.Dir(oauthPath(id, "")), 0o700); err != nil {
-		oauthMu.Unlock()
+		mu.Unlock()
 		return nil, err
 	}
 	unlock, err := lockFile(oauthPath(id, ".lock"), 0o600, true)
 	if err != nil {
-		oauthMu.Unlock()
+		mu.Unlock()
 		return nil, err
 	}
-	return func() { unlock(); oauthMu.Unlock() }, nil
+	return func() { unlock(); mu.Unlock() }, nil
 }
 
 // OAuthStatus is the login's health: "connected", "expired" (sign in again) or "missing".

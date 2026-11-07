@@ -21,7 +21,7 @@ import (
 // folder with its own config that denies every agent tool, so a prompt cannot reach a file or a shell.
 
 var (
-	cursorBin = func() string { return host.Bin("ARKISM_CURSOR_BIN", "cursor-agent") }
+	cursorBin = subscription.CursorBin
 	cursorRun = runCursor // test seam
 	// cursorDenied is every tool the CLI's agent offers; its config takes them one by one.
 	cursorDenied = []string{"Shell", "AwaitShell", "Read", "Write", "Delete", "StrReplace", "EditNotebook", "Grep", "Glob",

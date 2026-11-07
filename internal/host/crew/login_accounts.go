@@ -18,7 +18,7 @@ import (
 var (
 	oauthStatus   = subscription.OAuthStatus // test seams
 	oauthModels   = subscription.OAuthModels
-	cursorBin     = func() string { return host.Bin("ARKISM_CURSOR_BIN", "cursor-agent") }
+	cursorBin     = subscription.CursorBin
 	cursorStatus  = cursorLogin
 	cursorMu      sync.Mutex
 	cursorChecked time.Time
