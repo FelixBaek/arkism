@@ -211,6 +211,8 @@ func TestChangingFactCategoryWalk(t *testing.T) {
 	f := newFixture(t)
 	held, item := heldCorrection(t, f, "felix-home", "Felix lives in Seoul", "Felix moved to Busan in November")
 	beforeMove := time.Now().UTC()
+	// Recorded times have millisecond precision; approval must be in a later tick.
+	time.Sleep(2 * time.Millisecond)
 	newer := reviewCorrection(t, f, held, item, "keep_both")
 	old := f.get(f.human, colMemories, scopeA, held.ID)
 	if old.ExpiresAt != nil || old.ValidToProposal == nil || old.ValidToProposal.By.ID != newer.ID {

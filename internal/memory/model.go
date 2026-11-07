@@ -487,6 +487,8 @@ type Hit struct {
 	keywords   []string
 	// vector is the record's stored embedding in the query's space, for diverse selection (recall_quality.go).
 	vector []float64
+	// evidenceSpan is private provenance used only during diverse selection.
+	evidenceSpan string
 	// termShare: for a keyword lane hit of memory recall, the share of the query's topic concepts it holds (weighKeywordCoverage).
 	termShare float64
 }

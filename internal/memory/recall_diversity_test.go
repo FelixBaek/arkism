@@ -2,8 +2,10 @@ package memory
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -117,5 +119,66 @@ func TestRecallDiversityKeepsTheSingleFactFirst(t *testing.T) {
 		if got := selectDiverse(slices.Clone(rows), limit); len(got) != limit || got[0].ID != "a" {
 			t.Fatal(limit, got)
 		}
+	}
+}
+
+func TestSelectDiverseSourceSpan(t *testing.T) {
+	base := Hit{ID: "first", Scope: scopeA, Sources: []SourceRef{{SourceID: "source-a"}}, evidenceSpan: "one two three four five six seven eight nine ten"}
+	for _, tc := range []struct {
+		name   string
+		span   string
+		source string
+		scope  Scope
+		want   bool
+	}{
+		{"contained", "one two three four five", "source-a", scopeA, true},
+		{"ninety percent", "one two three four five six seven eight nine other", "source-a", scopeA, true},
+		{"below threshold", "one two three four five six seven eight other words", "source-a", scopeA, false},
+		{"missing span", "", "source-a", scopeA, false},
+		{"separate capture", base.evidenceSpan, "source-b", scopeA, true},
+		{"different scope", base.evidenceSpan, "source-a", Scope{}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			copy := Hit{ID: "copy", Scope: tc.scope, Sources: []SourceRef{{SourceID: tc.source}}, evidenceSpan: tc.span}
+			if sameSourceSpan(base, copy) != tc.want || sameSourceSpan(copy, base) != tc.want {
+				t.Fatal("containment mismatch")
+			}
+			rows := []ScoredHit{{Hit: base, Score: 1}, {Hit: copy, Score: .95}, diverseRow("distinct", .8)}
+			got := selectDiverse(rows, 2)
+			if (got[1].ID == "distinct") != tc.want {
+				t.Fatal(got)
+			}
+		})
+	}
+}
+
+func TestRecallDiversitySourceSpanStaysPrivate(t *testing.T) {
+	f := newFixture(t)
+	span := "private provenance of one repaired valve"
+	for i, id := range []string{"span-a", "span-b", "span-c"} {
+		r := f.activeMemory("repair note " + id)
+		delete(f.repo.store[colMemories], recKey(scopeA, r.ID))
+		r.ID = id
+		r.Classification = &CandidateClassification{EvidenceSpan: span}
+		if i == 2 {
+			r.Classification.EvidenceSpan = "independent evidence about replacing the copper coupling"
+		}
+		f.repo.store[colMemories][recKey(scopeA, id)] = r
+	}
+	query := SearchInput{Scope: scopeA, Query: "repair", Modes: []string{"fts"}, Limit: 2}
+	off := false
+	setRecallQuality(t, f, SpaceRecallQuality{Diversity: &off})
+	plain := f.search(f.human, query)
+	if len(plain.Items) != 2 || plain.Items[0].ID != "span-a" || plain.Items[1].ID != "span-b" {
+		t.Fatal("plain ranking did not keep the repeated fact", plain.Items)
+	}
+	setRecallQuality(t, f, SpaceRecallQuality{})
+	diverse := f.search(f.human, query)
+	if len(diverse.Items) != 2 || diverse.Items[0].ID != "span-a" || diverse.Items[1].ID != "span-c" {
+		t.Fatal("source span did not make room for the distinct fact", diverse.Items)
+	}
+	encoded, err := json.Marshal(diverse)
+	if err != nil || strings.Contains(string(encoded), span) || strings.Contains(string(encoded), "evidenceSpan") {
+		t.Fatal("private provenance leaked into the response", err)
 	}
 }

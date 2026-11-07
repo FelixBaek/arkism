@@ -593,6 +593,9 @@ func (s *Service) cleanSearchHit(ctx context.Context, token string, in SearchInp
 	if r.Embedding != nil && querySpace != "" && r.Embedding.Space == querySpace && len(r.Embedding.Vector) == len(queryVector) {
 		h.vector = r.Embedding.Vector
 	}
+	if r.Classification != nil {
+		h.evidenceSpan = r.Classification.EvidenceSpan
+	}
 	return h, true, nil
 }
 
