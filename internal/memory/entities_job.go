@@ -78,7 +78,9 @@ func (s *Service) ExtractEntities(ctx context.Context, token string, in EntityEx
 	var memories []Record
 	var found []memoryEntities
 	for _, r := range rows {
-		if entityExtractable(r) && live(r) && r.Scope == in.Scope {
+		// Skip known ineligible legacy rows before forming the batch; the
+		// write transaction still rejects evidence removed after selection.
+		if entityExtractable(r) && live(r) && len(r.Sources) > 0 && r.Scope == in.Scope {
 			memories = append(memories, r)
 			found = append(found, memoryEntityFinds(r, cfg)...)
 		}

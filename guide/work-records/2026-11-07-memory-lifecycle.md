@@ -55,3 +55,11 @@ The integrated suite's TestPostgresMemoryListChangedDuringPolicy compared the me
 The fixture now reads the stored row after approval and immediately before listing, then compares the entire Record with the stored row after listing. This preserves and strengthens the original assertion that listing does not rewrite memory data, while retaining all concurrent body/source/deletion/quarantine rejection cases. The test logs only the three internal fence counters to distinguish completed creation work from read effects. No product code changed in this follow-up; the focused database result is recorded in its commit.
 
 통합 검사 실패는 생성 후 후처리 이전에 만든 응답을 목록 조회 직전 DB 상태로 간주한 시험 기준 오류였다. 조회 직전·직후 실제 레코드 전체를 비교하도록 바꿔 목록 조회의 불변성 검증은 유지하고 강화했다. 제품 동작이나 권한은 변경하지 않았다.
+
+## Follow-up: source-less legacy rows in extraction batches
+
+The integrated reflection tool test contains an approved legacy row with no Sources. The strengthened write-time evidence validator correctly rejects that row, but the input selector previously admitted it and consequently aborted otherwise valid batch extraction. Input selection now skips known source-less rows, alongside expired/future rows. The existing reflection test is unchanged, so its per-memory evidence exclusion remains enforced.
+
+A disposable database mixed-batch test includes valid, expired, future and source-less records and requires only the valid entity to be published. A separate database race removes a real source after batch selection; the write transaction must still fail with ErrDenied and leave no entity/mention/fence changes. Known invalid input is skipped; evidence that changes during work is never silently accepted. The original reflection and mixed-batch failures were reproduced before this selector change.
+
+출처 없는 기존 행 하나 때문에 유효한 기억의 추출까지 중단되는 회귀를 입력 선별에서 해결했다. 기존 반영 기능 검사는 그대로 유지했다. 선택 후 출처가 제거되는 경합은 계속 거부하고 트랜잭션을 롤백하며, 이 구분을 임시 DB 시험으로 검증한다.

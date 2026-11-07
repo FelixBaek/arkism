@@ -456,6 +456,12 @@ func TestPostgresEntityExtractionReadOnlyAndLiveBatch(t *testing.T) {
 			if mode == "mixed_liveness" {
 				seed("expired-memory", "ExpiredPerson", -1)
 				seed("future-memory", "FuturePerson", 1)
+				bare := current
+				bare.ID, bare.Revision, bare.Sources = "sourceless-memory", 1, nil
+				bare.Entities = []EntityInput{{Name: "UnreferencedPerson", Type: "person"}}
+				if e := p.Insert(testCtx, colMemories, bare); e != nil {
+					t.Fatal(e)
+				}
 			}
 			beforeMemory, e := p.Get(testCtx, colMemories, scopeA, current.ID)
 			if e != nil {
@@ -496,5 +502,52 @@ func TestPostgresEntityExtractionReadOnlyAndLiveBatch(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Remove source evidence after batch selection, before its write transaction.
+type entityListRacePostgres struct {
+	*Postgres
+	afterList func()
+}
+
+func (p *entityListRacePostgres) ListRecordsByStatus(ctx context.Context, scope Scope, col, status string, limit int) ([]Record, error) {
+	rows, e := p.Postgres.ListRecordsByStatus(ctx, scope, col, status, limit)
+	if e == nil && col == colMemories && p.afterList != nil {
+		f := p.afterList
+		p.afterList = nil
+		f()
+	}
+	return rows, e
+}
+func TestPostgresEntityExtractionRejectsSourceRemovalAfterSelection(t *testing.T) {
+	p := isolatedPostgres(t)
+	f := newFixture(t)
+	f.svc.Repo = p
+	r := graphMemory(t, f, p, "selected-memory")
+	r.Entities = []EntityInput{{Name: "Mira", Type: "person"}}
+	r.Revision++
+	if e := p.Replace(testCtx, colMemories, r, r.Revision-1); e != nil {
+		t.Fatal(e)
+	}
+	f.svc.Repo = &entityListRacePostgres{Postgres: p, afterList: func() {
+		source, e := p.Get(testCtx, "sources", scopeA, r.Sources[0].SourceID)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if e = p.Delete(testCtx, "sources", scopeA, source.ID, source.Revision); e != nil {
+			t.Fatal(e)
+		}
+	}}
+	if _, e := f.svc.ExtractEntities(testCtx, f.human, EntityExtractInput{Scope: scopeA}); !errors.Is(e, ErrDenied) {
+		t.Fatal("removed source published", e)
+	}
+	g, e := loadEntityGraph(testCtx, p, scopeA)
+	if e != nil || len(g.entities) != 0 || len(g.mentions) != 0 {
+		t.Fatal("stale extraction persisted", g, e)
+	}
+	after, e := p.Get(testCtx, colMemories, scopeA, r.ID)
+	if e != nil || after.MemoryReferenceFence != r.MemoryReferenceFence {
+		t.Fatal("failed extraction did not roll back", after.MemoryReferenceFence, e)
 	}
 }
