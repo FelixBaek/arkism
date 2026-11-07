@@ -19,6 +19,20 @@ func conversationQueryExcerpt(query, text string, budget int) string {
 	if len(lines) < 2 || len(terms) == 0 {
 		return runeCutString(text, budget)
 	}
+	// The later lexical gate counts concepts, not their alias spellings.
+	// Keep one representative per concept while preserving the existing score.
+	concepts, conceptAt := map[string]bool{}, []int{}
+	for j, term := range terms {
+		concept := searchQueryConcepts([]string{term})[0]
+		if !concepts[concept] {
+			concepts[concept] = true
+			conceptAt = append(conceptAt, j)
+		}
+	}
+	need := 1
+	if len(conceptAt) >= 3 {
+		need = 2 // Same threshold as lexicallyRelevant.
+	}
 	counts := make([]int, len(terms))
 	matches := make([][]bool, len(lines))
 	lengths := make([]int, len(lines))
@@ -47,6 +61,7 @@ func conversationQueryExcerpt(query, text string, budget int) string {
 		weights[j] = 1 + math.Log(float64(len(lines)+1)/float64(counts[j]+1))
 	}
 	bestScore, bestStart, bestEnd := -1.0, 0, 0
+	bestEligible := false
 	present := make([]int, len(terms))
 	start, used := 0, 0
 	for end := range lines {
@@ -80,8 +95,18 @@ func conversationQueryExcerpt(query, text string, budget int) string {
 				score += weights[j]
 			}
 		}
-		if score > bestScore || score == bestScore && end-start > bestEnd-bestStart {
+		found := 0
+		for _, j := range conceptAt {
+			if present[j] > 0 {
+				found++
+			}
+		}
+		eligible := found >= need
+		// Prefer a window that survives the downstream gate. If none does,
+		// retain the existing highest-score fallback, including vector callers.
+		if eligible && !bestEligible || eligible == bestEligible && (score > bestScore || score == bestScore && end-start > bestEnd-bestStart) {
 			bestScore, bestStart, bestEnd = score, start, end
+			bestEligible = eligible
 		}
 	}
 	if bestScore <= 0 {
