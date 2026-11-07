@@ -1068,7 +1068,7 @@ func (s *Service) ReviewObservations(ctx context.Context, token string, in Obser
 // proposed observation citing the replaced memory (part of staleCascade).
 func staleObservations(ctx context.Context, tx Tx, lister statusLister, scope Scope, mark *StaleMark, actor string) error {
 	for _, status := range []string{obsActive, obsProposed} {
-		if e := walkStatusRows(ctx, lister, scope, colObservations, status, func(row Record) error {
+		if e := walkStaleDependents(ctx, lister, scope, colObservations, status, mark.Memory.ID, func(row Record) error {
 			if row.Observation == nil || !namesMemory(row.Observation.SourceMemories, mark.Memory.ID) {
 				return nil
 			}

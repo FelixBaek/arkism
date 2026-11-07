@@ -58,7 +58,11 @@ func TestPrivacyLargeSubjectPagesAndDurablePurgeResume(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		before := status.PrivacyDeletion.PurgeSourceOffset + status.PrivacyDeletion.PurgeRecordOffset
 		status, err = fresh.AdvancePrivacyDeletion(testCtx, "worker", status.ID, PrivacyRevisionInput{Scope: scope, ExpectedRevision: status.Revision})
+		if err == nil && status.PrivacyDeletion.PurgeSourceOffset+status.PrivacyDeletion.PurgeRecordOffset-before > 100 {
+			t.Fatal("source/record boundary exceeded shared batch budget")
+		}
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -61,7 +61,7 @@ func staleDigests(ctx context.Context, tx Tx, lister statusLister, scope Scope, 
 	userGone := false
 	for _, col := range []string{colTopicDigests, colUserDigests} {
 		for _, status := range []string{digestActive, digestCandidate} {
-			err := walkStatusRows(ctx, lister, scope, col, status, func(row Record) error {
+			err := walkStaleDependents(ctx, lister, scope, col, status, mark.Memory.ID, func(row Record) error {
 				if row.Digest == nil || row.Kind == digestKindState || !namesMemory(row.Digest.Members, mark.Memory.ID) {
 					return nil
 				}
@@ -83,7 +83,7 @@ func staleDigests(ctx context.Context, tx Tx, lister statusLister, scope Scope, 
 }
 func staleSkillProposals(ctx context.Context, tx Tx, lister statusLister, scope Scope, mark *StaleMark, actor string) error {
 	for _, status := range []string{"candidate", "approved", statusActive} {
-		if e := walkStatusRows(ctx, lister, scope, colSkillVersions, status, func(row Record) error {
+		if e := walkStaleDependents(ctx, lister, scope, colSkillVersions, status, mark.Memory.ID, func(row Record) error {
 			if row.Kind != proposedSkillKind || !namesMemory(row.Relations, mark.Memory.ID) {
 				return nil
 			}

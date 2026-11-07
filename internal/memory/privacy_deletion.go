@@ -686,7 +686,9 @@ func purgePrivacyDerived(ctx context.Context, tx Tx, scope Scope, r Record, who 
 	if pd.PurgeSourceOffset < 0 || pd.PurgeSourceOffset > len(pd.Impact.SourceEventIDs) || pd.PurgeRecordOffset < 0 || pd.PurgeRecordOffset > len(pd.Impact.Records) {
 		return false, ErrConflict
 	}
-	end := min(pd.PurgeSourceOffset+100, len(pd.Impact.SourceEventIDs))
+	remaining := 100
+	end := min(pd.PurgeSourceOffset+remaining, len(pd.Impact.SourceEventIDs))
+	remaining -= end - pd.PurgeSourceOffset
 	for _, sourceID := range pd.Impact.SourceEventIDs[pd.PurgeSourceOffset:end] {
 		if err := purgePrivacySource(ctx, tx, scope, sourceID, r.ID, who); err != nil {
 			return false, err
@@ -696,7 +698,7 @@ func purgePrivacyDerived(ctx context.Context, tx Tx, scope Scope, r Record, who 
 	if end < len(pd.Impact.SourceEventIDs) {
 		return false, nil
 	}
-	end = min(pd.PurgeRecordOffset+100, len(pd.Impact.Records))
+	end = min(pd.PurgeRecordOffset+remaining, len(pd.Impact.Records))
 	part := PrivacyImpact{Records: pd.Impact.Records[pd.PurgeRecordOffset:end]}
 	if err := eraseWorkPrivacyImpact(ctx, tx, scope, part, r.ID); err != nil {
 		return false, err
