@@ -767,10 +767,39 @@ signed in on this host (the same accounts agents use through the gateway),
 with the gateway's failover, limits and usage records. It works when memoryd
 runs on the same machine as the gateway; a container needs host networking
 or a loopback forward, since the gateway listens on loopback only. Model names
-are the gateway's (`provider/model` or `group/<name>`). Subscription logins
-the gateway does not have (other editors' or vendors' device logins) are not
-offered: each needs its own sign-in flow, token refresh and terms check in the
-gateway first, and the server would only reach them through it.
+are the gateway's (`provider/model` or `group/<name>`).
+
+#### Account logins
+
+Four more accounts can be signed in on the host and then used as
+`<provider>/<model>` through the gateway, by agents and by the server model
+alike. **Nothing is active until you sign in:** before a login the provider
+lists no models and requests for it are refused without reaching anyone.
+
+| Provider id | Sign in | Sign out | Models |
+|---|---|---|---|
+| `copilot` | `arkism oauth login copilot` | `arkism oauth logout copilot` | the account's model list |
+| `xai` | `arkism oauth login xai` (used when no `xai` API key is stored) | `arkism oauth logout xai` | the account's model list |
+| `nous` | `arkism oauth login nous` | `arkism oauth logout nous` | the account's model list |
+| `cursor` | `cursor-agent login` (its own CLI; shown only when installed) | `cursor-agent logout` | `cursor/auto`; other names are passed to the CLI as `--model` |
+
+- `arkism oauth login` prints a link and a short code: open the link on any
+  device, enter the code, and the command finishes when the provider confirms.
+  `arkism oauth status` shows each login as `connected`, `expired` or `missing`;
+  Settings › Agents shows the same as an account row.
+- Tokens are kept in the OS credential store, or, where there is none, in a
+  0600 file under the agent state folder (`oauth/<id>.json`). They are never
+  printed or logged. Access tokens are refreshed shortly before they expire,
+  one refresh at a time across processes; a refused refresh marks the login
+  expired, and you sign in again. A 401 from the provider retires the token so
+  the next request refreshes.
+- Model lists are asked at most once a day while signed in.
+- `cursor` runs text-only conversations: requests with tools, images or tool
+  results are refused. The CLI runs in an empty temporary folder with every
+  agent tool denied and sees only the environment it needs to find its login.
+- **Check the provider's terms first.** A subscription meant for the provider's
+  own apps may restrict or forbid use from a third-party app such as this one.
+  Signing in is your choice and your responsibility.
 
 With a stored Google API key (API mode), `ARKISM_GOOGLE_CONTEXT_CACHE=1`
 on the gateway stores a long stable prompt prefix (system instruction,
