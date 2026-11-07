@@ -15,3 +15,5 @@ The test-only context exposes DeadlineExceeded when its barrier closes. The real
 No product build, live model call, operating database, remote service or publication was used. The isolated local HTTP test server is the only network boundary exercised.
 
 At this commit, the focused race run is still running; no race pass is claimed. The parent integration run is also pending.
+
+Follow-up verification: `go test -race ./internal/memory -run '^TestSystemOneFailuresRecordOnce$/timeout$' -count=30`, under the same 6 GiB scope and 900-second command limit, passed in 1.364s with no race report. The preceding pending statement describes the implementation commit's state. The bilingual work-record checker also passed for that commit; the parent whole-package integration result remains separate.
