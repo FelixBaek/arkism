@@ -35,3 +35,20 @@ Limits: Trace identity is an explicit deduplication boundary, not proof of causa
 검증: 실제 평가 기록·검색 연결, 임시 DB 동등성, 기간 전 중복 제거, 범위·오류·누락 신호 검증 통과.
 한계: 서로 다른 trace의 인과 독립성은 보장하지 않는다. 기존 기본 정책과 전체 감사 이력은 유지한다.
 연구: 해당 없음
+
+## F5: classify metadata invalidation without weakening reference fences
+
+Task: MEM-FOLLOWUPS-F5
+Research: none
+
+Why: Exact dependency revisions remain authoritative, but operators need to distinguish content/safety changes from review-schedule or observation-time changes before studying continuity. Memory replacements now record `dependency_metadata_revision_changed` only when a conservative comparison differs solely in revision/update time, review schedule, reference bookkeeping, or observed-at metadata. All other changes retain the existing reason. Both paths install the same exact-reference fence and resumable purge intent.
+
+Verified: Nine synthetic mutation classifications (three metadata, six content/safety) and a real disposable-database replacement passed. The metadata purge reason was persisted, the old exact ref still returned conflict, and old dynamic evidence was not reused. Existing immediate-fence/resume regression passed (targeted package run 0.224s).
+
+Limits: This implements classification and a durable measurement basis, not evidence rebinding. Operational mutation frequencies, memory quality effects, and safe continuity/rebind policy remain deferred because no representative operational material was supplied. Synthetic counts are not operational measurements.
+
+제목: 동적 상태의 메타데이터 변경 원인 분류
+이유: 정확 참조 방어를 유지하면서 향후 연속성 판단에 필요한 변경 유형을 구분한다.
+검증: 9개 합성 변경과 실제 DB의 원인 저장·기존 참조 거부·이전 상태 미사용 검증 통과.
+한계: 운영 빈도와 안전한 근거 재연결 효과 자료는 부족하여 보류한다. 정확 참조 fence와 purge는 그대로 유지한다.
+연구: 해당 없음
