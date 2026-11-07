@@ -11,7 +11,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-from arkism_client import ArkismClient, ArkismError, retry_after_seconds  # noqa: E402
+from arkism_client import RECALL_HEADER, ArkismClient, ArkismError, retry_after_seconds  # noqa: E402
 
 SCOPE = {"workspace_id": "w", "project_id": "p"}
 
@@ -119,6 +119,19 @@ class ClientTest(unittest.TestCase):
         self.assertTrue(capture["event"]["occurred_at"].endswith("Z"))
         claim = capture["claims"][0]
         self.assertEqual((claim["kind"], claim["text"], claim["basis"]), ("procedural", "Run staging first", "inferred"))
+
+    def test_recall_text_and_capture_text(self):
+        hits = {"items": [{"kind": "procedural", "text": "Run staging first"}, {"kind": "semantic"}]}
+        server = self.serve([(200, hits, None), (200, {"items": []}, None)])
+        client = ArkismClient(server.url)
+        self.assertEqual(client.recall_text(SCOPE, "deploy", limit=3), RECALL_HEADER + "\n- [procedural] Run staging first")
+        self.assertEqual(client.recall_text(SCOPE, "nothing"), "")
+        client.capture_text(SCOPE, "user: hi", document_id="s1", context="chat")
+        client.capture_text(SCOPE, "plain")
+        self.assertEqual(server.calls[0][3], {"limit": 3, "scope": SCOPE, "query": "deploy"})
+        self.assertEqual(server.calls[2][1:4:2], ("/v1/memories/ingest", {"scope": SCOPE, "async": True, "items": [
+            {"content": "user: hi", "context": "chat", "document_id": "s1", "update_mode": "append"}]}))
+        self.assertEqual(server.calls[3][3]["items"], [{"content": "plain"}])
 
     def test_pages_follow_cursor(self):
         seen = []

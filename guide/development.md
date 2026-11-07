@@ -253,7 +253,11 @@ unless the caller sets TypeScript `retryUnsafe: true` / Python
 they have helpers: `recall(scope, query, options)` (`POST /v1/search`),
 `reflect(scope, query, options)` (`POST /v1/reflect`), `remember(scope, text,
 options)` (one `explicit_remember` capture; it stays a candidate until a person
-approves it) and `pages(page)`, which yields every item of a cursor-paged list
+approves it), `recall_text`/`recallText(scope, query, options)` (the recall
+hits as prompt lines under a header that marks them as data, `""` when nothing
+matched), `capture_text`/`captureText(scope, content, options)` (one queued
+`POST /v1/memories/ingest` item; extracted claims stay candidates; a document id
+appends to that document) and `pages(page)`, which yields every item of a cursor-paged list
 by following `next_cursor` (for example
 `client.pages(cursor => client.getV1Memories({workspace_id, project_id, cursor}))`).
 The runtime and helpers live in `tools/generate_sdk.py`.

@@ -1,7 +1,7 @@
 // Offline tests of the generated client: a fake fetch stands in for the server.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ArkismClient, ArkismError, retryAfterMs } from "../src/index.ts";
+import { ArkismClient, ArkismError, RECALL_HEADER, retryAfterMs } from "../src/index.ts";
 
 type Call = { url: string; method: string; headers: Record<string, string>; body: unknown };
 
@@ -80,6 +80,18 @@ test("recall, reflect and remember send the documented bodies", async () => {
   assert.equal(capture.event.session_id, "s1");
   assert.ok(!Number.isNaN(Date.parse(capture.event.occurred_at)));
   assert.deepEqual([capture.claims[0].kind, capture.claims[0].text, capture.claims[0].basis], ["procedural", "Run staging first", "inferred"]);
+});
+
+test("recallText formats approved hits; captureText queues one ingest item", async () => {
+  const { calls, fetchFn } = fake([{ status: 200, body: { items: [{ kind: "procedural", text: "Run staging first" }, { kind: "semantic" }] } }, { status: 200, body: { items: [] } }]);
+  const client = new ArkismClient({ baseUrl: "http://x", fetch: fetchFn });
+  assert.equal(await client.recallText(scope, "deploy", { limit: 3 }), `${RECALL_HEADER}\n- [procedural] Run staging first`);
+  assert.equal(await client.recallText(scope, "nothing"), "");
+  await client.captureText(scope, "user: hi", { documentId: "s1", context: "chat" });
+  await client.captureText(scope, "plain");
+  assert.deepEqual(calls[0].body, { limit: 3, scope, query: "deploy" });
+  assert.deepEqual([calls[2].url, calls[2].body], ["http://x/v1/memories/ingest", { scope, async: true, items: [{ content: "user: hi", context: "chat", document_id: "s1", update_mode: "append" }] }]);
+  assert.deepEqual((calls[3].body as { items: unknown[] }).items, [{ content: "plain" }]);
 });
 
 test("pages follows next_cursor until empty and stops at maxPages", async () => {
