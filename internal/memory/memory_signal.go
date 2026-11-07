@@ -401,25 +401,27 @@ func (s *Service) MemorySignals(ctx context.Context, token string, in MemorySign
 		return MemorySignalPage{}, ErrDenied
 	}
 	out := MemorySignalPage{Items: make([]MemorySignalView, 0, len(in.MemoryIDs)), Authority: AuthorityDataOnly}
+	visible := []string{}
 	for _, id := range in.MemoryIDs {
 		view := MemorySignalView{MemoryID: id, UseMeasurementBasis: "server_return", ActualUseStatus: "not_measured"}
 		_, e := s.readableOutcomeMemory(ctx, token, who, in.Scope, id)
 		if e != nil && !errors.Is(e, ErrNotFound) && !errors.Is(e, ErrDenied) {
 			return MemorySignalPage{}, e
 		}
-		if view.Available = e == nil; view.Available {
-			r, e := s.Repo.Get(ctx, colJobs, in.Scope, memorySignalID(in.Scope, id))
-			switch {
-			case errors.Is(e, ErrNotFound):
-			case e != nil:
-				return MemorySignalPage{}, e
-			case r.Scope != in.Scope || r.Kind != memorySignalKind || r.MemorySignal == nil || r.MemorySignal.Memory.ID != id:
-				return MemorySignalPage{}, ErrUnavailable
-			default:
-				view.Signal = r.MemorySignal
-			}
+		view.Available = e == nil
+		if view.Available {
+			visible = append(visible, id)
 		}
 		out.Items = append(out.Items, view)
+	}
+	records, e := s.visibleSignalRecords(ctx, in.Scope, visible)
+	if e != nil {
+		return MemorySignalPage{}, e
+	}
+	for i := range out.Items {
+		if r, ok := records[out.Items[i].MemoryID]; ok && out.Items[i].Available {
+			out.Items[i].Signal = r.MemorySignal
+		}
 	}
 	if e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		return audit(ctx, tx, in.Scope, who.PrincipalID, "read:memory_signals", "")

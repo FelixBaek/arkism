@@ -68,7 +68,7 @@ func TestSignalPolicyContentWindowAndRecovery(t *testing.T) {
 	in := SearchInput{Scope: scopeA, space: &SpaceConfig{RecallQuality: &SpaceRecallQuality{SignalPolicy: &SignalPolicy{Dimension: "work_task", WindowDays: 30, MinSamples: 3}}}}
 	f.repo.store["evaluations"] = map[string]Record{}
 	for i := 0; i < 101; i++ {
-		r := Record{ID: fmt.Sprint(i), Scope: scopeA, Kind: memoryOutcomeKind, Status: "active", Revision: 1, CreatedAt: now.Add(-time.Hour), Target: &Ref{Collection: colMemories, ID: m.ID, Revision: m.Revision}, Tags: []string{"dimension:work_task"}, Passed: i > 0, MemoryOutcomeContentHash: signalContentHash(h)}
+		r := Record{ID: fmt.Sprint(i), Scope: scopeA, Kind: memoryOutcomeKind, Status: "active", Revision: 1, CreatedAt: now.Add(-time.Hour), Target: &Ref{Collection: colMemories, ID: m.ID, Revision: m.Revision}, Tags: []string{"dimension:work_task"}, Passed: i > 0, Relations: []Ref{{Collection: "execution_traces", ID: fmt.Sprintf("task-%d", i), Revision: 1}}, MemoryOutcomeContentHash: signalContentHash(h)}
 		f.repo.store["evaluations"][recKey(scopeA, r.ID)] = r
 	}
 	got := f.svc.policyOutcomeWeights(testCtx, in, rows)
@@ -105,6 +105,9 @@ func TestSignalPolicyContentWindowAndRecovery(t *testing.T) {
 func TestSignalPolicyFromRecordedOutcomeToSearch(t *testing.T) {
 	f, m, in := outcomeFixture(t)
 	for i := 0; i < 3; i++ {
+		if i > 0 {
+			in = distinctOutcomeTask(t, f, in, fmt.Sprintf("policy-task-%d", i))
+		}
 		in.EventID = fmt.Sprintf("policy-%d", i)
 		in.Passed = true
 		ref, err := f.svc.RecordMemoryOutcome(testCtx, "checker", in)

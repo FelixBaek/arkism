@@ -44,7 +44,14 @@ func (f *fakeRepo) MemoryOutcomeCounts(_ context.Context, in MemoryOutcomeQuery)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	by := map[string]*MemoryOutcomeCount{}
+	rows := []Record{}
 	for _, r := range f.store["evaluations"] {
+		rows = append(rows, r)
+	}
+	if in.IndependentFirst {
+		rows = independentOutcomeRows(rows, in)
+	}
+	for _, r := range rows {
 		if !memoryOutcomeMatches(r, in) {
 			continue
 		}

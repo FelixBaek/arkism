@@ -22,14 +22,15 @@ const (
 )
 
 type MemoryOutcomeQuery struct {
-	ContentHashes map[string]string `json:"-"`
-	Scope         Scope             `json:"scope"`
-	MemoryIDs     []string          `json:"memory_ids"`
-	Dimension     string            `json:"dimension,omitempty"`
-	From          *time.Time        `json:"from,omitempty"`
-	To            *time.Time        `json:"to,omitempty"`
-	Limit         int               `json:"limit,omitempty"`
-	Cursor        string            `json:"cursor,omitempty"`
+	IndependentFirst bool              `json:"-"`
+	ContentHashes    map[string]string `json:"-"`
+	Scope            Scope             `json:"scope"`
+	MemoryIDs        []string          `json:"memory_ids"`
+	Dimension        string            `json:"dimension,omitempty"`
+	From             *time.Time        `json:"from,omitempty"`
+	To               *time.Time        `json:"to,omitempty"`
+	Limit            int               `json:"limit,omitempty"`
+	Cursor           string            `json:"cursor,omitempty"`
 }
 
 func (v *MemoryOutcomeQuery) UnmarshalJSON(data []byte) error {

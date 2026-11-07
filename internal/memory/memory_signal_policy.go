@@ -103,7 +103,7 @@ func (s *Service) policyOutcomeWeights(ctx context.Context, in SearchInput, rows
 	to := s.recallClock(in)
 	from := to.Add(-time.Duration(p.WindowDays) * 24 * time.Hour)
 	for start := 0; start < len(rows); start += memoryOutcomeBatchLimit {
-		query := MemoryOutcomeQuery{Scope: in.Scope, Dimension: p.Dimension, From: &from, To: &to, ContentHashes: map[string]string{}}
+		query := MemoryOutcomeQuery{IndependentFirst: true, Scope: in.Scope, Dimension: p.Dimension, From: &from, To: &to, ContentHashes: map[string]string{}}
 		for _, r := range rows[start:min(start+memoryOutcomeBatchLimit, len(rows))] {
 			if _, ok := query.ContentHashes[r.ID]; !ok {
 				query.MemoryIDs = append(query.MemoryIDs, r.ID)

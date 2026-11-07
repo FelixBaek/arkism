@@ -653,6 +653,9 @@ func (p *Postgres) MemoryOutcomes(ctx context.Context, in MemoryOutcomeQuery) ([
 }
 
 func (p *Postgres) MemoryOutcomeCounts(ctx context.Context, in MemoryOutcomeQuery) ([]MemoryOutcomeCount, error) {
+	if in.IndependentFirst {
+		return p.independentOutcomeCounts(ctx, in)
+	}
 	in, _, err := normalizeMemoryOutcomeQuery(in, false)
 	if err != nil {
 		return nil, err
