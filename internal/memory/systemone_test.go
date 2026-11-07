@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -383,11 +384,32 @@ func TestSystemOneNoGenerationBeforeGates(t *testing.T) {
 	}
 }
 
+// systemOneDeadlineContext injects caller deadline expiry after dispatch. The
+// product still propagates DeadlineExceeded through a real HTTP request; wall
+// clock scheduling before the handler starts is not part of this assertion.
+type systemOneDeadlineContext struct {
+	context.Context
+	done <-chan struct{}
+}
+
+func (c systemOneDeadlineContext) Done() <-chan struct{} { return c.done }
+func (c systemOneDeadlineContext) Err() error {
+	select {
+	case <-c.done:
+		return context.DeadlineExceeded
+	default:
+		return nil
+	}
+}
+
 func TestSystemOneFailuresRecordOnce(t *testing.T) {
 	for _, name := range []string{"http refusal", "redirect", "truncated", "invalid", "secret", "large response", "timeout", "finish failure", "routing record failure"} {
 		t.Run(name, func(t *testing.T) {
 			f := newFixture(t)
 			var calls atomic.Int32
+			expired := make(chan struct{})
+			expire := sync.OnceFunc(func() { close(expired) })
+			var watchdogFired atomic.Bool
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				calls.Add(1)
 				switch name {
@@ -407,8 +429,10 @@ func TestSystemOneFailuresRecordOnce(t *testing.T) {
 				case "large response":
 					io.WriteString(w, strings.Repeat("x", systemOneResponseMax+1))
 				case "timeout":
-					time.Sleep(80 * time.Millisecond)
-					io.WriteString(w, systemOneTestResponse)
+					// Consume the request so connection cancellation reaches the handler.
+					_, _ = io.Copy(io.Discard, r.Body)
+					expire()
+					<-r.Context().Done()
 				default:
 					io.WriteString(w, systemOneTestResponse)
 				}
@@ -423,11 +447,16 @@ func TestSystemOneFailuresRecordOnce(t *testing.T) {
 			}
 			ctx := testCtx
 			if name == "timeout" {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(testCtx, 30*time.Millisecond)
-				defer cancel()
+				ctx = systemOneDeadlineContext{Context: testCtx, done: expired}
+				// Only a stuck fixture uses this bound; normal expiry is the handler barrier.
+				watchdog := time.AfterFunc(5*time.Second, func() { watchdogFired.Store(true); expire() })
+				defer watchdog.Stop()
+				defer expire()
 			}
 			out, err := f.svc.EvaluateSystemOne(ctx, f.human, systemOneTestInput(scopeA))
+			if name == "timeout" && (watchdogFired.Load() || ctx.Err() != context.DeadlineExceeded) {
+				t.Fatal("deadline was not triggered by the dispatched request")
+			}
 			if name == "http refusal" || name == "redirect" {
 				status := 429
 				if name == "redirect" {
