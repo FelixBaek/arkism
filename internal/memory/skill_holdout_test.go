@@ -113,3 +113,17 @@ func TestSkillHoldoutMissingFailsAtomicRecording(t *testing.T) {
 		t.Fatal("partial evidence committed")
 	}
 }
+
+// The reserved source kind is part of the recorder provenance boundary: generic
+// source writes cannot fabricate the source accepted by holdout approval.
+func TestSkillHoldoutReservedSourceCannotBeCreated(t *testing.T) {
+	f := newFixture(t)
+	in, _ := holdoutFixture(t, f)
+	f.svc.Auth = &learningPolicy{Authorizer: f.auth, deny: "write:agent_runs"}
+	if _, e := f.svc.RecordSkillComparison(testCtx, "comparison-service", in); e == nil {
+		t.Fatal("recorder unexpectedly permitted")
+	}
+	if _, e := f.svc.Create(testCtx, "comparison-service", "sources", CreateInput{Scope: scopeA, Kind: "skill_comparison_result", Text: structuredText(in.Result), OriginProduct: "arkism", SourceRef: "forged-comparison"}); !errors.Is(e, ErrInvalid) {
+		t.Fatal("reserved comparison source created", e)
+	}
+}

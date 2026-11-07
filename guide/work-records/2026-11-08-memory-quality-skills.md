@@ -66,3 +66,14 @@ input. The final run above passed; earlier failures are not counted as passes.
 검증 결과: 실제 임시 PostgreSQL을 포함한 관련 메모리 검사는 16.029초에 통과했다.
 CLI 검사는 로컬 adapter 프로세스 실행과 개발 문제 유출 사전 차단을 포함해
 2.293초에 통과했다. 모델 호출은 하지 않았다. API·SDK 동기화는 통합 단계에서 수행한다.
+
+Independent review considered whether a generic source writer could fabricate a
+`skill_comparison_result` and bypass recorder permissions. The existing source-kind
+allowlist already rejects that reserved kind, so the suspected runtime defect was
+retracted and no production change was made. A service regression now verifies
+that a caller denied `write:agent_runs` cannot use the recorder or create the
+reserved comparison source through generic Create. This also documents the
+reserved-kind boundary on which holdout evidence validation relies.
+
+검토 보완: 일반 source 작성으로 비교 근거를 위조할 수 있다는 의심은 기존 kind 허용 목록이
+이미 차단함을 확인해 철회했다. 제품 코드는 변경하지 않고 실제 서비스 회귀 검사를 추가했다.
