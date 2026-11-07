@@ -23,8 +23,11 @@ type MemorySignalExplanation struct {
 	EvaluationFactor     float64       `json:"evaluation_factor"`
 	WorkFactor           float64       `json:"work_factor"`
 	EffectiveFactor      float64       `json:"effective_factor"`
-	Applicable           bool          `json:"applicable"`
-	SignalComputedAt     *time.Time    `json:"signal_computed_at,omitempty"`
+	// Applicable means the memory itself is active for baseline weighting.
+	// It does not assert query eligibility: source visibility, expiry, transfer
+	// rules, and relevance are checked independently by Search.
+	Applicable       bool       `json:"applicable"`
+	SignalComputedAt *time.Time `json:"signal_computed_at,omitempty"`
 }
 
 func (s *Service) ExplainMemorySignal(ctx context.Context, token string, scope Scope, id string) (MemorySignalExplanation, error) {

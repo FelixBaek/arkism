@@ -100,3 +100,28 @@ func TestSignalPolicyHTTPContractEvidence(t *testing.T) {
 		t.Fatal(cases)
 	}
 }
+
+func TestSignalExplanationBaselineDoesNotPromiseSearchEligibility(t *testing.T) {
+	f, m, _ := outcomeFixture(t)
+	q := SearchInput{Scope: scopeA, Query: m.Text, Modes: []string{"fts"}}
+	before := f.search(f.human, q)
+	if len(before.Items) != 1 {
+		t.Fatal("positive search control", before.Items)
+	}
+	source := m.Sources[0]
+	src, err := f.repo.Get(testCtx, "sources", scopeA, source.SourceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.repo.Delete(testCtx, "sources", scopeA, source.SourceID, src.Revision); err != nil {
+		t.Fatal(err)
+	}
+	v, err := f.svc.ExplainMemorySignal(testCtx, f.human, scopeA, m.ID)
+	if err != nil || !v.Applicable {
+		t.Fatal("historical baseline explanation unexpectedly hidden", v, err)
+	}
+	after := f.search(f.human, q)
+	if len(after.Items) != 0 {
+		t.Fatal("source-ineligible memory appeared in Search", after.Items)
+	}
+}

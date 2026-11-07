@@ -48,7 +48,7 @@ window.ArkismMemoryEvaluation = (() => {
           const values = [["기준 시각", new Date(result.as_of).toLocaleString()], ["전체 평가 이력", `${result.historical_total}건`]];
           if (recent) values.push(["평가 종류", result.policy?.dimension === "work_task" ? "업무 결과" : "개인 규칙 준수"], ["평가 기간", `${result.policy?.window_days}일`], ["현재 내용·기간의 이벤트", `${result.window_events}건`], ["중복·귀속 부족으로 제외", `${result.excluded_window_events}건`], ["적용 표본", `${result.eligible_total}건 · 통과 ${result.eligible_passed}건`], ["최소 표본", `${result.policy?.min_samples}건 · ${result.minimum_met ? "충족" : "미충족 (평가 가중치 1)"}`]);
           values.push(["평가 가중치", String(result.evaluation_factor)], ["업무 관측 가중치", String(result.work_factor)], ["합산 가중치", String(result.effective_factor)]);
-          box.replaceChildren(note, facts(values), el("p", "meta", "일반 검색의 기준값이에요. 다른 기준 시각이나 별도 동적 순위는 다를 수 있어요. 반환·전달·실제 사용·성공 원인은 서로 달라요."), show);
+          box.replaceChildren(note, facts(values), el("p", "meta", "일반 검색의 기준 가중치예요. 원본 만료·삭제·권한·검색어에 따라 검색 결과에서 빠질 수 있어요. 다른 기준 시각이나 별도 동적 순위는 다를 수 있어요. 반환·전달·실제 사용·성공 원인은 서로 달라요."), show);
           show.textContent = "순위 기준 새로고침";
         } catch (_) { if (turn.live() && box.isConnected) { note.textContent = "순위 기준을 불러오지 못했어요."; show.textContent = "순위 기준 다시 시도"; } }
         finally { if (turn.live() && box.isConnected) show.disabled = false; }

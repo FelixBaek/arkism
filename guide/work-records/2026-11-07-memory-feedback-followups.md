@@ -88,3 +88,13 @@ Verified: Targeted host recall and golden schema tests pass (0.035s), including 
 
 Limits: Host output test uses deterministic transport responses; service tests separately exercise actual handlers and packet construction. This is not a real-model usage or success claim. Automatic prompt hooks remain unchanged and default off; no new persistent enable setting, pinned support or native dynamic algorithm was added. No product build, external publication or model call was performed.
 한계: 호스트의 합성 전송 시험과 실제 서비스 시험을 구분합니다. 자동 hook 활성화·지원하지 않는 pinned 조합·동적 순위 알고리즘 확대는 없습니다.
+
+## F3 follow-up — Baseline is not search eligibility / 기준 가중치와 검색 포함 조건 구분
+
+Task: memory-followups-F3
+Research: none
+연구: 해당 없음
+
+Why / 이유: Independent review identified that an active memory can have a valid baseline factor while its expired/deleted/inaccessible source excludes it from Search. `applicable` describes only the memory's own active state for baseline weighting, not complete search eligibility. The API DTO comment and UI now state that source visibility, expiry, query relevance and separate dynamic ranking may prevent application.
+Verified / 검증: A focused service test deletes the original source and confirms that historical baseline explanation remains readable while actual Search removes the memory (0.037s). Node panel tests and local Chromium retry/keyboard tests pass; updated screenshot inspected. Better Design again reported unsupported JS input.
+Limits / 한계: The endpoint does not run an arbitrary search query or claim a factor was applied to any particular response. No broader source-permission behavior changed.
