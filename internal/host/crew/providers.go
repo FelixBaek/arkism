@@ -31,7 +31,8 @@ import (
 	"github.com/FelixBaek/arkism/internal/host/skills"
 )
 
-var providerNames = map[string]string{"anthropic": "Anthropic", "openai": "OpenAI", "google": "Google", "zai": "Z.ai", "xai": "xAI", "custom": "직접 추가"}
+var providerNames = map[string]string{"anthropic": "Anthropic", "openai": "OpenAI", "google": "Google", "zai": "Z.ai", "xai": "xAI", "custom": "직접 추가",
+	"copilot": "GitHub Copilot", "nous": "Nous Portal", "cursor": "Cursor"}
 
 // defaultModels is what each provider offers to AI nodes. ARKISM_PROVIDER_MODELS='{"openai":["gpt-6.1-sol"]}' replaces a row.
 var defaultModels = map[string][]string{
@@ -328,7 +329,11 @@ func modelsFor(provider string) []string {
 		case "openai":
 			found = codexModels()
 		case "xai":
-			found = grokModels()
+			if found = grokModels(); len(found) == 0 {
+				found = loginModels(provider)
+			}
+		case "copilot", "nous", "cursor":
+			found = loginModels(provider)
 		case "zai":
 			found = zaiModels()
 		case "google":
@@ -507,7 +512,8 @@ func inventory(home string, keys []map[string]any, refreshUsage bool) ([]any, er
 		}
 	}
 	out := []any{}
-	for _, pid := range []string{"anthropic", "openai", "google", "zai", "xai"} { // xai runs through grok
+	// xai runs through grok or its account login; copilot, nous and cursor through theirs (login_accounts.go)
+	for _, pid := range []string{"anthropic", "openai", "google", "zai", "xai", "copilot", "nous", "cursor"} {
 		accounts, err := providerAccounts(pid, home, refreshUsage)
 		if err != nil {
 			return nil, err
@@ -518,7 +524,7 @@ func inventory(home string, keys []map[string]any, refreshUsage bool) ([]any, er
 				mine = append(mine, keyRow(publicKey(k)))
 			}
 		}
-		if len(accounts) == 0 && len(mine) == 0 && pid == "xai" {
+		if len(accounts) == 0 && len(mine) == 0 && (pid == "xai" || pid == "cursor") {
 			continue
 		}
 		kind := "api"
@@ -567,7 +573,7 @@ func providerAccounts(pid, home string, refreshUsage bool) ([]any, error) {
 		}
 		accounts = append(accounts, cliLogin(row, home, isDefault))
 	}
-	return accounts, nil
+	return append(accounts, loginAccounts(pid)...), nil
 }
 
 // cliLogin is the sign-in row of a CLI without account profiles.
