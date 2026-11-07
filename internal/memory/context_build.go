@@ -12,6 +12,8 @@ type ContextBuildInput struct {
 	WholeItems      bool                   `json:"whole_items,omitempty"`
 	BestEffortLanes bool                   `json:"best_effort_lanes,omitempty"`
 	ContextView     *ContextInvocationView `json:"context_view,omitempty"`
+	TemporalWindow  *TemporalWindow        `json:"temporal_window,omitempty"`
+	TemporalWindows []TemporalWindow       `json:"temporal_windows,omitempty"`
 	SearchCriteria
 	RelatedTo     *Ref     `json:"related_to,omitempty"`
 	Scope         Scope    `json:"scope"`
@@ -50,7 +52,7 @@ type ContextPack struct {
 
 func (s *Service) BuildContext(ctx context.Context, token string, in ContextBuildInput) (ContextPack, error) {
 	// Without budget_tokens the space's recall budget applies (read in directivesFirst, after validation).
-	if in.Agent != "" && (in.ConversationContext || in.WholeItems || in.BestEffortLanes) {
+	if in.Agent != "" && (in.ConversationContext || in.WholeItems || in.BestEffortLanes || in.TemporalWindow != nil || in.TemporalWindows != nil) {
 		return ContextPack{}, ErrInvalid
 	}
 	maxItems, budget := 6, 2000
@@ -70,6 +72,7 @@ func (s *Service) BuildContext(ctx context.Context, token string, in ContextBuil
 	in.ContextView = view
 	search := SearchInput{
 		ConversationContext: in.ConversationContext, WholeItems: in.WholeItems, BestEffortLanes: in.BestEffortLanes,
+		TemporalWindow: in.TemporalWindow, TemporalWindows: in.TemporalWindows,
 		SearchCriteria: in.SearchCriteria, Scope: in.Scope, Query: in.Task, contextView: view,
 		Limit: maxItems, BudgetTokens: budget, TokenEncoding: in.TokenEncoding,
 		Destination: in.Destination, RunID: in.RunID, Modes: in.Modes, Purpose: "answer", RelatedTo: in.RelatedTo,

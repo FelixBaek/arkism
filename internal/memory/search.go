@@ -67,6 +67,8 @@ type SearchInput struct {
 	// TemporalWindow is the temporal lane's [from, to) instead of time words in the query:
 	// memories in it rank higher, the others still match (recall_floors.go).
 	TemporalWindow *TemporalWindow `json:"temporal_window,omitempty"`
+	// TemporalWindows explicitly compares up to four intervals through one deduplicated lane.
+	TemporalWindows []TemporalWindow `json:"temporal_windows,omitempty"`
 	// MinScores drops lane hits and reranked hits below per-stage floors (recall_floors.go).
 	MinScores *MinScores `json:"min_scores,omitempty"`
 	// RerankOptions lets the model rerank and the recall decision engine also drop off-topic hits and near-duplicates.

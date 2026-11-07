@@ -28,11 +28,48 @@ func (p *Postgres) SearchMemoriesInWindow(ctx context.Context, in SearchInput, f
 	// valid_from dates get a day of slack each side: an RFC3339 value in another offset can carry the neighbouring date.
 	args := []any{to, from, from, to, from.AddDate(0, 0, -1).Format(time.DateOnly), to.AddDate(0, 0, 1).Format(time.DateOnly), from, to, from, to}
 	where, params := pgSearchWhere(criteria, colMemories, now, recallWindowSQL, args)
-	rows, err := p.selectRecords(ctx, colMemories, in.Scope, where, params, "updated_at DESC, id ASC", in.Limit*5)
+	// Stream the SQL superset instead of cutting it before event-time precedence
+	// is checked. Retain only the best Limit hits; request cancellation bounds work.
+	query := "SELECT payload FROM memory_records WHERE collection=$1 AND workspace_id=$2 AND project_id=$3 AND user_id=$4 AND agent_id=$5 AND (" + where + ") ORDER BY updated_at DESC,id ASC"
+	values := append([]any{colMemories, in.Scope.WorkspaceID, in.Scope.ProjectID, in.Scope.UserID, in.Scope.AgentID}, params...)
+	rows, err := p.q().Query(ctx, query, values...)
 	if err != nil {
-		return nil, err
+		return nil, pgErr(err)
 	}
-	return windowHits(rows, criteria, now, timeWindow{From: from, To: to}, loc, in.Limit), nil
+	defer rows.Close()
+	hits := []Hit{}
+	for rows.Next() {
+		var payload []byte
+		if err := rows.Scan(&payload); err != nil {
+			return nil, ErrUnavailable
+		}
+		r, err := pgDecode(payload)
+		if err != nil {
+			return nil, ErrUnavailable
+		}
+		if r.ID == "" || r.Scope != in.Scope {
+			continue
+		}
+		eligible := windowHits([]Record{r}, criteria, now, timeWindow{From: from, To: to}, loc, 1)
+		if len(eligible) == 0 {
+			continue
+		}
+		h := eligible[0]
+		at := sort.Search(len(hits), func(i int) bool { return hitEventTime(hits[i], loc).Before(hitEventTime(h, loc)) })
+		if at >= in.Limit {
+			continue
+		}
+		hits = append(hits, Hit{})
+		copy(hits[at+1:], hits[at:])
+		hits[at] = h
+		if len(hits) > in.Limit {
+			hits = hits[:in.Limit]
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, pgErr(err)
+	}
+	return hits, nil
 }
 
 // windowHits keeps the live approved memories whose event time is in w, newest event first.
@@ -57,18 +94,18 @@ const memoryNeighborsSQL = `WITH seed AS (SELECT id, pos FROM unnest($5::text[])
 edge AS (
  SELECT n.id, s.pos FROM seed s CROSS JOIN LATERAL (SELECT r.target_id AS id FROM relations r
   WHERE r.organization_id=$1 AND r.project_id=$2 AND r.user_id=$3 AND r.agent_id=$4
-  AND r.source_kind IN ('memory','lesson') AND r.source_id=s.id AND r.target_kind IN ('memory','lesson') LIMIT $7) n
+  AND r.source_kind IN ('memory','lesson') AND r.source_id=s.id AND r.target_kind IN ('memory','lesson') ORDER BY r.target_id,r.target_kind,r.relation_kind LIMIT $7) n
  UNION ALL
  SELECT n.id, s.pos FROM seed s CROSS JOIN LATERAL (SELECT r.source_id AS id FROM relations r
   WHERE r.organization_id=$1 AND r.project_id=$2 AND r.user_id=$3 AND r.agent_id=$4
-  AND r.target_kind IN ('memory','lesson') AND r.target_id=s.id AND r.source_kind IN ('memory','lesson') LIMIT $7) n
+  AND r.target_kind IN ('memory','lesson') AND r.target_id=s.id AND r.source_kind IN ('memory','lesson') ORDER BY r.source_id,r.source_kind,r.relation_kind LIMIT $7) n
  UNION ALL
  SELECT n.id, s.pos FROM seed s CROSS JOIN LATERAL (SELECT m.target_kind, m.target_id FROM relations m
   WHERE m.organization_id=$1 AND m.project_id=$2 AND m.user_id=$3 AND m.agent_id=$4
-  AND m.source_kind IN ('memory','lesson') AND m.source_id=s.id AND m.relation_kind='mentions' LIMIT $7) x
+  AND m.source_kind IN ('memory','lesson') AND m.source_id=s.id AND m.relation_kind='mentions' ORDER BY m.target_kind,m.target_id LIMIT $7) x
  CROSS JOIN LATERAL (SELECT o.source_id AS id FROM relations o
   WHERE o.organization_id=$1 AND o.project_id=$2 AND o.user_id=$3 AND o.agent_id=$4
-  AND o.target_kind=x.target_kind AND o.target_id=x.target_id AND o.relation_kind='mentions' AND o.source_kind IN ('memory','lesson') LIMIT $7) n)
+  AND o.target_kind=x.target_kind AND o.target_id=x.target_id AND o.relation_kind='mentions' AND o.source_kind IN ('memory','lesson') ORDER BY o.source_id,o.source_kind LIMIT $7) n)
 SELECT id FROM edge WHERE id <> ALL($5::text[]) GROUP BY id ORDER BY count(*) DESC, min(pos) ASC, id ASC LIMIT $6`
 
 func (p *Postgres) MemoryNeighbors(ctx context.Context, scope Scope, seeds []string, limit int) ([]string, error) {

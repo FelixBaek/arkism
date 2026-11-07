@@ -48,9 +48,10 @@ type HitExplain struct {
 
 // RecallExplain is the search-level debug trace returned with explain=true.
 type RecallExplain struct {
-	Lanes      []string          `json:"lanes"`
-	TimeWindow *RecallTimeWindow `json:"time_window,omitempty"`
-	Reranked   bool              `json:"reranked"`
+	Lanes       []string           `json:"lanes"`
+	TimeWindow  *RecallTimeWindow  `json:"time_window,omitempty"`
+	TimeWindows []RecallTimeWindow `json:"time_windows,omitempty"`
+	Reranked    bool               `json:"reranked"`
 	// ModelRerank is set when the model rerank was asked for: applied, or why the fused order was kept.
 	ModelRerank string `json:"model_rerank,omitempty"`
 	// Expand is set when query expansion was on: applied, or why plain recall ran (recall_expand.go);
@@ -95,6 +96,7 @@ type recallTrace struct {
 	explain  bool
 	lanes    []string
 	window   *timeWindow
+	windows  []timeWindow
 	fused    map[string]float64
 	rerank   map[string]float64
 	reranked bool
@@ -184,7 +186,7 @@ func boundRecallOptions(in *SearchInput) bool {
 		in.GraphDepth = 2
 	}
 	return in.GraphDepth >= 1 && in.GraphDepth <= graphDepthMax && in.MinScore >= 0 && in.MinScore <= 1 && validInclude(in.Include, in.IncludeOptions) &&
-		validLaneWeights(in.LaneWeights) && in.TemporalWindow.valid() && in.MinScores.valid()
+		validLaneWeights(in.LaneWeights) && in.TemporalWindow.valid() && in.validTemporalWindows() && in.MinScores.valid()
 }
 
 func hitKey(h Hit) string { return h.Origin + ":" + h.Collection + ":" + h.ID }
@@ -204,16 +206,22 @@ func (s *Service) recallLanes(ctx context.Context, in SearchInput, collection st
 			lists, trace.lanes = append(lists, hits), append(trace.lanes, "expanded")
 		}
 	}
-	if collection != colMemories || in.IncludeInactive || len(in.Modes) > 0 && !in.spaceModes {
+	if collection != colMemories || in.IncludeInactive || len(in.Modes) > 0 && !in.spaceModes && len(in.TemporalWindows) == 0 {
 		return lists, trace, nil
 	}
-	if w, ok := in.timeWindow(s.recallClock(in)); ok && spaceLaneOn(in.space, "temporal", true) {
-		start := time.Now()
-		hits, err := s.Repo.SearchMemoriesInWindow(ctx, in, w.From, w.To)
-		trace.clock.since("temporal", start)
-		if optionalLaneUnavailable(ctx, in, err) {
-			trace.degraded = append(trace.degraded, "temporal")
-		} else {
+	if windows := in.timeWindows(s.recallClock(in)); len(windows) > 0 && spaceLaneOn(in.space, "temporal", true) {
+		combined := []Hit{}
+		seen := map[string]bool{}
+		for _, w := range windows {
+			start := time.Now()
+			hits, err := s.Repo.SearchMemoriesInWindow(ctx, in, w.From, w.To)
+			trace.clock.since("temporal", start)
+			if optionalLaneUnavailable(ctx, in, err) {
+				if !slices.Contains(trace.degraded, "temporal") {
+					trace.degraded = append(trace.degraded, "temporal")
+				}
+				continue
+			}
 			if err != nil {
 				return nil, nil, err
 			}
@@ -221,9 +229,32 @@ func (s *Service) recallLanes(ctx context.Context, in SearchInput, collection st
 			if err != nil {
 				return nil, nil, err
 			}
-			trace.window = &w
-			lists, trace.lanes = append(lists, hits), append(trace.lanes, "temporal")
+			trace.windows = append(trace.windows, w)
+			for _, h := range hits {
+				if !seen[hitKey(h)] {
+					seen[hitKey(h)] = true
+					combined = append(combined, h)
+				}
+			}
 		}
+		if len(trace.windows) > 0 {
+			if len(in.TemporalWindows) == 0 {
+				trace.window = &trace.windows[0]
+			} else {
+				sort.SliceStable(combined, func(i, j int) bool {
+					a, b := hitEventTime(combined[i], recallLocation(in.Timezone)), hitEventTime(combined[j], recallLocation(in.Timezone))
+					if a.Equal(b) {
+						return combined[i].ID < combined[j].ID
+					}
+					return a.After(b)
+				})
+			}
+			lists, trace.lanes = append(lists, combined), append(trace.lanes, "temporal")
+		}
+	}
+	// Explicit base modes still do not enable graph expansion implicitly.
+	if len(in.Modes) > 0 && !in.spaceModes {
+		return lists, trace, nil
 	}
 
 	sources := []neighborSource{}
@@ -524,6 +555,11 @@ func (t *recallTrace) annotate(out *ContextBundle, lists [][]Hit) {
 	}
 	out.Explain = &RecallExplain{Lanes: t.lanes, Reranked: t.reranked, ModelRerank: t.modelRerank, Expand: t.expand, ExpandQueries: t.expandQueries, MinScoreDropped: t.dropped,
 		Dropped: t.dropStages, LaneWeights: t.weights, LaneMS: t.clock.millis(), RerankChain: t.chain, LaneHits: t.laneHits(lists)}
+	if t.window == nil {
+		for _, w := range t.windows {
+			out.Explain.TimeWindows = append(out.Explain.TimeWindows, RecallTimeWindow{Phrase: w.Phrase, From: w.From, To: w.To})
+		}
+	}
 	if t.window != nil {
 		out.Explain.TimeWindow = &RecallTimeWindow{Phrase: t.window.Phrase, From: t.window.From, To: t.window.To}
 	}

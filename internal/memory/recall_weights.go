@@ -2,6 +2,7 @@ package memory
 
 import (
 	"maps"
+	"math"
 	"os"
 	"slices"
 	"strconv"
@@ -27,7 +28,7 @@ func validLaneWeights(w map[string]float64) bool {
 		return false
 	}
 	for lane, v := range w {
-		if !slices.Contains(recallLaneNames, lane) || v < laneWeightMin || v > laneWeightMax {
+		if !slices.Contains(recallLaneNames, lane) || math.IsNaN(v) || math.IsInf(v, 0) || v < laneWeightMin || v > laneWeightMax {
 			return false
 		}
 	}

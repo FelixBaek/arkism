@@ -135,3 +135,34 @@ func (in SearchInput) timeWindow(now time.Time) (timeWindow, bool) {
 	}
 	return parseTimeIntent(in.Query, in.locale, now.In(recallLocation(in.Timezone)))
 }
+
+// Explicit windows are a bounded additive recall lane, not a filter or a guess
+// about ambiguous natural-language ranges. Repeated windows never multiply rank.
+func (in SearchInput) validTemporalWindows() bool {
+	if in.TemporalWindows == nil {
+		return true
+	}
+	if len(in.TemporalWindows) < 1 || len(in.TemporalWindows) > 4 || in.TemporalWindow != nil || in.IncludeInactive || in.RelatedTo != nil {
+		return false
+	}
+	for i := range in.TemporalWindows {
+		if !in.TemporalWindows[i].valid() {
+			return false
+		}
+	}
+	return true
+}
+func (in SearchInput) timeWindows(now time.Time) []timeWindow {
+	if len(in.TemporalWindows) > 0 {
+		out := make([]timeWindow, 0, len(in.TemporalWindows))
+		for _, w := range in.TemporalWindows {
+			out = append(out, timeWindow{From: w.From, To: w.To, Phrase: "temporal_windows"})
+		}
+		return out
+	}
+	w, ok := in.timeWindow(now)
+	if !ok {
+		return nil
+	}
+	return []timeWindow{w}
+}
