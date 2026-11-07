@@ -37,8 +37,8 @@ import (
 //   - diversity (default on; false keeps the plain score order): each recall lane reads
 //     twice the limit (at most 50), and memory recall picks its
 //     limit rows from the fused, reranked and recency-weighted pool greedily, each pick's
-//     score lowered by diversityPenalty times its highest embedding similarity to a row
-//     already picked (selectDiverse). Near-duplicates of one fact then give way to the next
+//     score lowered by diversityPenalty times how far its highest embedding similarity to a
+//     row already picked sits into the near-duplicate band (selectDiverse). Near-duplicates of one fact then give way to the next
 //     distinct fact instead of filling the result; the count never exceeds the limit.
 //   - expand (opt-in, spends one server model call per recall): the model's sub-queries
 //     search beside the question and join its fusion (recall_expand.go).
@@ -111,13 +111,14 @@ func (q SpaceRecallQuality) provisionalOn() bool { return q.Provisional == nil |
 
 func (q SpaceRecallQuality) diversityOn() bool { return q.Diversity == nil || *q.Diversity }
 
-// diversityPenalty weighs a candidate's closest similarity to the rows already picked against
-// its score relative to the best row. At 0.5 a row that repeats a picked one (similarity near 1)
-// loses half the best score, while rows on distinct facts keep their order.
+// diversityPenalty weighs how near-duplicate a candidate is to the rows already picked
+// (nearDuplicateShare) against its score relative to the best row. At 0.5 a row that repeats a
+// picked one (similarity near 1) loses half the best score, while rows on distinct facts keep
+// their order.
 const diversityPenalty = 0.5
 
 // selectDiverse picks limit rows from rows (best score first) one at a time by score/best
-// minus diversityPenalty times the row's highest cosine similarity to a picked row. A row
+// minus diversityPenalty times the row's highest near-duplicate share to a picked row. A row
 // without a stored vector is never penalised. Scores are kept, so the score floors still
 // apply to the real values; the result is in pick order.
 func selectDiverse(rows []ScoredHit, limit int) []ScoredHit {
@@ -137,11 +138,19 @@ func selectDiverse(rows []ScoredHit, limit int) []ScoredHit {
 		picked = append(picked, rows[at])
 		for i := range rows {
 			if !used[i] && rows[at].vector != nil && rows[i].vector != nil {
-				closest[i] = max(closest[i], cosine(rows[at].vector, rows[i].vector))
+				closest[i] = max(closest[i], nearDuplicateShare(cosine(rows[at].vector, rows[i].vector)))
 			}
 		}
 	}
 	return picked
+}
+
+// nearDuplicateShare is how far a similarity sits into the near-duplicate band: 0 below the
+// bar capture uses for a rewording of one fact (defaultCaptureMergeSimilarity), 1 at identical.
+// Rows that merely share a topic, such as every memory about one person, keep their order;
+// only rewordings of one fact give way.
+func nearDuplicateShare(similarity float64) float64 {
+	return max(0, similarity-defaultCaptureMergeSimilarity) / (1 - defaultCaptureMergeSimilarity)
 }
 
 // noticeLang is the language recall notices are written in.

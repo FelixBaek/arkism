@@ -31,6 +31,15 @@ func TestSelectDiverseSkipsNearDuplicatesWithinTheLimit(t *testing.T) {
 	if got := ids(selectDiverse(plain, 2)); !slices.Equal(got, []string{"x", "y"}) {
 		t.Fatal(got)
 	}
+	// A row that only shares the topic (similarity 0.8, below the near-duplicate band) keeps its
+	// place ahead of a less similar but lower scored row.
+	topic := []ScoredHit{diverseRow("a", 1, 1, 0), diverseRow("same-topic", 0.9, 0.8, 0.6), diverseRow("far", 0.85, 0, 1)}
+	if got := ids(selectDiverse(topic, 2)); !slices.Equal(got, []string{"a", "same-topic"}) {
+		t.Fatal("a same-topic row lost its place", got)
+	}
+	if nearDuplicateShare(0.5) != 0 || nearDuplicateShare(1) < 0.999 {
+		t.Fatal(nearDuplicateShare(0.5), nearDuplicateShare(1))
+	}
 	for _, r := range selectDiverse(slices.Clone(rows), 4) {
 		if r.ID == "a-again" && r.Score != 0.95 {
 			t.Fatal("scores were rewritten", r.Score)
@@ -44,7 +53,7 @@ func TestRecallDiversityDefaultAndSpaceSwitch(t *testing.T) {
 	f := newFixture(t)
 	f.emb.semantic = true
 	f.svc.Repo = nearestFirstRepo{f.repo}
-	for _, text := range []string{"melanie camping trip with the kids in the forest", "melanie camping trip with the kids in the forest last summer", "melanie camping trip at the beach"} {
+	for _, text := range []string{"melanie camping trip with the kids in the forest", "melanie camping trip with the kids in the forest today", "melanie camping trip at the beach"} {
 		f.embedText(f.activeMemory(text))
 	}
 	query := SearchInput{Scope: scopeA, Query: "melanie camping trip with the kids in the forest", Modes: []string{"vector"}, Limit: 2}
