@@ -130,20 +130,61 @@ func TestProcessExtensionStdioRefusesAndChecksTenant(t *testing.T) {
 	}
 }
 
+// deadlineExtensionTransport observes actual transport deadlines, so fail-open
+// success cannot accidentally stand in for the timeout or restart assertion.
+type deadlineExtensionTransport struct {
+	extTransport
+	deadlines int
+}
+
+func (t *deadlineExtensionTransport) call(ctx context.Context, method string, params any) (json.RawMessage, error) {
+	raw, err := t.extTransport.call(ctx, method, params)
+	if errors.Is(err, context.DeadlineExceeded) {
+		t.deadlines++
+	}
+	return raw, err
+}
+
 func TestProcessExtensionTimeoutFollowsFailSetting(t *testing.T) {
 	for _, fail := range []string{"closed", "open"} {
-		f := newFixture(t)
-		cfg := stdioExtension(t, "slow")
-		cfg.Timeout, cfg.Fail = "300ms", fail
-		loadExtensions(t, f, cfg)
-		_, err := f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "sleepy"})
-		if fail == "closed" && !errors.Is(err, ErrExtensionRefused) || fail == "open" && err != nil {
-			t.Fatal(fail, err)
-		}
-		// The stopped program starts again for the next call.
-		if _, err := f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "답"}); err != nil {
-			t.Fatal(fail, "after restart", err)
-		}
+		t.Run(fail, func(t *testing.T) {
+			f := newFixture(t)
+			cfg := stdioExtension(t, "slow")
+			cfg.Timeout, cfg.Fail = "300ms", fail
+			extensions := loadExtensions(t, f, cfg)
+			extension := extensions.list[0]
+			transport := extension.t.(*stdioTransport)
+			initialPID := transport.cmd.Process.Pid
+			observed := &deadlineExtensionTransport{extTransport: transport}
+			extension.t = observed
+			_, err := f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "sleepy"})
+			if fail == "closed" && !errors.Is(err, ErrExtensionRefused) || fail == "open" && err != nil {
+				t.Fatal(fail, err)
+			}
+			if observed.deadlines == 0 {
+				t.Fatal("sleepy operation did not exercise a transport deadline")
+			}
+			// The 300ms fault budget is intentionally too small for a busy test binary's
+			// cold start. Restart is a separate correctness check, not a latency target.
+			// Give only this test instance a bounded startup budget, then demand a real
+			// reply directly so fail-open cannot hide a broken restarted process.
+			extension.timeout = 5 * time.Second
+			deadlines := observed.deadlines
+			raw, err := extension.ask(testCtx, "describe", nil)
+			var description extDescription
+			if err != nil || json.Unmarshal(raw, &description) != nil || !slices.Contains(description.Operations, OpRecall) {
+				t.Fatal("restart handshake", err, string(raw))
+			}
+			if transport.cmd == nil || transport.cmd.Process.Pid == initialPID {
+				t.Fatal("timed-out process was not replaced")
+			}
+			if _, err = f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "답"}); err != nil {
+				t.Fatal(fail, "after restart", err)
+			}
+			if observed.deadlines != deadlines {
+				t.Fatal("healthy restart operation timed out")
+			}
+		})
 	}
 }
 

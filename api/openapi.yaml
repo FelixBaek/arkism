@@ -58002,6 +58002,9 @@
           },
           "memory_context": {
             "$ref": "#/components/schemas/MemoryContext"
+          },
+          "conversation_order": {
+            "$ref": "#/components/schemas/ConversationOrder"
           }
         },
         "required": [

@@ -95,3 +95,27 @@ reproduced the actual false-zero case before the fix.
 
 검증 보완: 일반 스키마 소유자의 RLS 부분 조회가 0건 완료로 잘못 보고되는 상황을 실제 DB에서
 재현했다. 보존기간 작업에만 전역 조회 권한을 추가 확인하고, 마이그레이션 권한은 바꾸지 않았다.
+
+
+The first integrated run exposed two issues: FileSourceInput lacked the new
+conversation_order field shared with CreateInput, and the existing extension
+restart test charged a cold process start against its 300ms fault deadline.
+The schema is synchronized. The extension test still demands an actual transport
+deadline and closed/open behavior at 300ms, then separately verifies a real
+restarted process/handshake and healthy request under a test-only 5s bound.
+Production timeouts are unchanged. Twenty repeated cases passed (20.202s), as did
+the related extension suite (3.103s). These failures remain in the first-run log;
+a clean full integration run is required after the fixes.
+
+Strict integrated HTTP validation now covers 435 operations and 284 real cases,
+including both-period final context and the new policy explanation endpoint.
+SDK tests passed all eight cases with an installed TypeScript compiler, including
+positive/negative request-type checks. The initial SDK run skipped that compiler
+check before TSC_BIN was configured; it is not counted as the final result.
+The UI regression used the five existing insight/settings/views/page-views/list
+files (all pass). An attempted nonexistent memory-evaluation.test.js is not
+counted; evaluation behavior is covered by the real files and browser components.
+
+검증 보완: 전체 검사에서 발견한 입력 스키마 누락과 시간 제한에 민감한 재시작 시험을 수정했다.
+원래 실패 차단은 유지하고 제품 timeout은 바꾸지 않았다. 현재 HTTP 284개 응답·요청과
+SDK 8개 검사가 통과했고, 최종 전체 검사 결과는 아래에 추가한다.

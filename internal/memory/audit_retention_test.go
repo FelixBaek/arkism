@@ -116,6 +116,10 @@ func TestRetentionRejectsOwnerWithoutGlobalRLSVisibility(t *testing.T) {
 	if yes, e := schemaOwner(testCtx, restricted.q()); e != nil || !yes {
 		t.Fatal("fixture is not schema owner", yes, e)
 	}
+	var visible int
+	if e := restricted.q().QueryRow(testCtx, "SELECT count(*) FROM memory_records WHERE collection='audit_events'").Scan(&visible); e != nil || visible != 0 {
+		t.Fatal("fixture must have RLS-filtered zero rows", visible, e)
+	}
 	cutoff := time.Now().UTC().Add(-36 * time.Hour)
 	for _, execute := range []bool{false, true} {
 		if _, e := restricted.ExpireAuditEvents(testCtx, cutoff, execute); !errors.Is(e, ErrDenied) {
