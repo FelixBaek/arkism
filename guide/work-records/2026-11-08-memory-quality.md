@@ -9,7 +9,8 @@ Verified: integrated PostgreSQL memory suite passed with2029 top-level tests and
 explicit skips (726.896s); later retrieval corrections passed their combined
 selection (4.405s). Eleven additional real HTTP host/receipt tests passed (19.986s).
 API contract validation covered284 real HTTP cases; SDK tests and scoped vet passed.
-The first frozen quality comparison failed; the final corrected comparison is pending.
+Both completed frozen quality comparisons failed acceptance. The final corrected
+comparison completed all906 searches; results are below. MQ1/MQ2 remain incomplete.
 Limits: no publication, production deployment, paid model calls or answer-quality
 claim. Only the previously authorized isolated offline recall harness is compiled.
 
@@ -18,6 +19,42 @@ claim. Only the previously authorized isolated offline recall harness is compile
 검증: 실제 DB 검색 집중 검사와 분야별 품질 판정기 검사를 실행했다. 통합 결과는 아래에 갱신한다.
 한계: 90%는 고정 질문의 근거 회수율 목표이며 답변 정확도나 모든 실제 업무의 성공률이 아니다.
 연구: 해당 없음
+
+## Final measured status / 최종 측정 상태
+
+**전체 요청 미완료: MQ3/MQ4/MQ5는 구현·기능 검증했고, MQ1/MQ2의 분야별90% 검색 품질 목표는 달성하지 못했다.**
+새 검색 옵션은 기본값 `false`이며 생산 환경에 적용하지 않았다. 자료 부족으로
+보류한 연구 항목은 그대로 보류한다.
+
+| 질문 분야 | 기존 근거 회수율 | 최종 후보 | 판정 |
+| --- | ---: | ---: | --- |
+| 여러 기억 연결 |59.55%|60.66%|90% 미달|
+| 날짜·시간 |91.09%|89.56%|90% 미달·기존 대비 하락|
+| 개방형 |61.46%|61.46%|90% 미달|
+| 단일 기억 |97.07%|96.65%|90% 이상이지만 기존 대비 하락|
+| 전체 참고 평균 |85.65%|85.37%|분야별 완료 기준을 대신하지 않음|
+
+The final frozen candidate `memory-quality-final-20261108` produced453 complete
+question rows,451 scored questions and906 successful HTTP searches. Degraded
+results0; model-trap lines0; independently queried final non-embedding usage0.
+The fingerprint matches the original baseline. The strict category checker
+returned1: **not accepted**, including the single-hop baseline regression.
+The small multi-hop gain does not offset regressions in other categories.
+
+The evaluator wrote all rows and `summary.json` but its stdout pipe closed during
+final flushing (`BrokenPipeError`), so the runner did not produce its normal
+summary/footer or complete cleanup. This was not reported as a successful runner
+exit. Results were rechecked directly from the complete rows and server log;
+model usage was read from the isolated DB before removal. A recovered
+`postcheck.json` records that distinction. Tests do not establish answer accuracy,
+semantic task success or an unseen-data generalization claim.
+
+Remaining retrieval work must improve multi-hop/open-domain evidence coverage,
+recover temporal and single-hop regressions, and then pass the unchanged full
+category gate. No claims of90% completion, production enablement, publication,
+merge or issue closure are made. Temporary test clusters, completed worker trees,
+and the owned benchmark services/binaries were removed; result rows and logs
+remain for review.
 
 ## Frozen acceptance / 고정 완료 기준
 
@@ -89,8 +126,8 @@ UI screen is added, and no existing space is enabled automatically.
   upgraded-client prerequisite. Targeted work-checkpoint deletion remains atomic;
   total manifest memory/rewrite cost remains proportional to impact size.
 
-MQ1/MQ2 implementation is present, but the category-level retrieval acceptance is
-not complete. Implementation and unit-test completion never substitute for the
+MQ1/MQ2 implementation is present, but the final category-level retrieval acceptance
+failed and those quality objectives remain incomplete. Implementation and unit-test completion never substitute for the
 frozen evidence-recall target.
 
 
