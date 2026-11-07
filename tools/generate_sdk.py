@@ -36,9 +36,19 @@ def ts_type(s, depth=0):
         return json.dumps(s["const"], ensure_ascii=False)
     if "enum" in s:
         return " | ".join(json.dumps(v, ensure_ascii=False) for v in s["enum"]) or "never"
-    for key, sep in (("anyOf", " | "), ("oneOf", " | "), ("allOf", " & ")):
-        if key in s:
-            return "(" + sep.join(ts_type(x, depth + 1) for x in s[key]) + ")"
+    compositions = {key: s[key] for key in ("anyOf", "oneOf", "allOf") if key in s}
+    if compositions:
+        # Object properties beside allOf are constraints too. Conditional-only
+        # branches remain unknown, without erasing the known sibling shape.
+        base = ts_type({k: v for k, v in s.items() if k not in compositions}, depth + 1)
+        parts = [] if base == "unknown" else [base]
+        for key, branches in compositions.items():
+            values = [ts_type(x, depth + 1) for x in branches]
+            if key == "allOf":
+                parts.extend(value for value in values if value != "unknown")
+            else:
+                parts.append("(" + " | ".join(values) + ")")
+        return "(" + " & ".join(parts) + ")" if parts else "unknown"
     t = s.get("type")
     if isinstance(t, list):
         return "(" + " | ".join(ts_type(dict(s, type=x), depth + 1) for x in t) + ")"

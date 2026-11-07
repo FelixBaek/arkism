@@ -1,5 +1,9 @@
 import importlib.util
 import json
+import os
+import shutil
+import subprocess
+import tempfile
 import sys
 import threading
 import unittest
@@ -20,6 +24,38 @@ class GenerateSDKTest(unittest.TestCase):
         self.assertEqual(t({"type": "array", "items": {"type": "integer"}}), "Array<number>")
         self.assertEqual(t({"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"], "additionalProperties": False}), '{ "id": string }')
         self.assertEqual(t({"type": "object", "additionalProperties": {"type": "boolean"}}), "{ [key: string]: boolean }")
+
+    def test_composed_schemas_preserve_known_siblings(self):
+        t = generate_sdk.ts_type
+        schema = {"type": "object", "properties": {"scope": {"type": "string"}}, "required": ["scope"], "additionalProperties": False,
+                  "allOf": [{"if": {"required": ["extra"]}, "then": {"required": ["scope"]}}]}
+        self.assertEqual(t(schema), '({ "scope": string })')
+        self.assertEqual(t({"allOf": [{"$ref": "#/X"}, {"type": "object", "properties": {"id": {"type": "string"}}}]}), '(X & { "id"?: string })')
+        self.assertIn('"scope": string', t(dict(schema, anyOf=[{"type": "object", "properties": {"limit": {"type": "number"}}}])))
+
+    def test_real_search_context_types_compile(self):
+        compiler = os.environ.get("TSC_BIN") or shutil.which("tsc")
+        if not compiler:
+            self.skipTest("set TSC_BIN to run the no-emit type acceptance check")
+        ts, _ = generate_sdk.render(json.loads(generate_sdk.SPEC.read_text()))
+        with tempfile.TemporaryDirectory(prefix="arkism-sdk-types-") as tmp:
+            root = Path(tmp)
+            (root / "client.ts").write_text(ts)
+            (root / "acceptance.ts").write_text("""import type { SearchInput, ContextBuildInput } from './client';
+const scope = { workspace_id: 'w', project_id: 'p' };
+const search: SearchInput = {scope, query:'valve', conversation_context:true, budget_tokens:1000, token_encoding:'cl100k_base'};
+const context: ContextBuildInput = {scope, task:'valve', token_encoding:'cl100k_base', whole_items:true, best_effort_lanes:true};
+// @ts-expect-error required scope
+const noScope: SearchInput = {query:'valve'};
+// @ts-expect-error budget must be numeric
+const badBudget: ContextBuildInput = {scope, task:'valve', token_encoding:'cl100k_base', budget_tokens:'many'};
+// @ts-expect-error option must be boolean
+const badOption: SearchInput = {scope, query:'valve', whole_items:'yes'};
+void [search,context,noScope,badBudget,badOption];
+""")
+            command = [compiler, "--noEmit", "--strict", "--skipLibCheck", "--target", "ES2022", "--module", "ESNext", "--moduleResolution", "bundler", str(root / "acceptance.ts")]
+            result = subprocess.run(command, capture_output=True, text=True, timeout=120)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_missing_operation_ids_are_filled_stably(self):
         spec = {"paths": {"/v1/x/{id}": {"get": {}, "post": {"operationId": "make_x"}}, "/v1/x/by_id": {"get": {}}}}
