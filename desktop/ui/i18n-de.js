@@ -6372,7 +6372,9 @@
  "같은 내용이 여러 개 걸리면 하나만 두고 그 자리에 다른 내용을 보여 줘요. 처음에는 켜져 있어요.": "Sagen mehrere Ergebnisse dasselbe, bleibt eines und an ihrer Stelle erscheint etwas anderes. Anfangs an.",
  "질문을 나눠서도 찾기": "Auch mit aufgeteilter Frage suchen",
  "서버 AI가 질문을 작은 질문 몇 개로 나눠 같이 찾아요. 처음에는 꺼져 있어요.": "Die Server-KI teilt die Frage in einige kleinere auf und sucht sie gemeinsam. Anfangs aus.",
- "켜져 있어요. 찾을 때마다 서버 AI를 한 번 불러 모델 예산을 써요.": "An. Jede Suche ruft die Server-KI einmal auf und verbraucht Modellbudget."
+ "켜져 있어요. 찾을 때마다 서버 AI를 한 번 불러 모델 예산을 써요.": "An. Jede Suche ruft die Server-KI einmal auf und verbraucht Modellbudget.",
+ "로그아웃": "Abmelden",
+ "로그인하기 전에는 아무것도 켜지지 않아요. 회사 약관이 다른 프로그램에서 쓰는 것을 막을 수 있으니 먼저 확인해 주세요.": "Bis zur Anmeldung ist nichts aktiv. Die Nutzungsbedingungen des Anbieters können die Nutzung in anderen Apps verbieten – bitte zuerst prüfen."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} Quell-Memories",

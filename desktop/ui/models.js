@@ -122,7 +122,10 @@ window.ArkismModels = (ctx) => {
   // 계정 추가: on this PC the app opens the CLI's own sign-in (agent_login: a terminal window that opens the browser)
   // and waits for it; on a server the login happens there, so the window shows the command to run.
   const LOGIN = { codex: "codex login", claude: "claude auth login", gemini: "gemini  →  로그인 선택",
-    grok: "grok  →  /login", agy: "agy  →  로그인" };
+    grok: "grok  →  /login", agy: "agy  →  로그인", copilot: "arkism oauth login copilot", nous: "arkism oauth login nous",
+    xai: "arkism oauth login xai", cursor: "cursor-agent login" };
+  // Account logins (not an agent CLI): signing out is a command too, and the provider's terms may forbid other apps.
+  const LOGOUT = { copilot: "arkism oauth logout copilot", nous: "arkism oauth logout nous", xai: "arkism oauth logout xai", cursor: "cursor-agent logout" };
   const APP_LOGIN = ["claude", "codex", "gemini"]; // agent_login.rs knows these
   const ANOTHER = ["claude", "codex"]; // CLIs whose second account lives in its own folder (subscription accounts)
   const LOGIN_ERR = { login_timeout: "10분 안에 로그인이 끝나지 않았어요. 다시 눌러 주세요.", login_terminal_missing: "로그인 창을 열지 못했어요. 터미널에서 아래 명령을 실행해 주세요.",
@@ -190,9 +193,15 @@ window.ArkismModels = (ctx) => {
           logins.push(b);
           row.append(b);
         }
-      } else row.append(el("strong", "", /CLI$/.test(name) ? name : `${name} CLI`), el("code", "", LOGIN[c] || `${c} login`));
+      } else row.append(el("strong", "", /CLI$/.test(name) || LOGOUT[c] ? name : `${name} CLI`), el("code", "", LOGIN[c] || `${c} login`));
       body.append(row);
+      if (LOGOUT[c] && (p.accounts || []).some((a) => a.cli === c && a.status !== "missing")) {
+        const out = el("div", "login-row");
+        out.append(el("small", "dim", "로그아웃"), el("code", "", LOGOUT[c]));
+        body.append(out);
+      }
     }
+    if (clis.some((c) => LOGOUT[c])) body.append(el("p", "pg-hint", "로그인하기 전에는 아무것도 켜지지 않아요. 회사 약관이 다른 프로그램에서 쓰는 것을 막을 수 있으니 먼저 확인해 주세요."));
     body.append(status);
     if (!local) body.append(el("p", "pg-hint", "여러 계정을 번갈아 쓰려면 계정마다 따로 로그인한 홈 폴더를 쓰세요. API로 쓰려면 '키 넣기'를 눌러요."));
     const foot = el("div", "dialog-foot");
@@ -253,7 +262,8 @@ window.ArkismModels = (ctx) => {
   }
   // 07b: one head per logged-in CLI (name, status, refresh, 계정 추가) over a grey card with its limits,
   // then keys (API providers, or any provider holding one), then the model list.
-  const CLI_NAMES = { claude: "Claude Code", codex: "Codex", glm: "ZCode", gemini: "Gemini CLI", grok: "Grok", agy: "antigravity" };
+  const CLI_NAMES = { claude: "Claude Code", codex: "Codex", glm: "ZCode", gemini: "Gemini CLI", grok: "Grok", agy: "antigravity",
+    copilot: "GitHub Copilot", nous: "Nous Portal", xai: "xAI", cursor: "Cursor CLI" };
   // 연필: the owner's own names for accounts and models; an empty answer goes back to the default name.
   const labelOf = (kind, pid, id) => doc().labels?.[`${kind}:${pid}/${id}`] || "";
   const modelName = (pid, m) => labelOf("model", pid, m) || m.replace(/^antigravity-/, "");

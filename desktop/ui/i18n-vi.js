@@ -6372,7 +6372,9 @@
  "같은 내용이 여러 개 걸리면 하나만 두고 그 자리에 다른 내용을 보여 줘요. 처음에는 켜져 있어요.": "Khi nhiều kết quả nói cùng một điều, giữ một cái và hiện nội dung khác vào chỗ đó. Lúc đầu bật.",
  "질문을 나눠서도 찾기": "Tìm cả bằng cách tách câu hỏi",
  "서버 AI가 질문을 작은 질문 몇 개로 나눠 같이 찾아요. 처음에는 꺼져 있어요.": "AI máy chủ tách câu hỏi thành vài câu nhỏ hơn và tìm cùng lúc. Lúc đầu tắt.",
- "켜져 있어요. 찾을 때마다 서버 AI를 한 번 불러 모델 예산을 써요.": "Đang bật. Mỗi lần tìm sẽ gọi AI máy chủ một lần và dùng ngân sách mô hình."
+ "켜져 있어요. 찾을 때마다 서버 AI를 한 번 불러 모델 예산을 써요.": "Đang bật. Mỗi lần tìm sẽ gọi AI máy chủ một lần và dùng ngân sách mô hình.",
+ "로그아웃": "Đăng xuất",
+ "로그인하기 전에는 아무것도 켜지지 않아요. 회사 약관이 다른 프로그램에서 쓰는 것을 막을 수 있으니 먼저 확인해 주세요.": "Không có gì được bật cho đến khi bạn đăng nhập. Điều khoản của nhà cung cấp có thể cấm dùng từ ứng dụng khác, hãy kiểm tra trước."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} bộ nhớ làm căn cứ",

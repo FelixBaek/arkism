@@ -7652,3 +7652,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "질문을 나눠서도 찾기": "Also search by splitting the question",
   "서버 AI가 질문을 작은 질문 몇 개로 나눠 같이 찾아요. 처음에는 꺼져 있어요.": "The server AI splits the question into a few smaller ones and searches them together. Off at first.",
   "켜져 있어요. 찾을 때마다 서버 AI를 한 번 불러 모델 예산을 써요.": "On. Every search calls the server AI once and uses the model budget." });
+Object.assign(window.ArkismI18nEN.strings, {
+  "로그아웃": "Sign out",
+  "로그인하기 전에는 아무것도 켜지지 않아요. 회사 약관이 다른 프로그램에서 쓰는 것을 막을 수 있으니 먼저 확인해 주세요.": "Nothing turns on until you sign in. The provider's terms may forbid use from other apps, so check them first." });

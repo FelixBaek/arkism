@@ -6372,7 +6372,9 @@
  "같은 내용이 여러 개 걸리면 하나만 두고 그 자리에 다른 내용을 보여 줘요. 처음에는 켜져 있어요.": "Jika beberapa hasil menyatakan hal yang sama, satu disimpan dan tempatnya diisi hal lain. Awalnya aktif.",
  "질문을 나눠서도 찾기": "Cari juga dengan memecah pertanyaan",
  "서버 AI가 질문을 작은 질문 몇 개로 나눠 같이 찾아요. 처음에는 꺼져 있어요.": "AI server memecah pertanyaan menjadi beberapa pertanyaan kecil dan mencarinya bersama. Awalnya nonaktif.",
- "켜져 있어요. 찾을 때마다 서버 AI를 한 번 불러 모델 예산을 써요.": "Aktif. Setiap pencarian memanggil AI server sekali dan memakai anggaran model."
+ "켜져 있어요. 찾을 때마다 서버 AI를 한 번 불러 모델 예산을 써요.": "Aktif. Setiap pencarian memanggil AI server sekali dan memakai anggaran model.",
+ "로그아웃": "Keluar",
+ "로그인하기 전에는 아무것도 켜지지 않아요. 회사 약관이 다른 프로그램에서 쓰는 것을 막을 수 있으니 먼저 확인해 주세요.": "Tidak ada yang aktif sebelum Anda masuk. Ketentuan penyedia mungkin melarang penggunaan dari aplikasi lain, jadi periksa dulu."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memori sumber",
