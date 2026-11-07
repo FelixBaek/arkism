@@ -4,6 +4,8 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"time"
+	"unicode/utf8"
 )
 
 // The conversation lane: a space with capture_density conversation keeps each captured batch of
@@ -43,6 +45,7 @@ func (s *Service) conversationTurns(ctx context.Context, token string, in Search
 		return
 	}
 	terms := searchQueryTerms(in.Query)
+	selected := map[string]Record{}
 	for _, row := range rows {
 		if len(out.Conversation) == conversationLaneHits {
 			break
@@ -55,6 +58,89 @@ func (s *Service) conversationTurns(ctx context.Context, token string, in Search
 		h.Origin, h.Text, h.Reasons, h.Authority, h.CollectedAt = conversationSourceKind, redactSessionPrivate(runeCutString(h.Text, sessionLaneRunes)), []string{conversationSourceKind}, AuthorityDataOnly, r.CollectedAt
 		if slices.Contains(row.Hit.Reasons, reasonVector) || lexicallyRelevant(terms, h) {
 			out.Conversation = append(out.Conversation, h)
+			selected[r.ID] = r
 		}
 	}
+	spare := len(out.Conversation) * sessionLaneRunes
+	for _, h := range out.Conversation {
+		spare -= utf8.RuneCountInString(h.Text)
+	}
+	for i := range out.Conversation {
+		before := utf8.RuneCountInString(out.Conversation[i].Text)
+		s.completeConversationTurn(ctx, token, in, &out.Conversation[i], selected, spare)
+		spare -= utf8.RuneCountInString(out.Conversation[i].Text) - before
+	}
+}
+
+// completeConversationTurn fills only unused excerpt space with an adjacent
+// captured batch from the same conversation. The ranked batches and their text
+// stay intact, and the lane shares only the unused character budget of its ranked batches.
+func (s *Service) completeConversationTurn(ctx context.Context, token string, in SearchInput, h *Hit, selected map[string]Record, spare int) {
+	r := selected[h.ID]
+	if r.SourceRef == "" || r.CollectedAt == nil || spare <= 1 {
+		return
+	}
+	end := r.CollectedAt.Add(time.Millisecond)
+	rows, err := s.Repo.ListSources(ctx, SourceListInput{Scope: in.Scope, Kind: conversationSourceKind, OriginProduct: r.OriginProduct, CollectedFrom: r.CollectedAt, CollectedTo: &end, Limit: 100})
+	if err != nil || len(rows) > 100 {
+		return
+	}
+	rows = slices.DeleteFunc(rows, func(other Record) bool {
+		return other.SourceRef != r.SourceRef || other.OriginProduct != r.OriginProduct
+	})
+	slices.SortFunc(rows, func(a, b Record) int {
+		if c := a.CreatedAt.Compare(b.CreatedAt); c != 0 {
+			return c
+		}
+		return strings.Compare(a.ID, b.ID)
+	})
+	at := slices.IndexFunc(rows, func(other Record) bool { return other.ID == r.ID })
+	if at < 0 {
+		return
+	}
+	for _, pos := range []int{at + 1, at - 1} {
+		if pos < 0 || pos >= len(rows) {
+			continue
+		}
+		other := rows[pos]
+		if _, shown := selected[other.ID]; shown {
+			continue
+		}
+		before := utf8.RuneCountInString(h.Text)
+		s.appendConversationNeighbor(ctx, token, in, h, other, spare)
+		spare -= utf8.RuneCountInString(h.Text) - before
+	}
+}
+
+func (s *Service) appendConversationNeighbor(ctx context.Context, token string, in SearchInput, h *Hit, neighbor Record, spare int) {
+	// Re-read the list candidate and authorize it independently before showing it.
+	r, err := s.Repo.Get(ctx, "sources", in.Scope, neighbor.ID)
+	if err != nil || r.Revision != neighbor.Revision || !conversationSource("sources", r) || !live(r) || r.ContentErased || r.PrivacyQuarantined || r.Sensitivity == "restricted" {
+		return
+	}
+	if _, err = s.authorize(ctx, token, "read:sources", in.Scope, r.ID, structuredText(r)); err != nil {
+		return
+	}
+	left := spare - 1
+	text := conversationNeighborExcerpt(r.Text, left)
+	if text == "" {
+		return
+	}
+	h.Text += "\n" + text
+	h.Sources = append(slices.Clone(h.Sources), sourceReference(r, "conversation_neighbor"))
+}
+
+// A reply cut mid-turn can omit its fact or qualification. Fit whole lines only;
+// a long turn does not prevent a shorter adjacent turn from using the spare room.
+func conversationNeighborExcerpt(text string, left int) string {
+	var lines []string
+	for _, line := range strings.Split(redactSessionPrivate(text), "\n") {
+		n := utf8.RuneCountInString(line)
+		if strings.TrimSpace(line) == "" || n > left {
+			continue
+		}
+		lines = append(lines, line)
+		left -= n + 1
+	}
+	return strings.Join(lines, "\n")
 }
