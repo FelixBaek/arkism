@@ -28,6 +28,9 @@ func orderedCaptureSources(refs []Ref) []Ref {
 }
 
 func captureLegacyEvidenceMatches(candidate Record, c CaptureClaim) bool {
+	if c.Kind == "episodic" && structuredText(candidate.Occurred) != structuredText(c.occurred) {
+		return false
+	}
 	repo := ""
 	if c.Kind != "user" {
 		repo = c.Repo

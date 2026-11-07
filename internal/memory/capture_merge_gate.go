@@ -31,7 +31,8 @@ func (s *Service) captureGateBudget() time.Duration {
 }
 
 // captureMergeGateKind is the job that runs the merge check of a candidate whose capture
-// request spent its gate budget: the worker checks it later instead of skipping it.
+// request exhausted its gate budget or encountered an unavailable embedding: the
+// worker checks it later, with the shared retry bound.
 const captureMergeGateKind = "capture_merge_gate"
 
 // captureMergeGate opens a merge proposal when the new candidate's text sits
@@ -39,7 +40,7 @@ const captureMergeGateKind = "capture_merge_gate"
 // reports whether it did. It never fails a capture: no embedder, a refused or
 // failed embedding, or no embedded memory nearby leaves the candidate on the
 // ordinary review path. A claim reached after the request's gate budget
-// (in.gateUntil), or whose check the budget cut short, queues the same check for
+// (in.gateUntil), or whose check was unavailable or cut short, queues the same check for
 // the worker (deferMergeGate). A person decides the proposal; nothing is merged or
 // deleted here.
 func (s *Service) captureMergeGate(ctx context.Context, token string, in CaptureInput, scope Scope, cand Record) bool {
@@ -54,7 +55,7 @@ func (s *Service) captureMergeGate(ctx context.Context, token string, in Capture
 	gateCtx, cancel := context.WithDeadline(ctx, in.gateUntil)
 	defer cancel()
 	proposed, err := s.mergeGateCheck(gateCtx, token, actor, scope, cand, *in.Generator)
-	if err != nil && gateCtx.Err() != nil {
+	if err != nil && (gateCtx.Err() != nil || errors.Is(err, ErrUnavailable)) {
 		s.deferMergeGate(ctx, token, scope, cand, *in.Generator)
 	}
 	return proposed
@@ -122,7 +123,7 @@ func (s *Service) deferMergeGate(ctx context.Context, token string, scope Scope,
 	err := s.Repo.Insert(context.WithoutCancel(ctx), colJobs, job)
 	switch {
 	case err == nil:
-		slog.Info("capture merge gate deferred: budget spent", "candidate_id", cand.ID)
+		slog.Info("capture merge gate deferred: retryable check", "candidate_id", cand.ID)
 	case !errors.Is(err, ErrConflict):
 		slog.Warn("capture merge gate not deferred", "candidate_id", cand.ID, "error", err)
 	}

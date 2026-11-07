@@ -1169,6 +1169,11 @@ func validTransition(from, to string) bool {
 	return false
 }
 func enqueue(ctx context.Context, tx Tx, col string, r Record) error {
+	if col == colMemories && entityExtractable(r) && (len(r.Entities) > 0 || len(r.EntityRelations) > 0) {
+		if err := enqueueApprovedEntities(ctx, tx, r); err != nil {
+			return err
+		}
+	}
 	now := time.Now().UTC()
 	return tx.Insert(ctx, "jobs", Record{ID: ID(), Scope: r.Scope, Kind: "embedding", Status: "pending", Revision: 1, CreatedAt: now, UpdatedAt: now, Target: &Ref{Collection: col, ID: r.ID, Revision: r.Revision}})
 }

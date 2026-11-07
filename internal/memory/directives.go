@@ -10,6 +10,7 @@ package memory
 import (
 	"cmp"
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"time"
@@ -34,9 +35,15 @@ var directiveTargets = []string{"reflect", "context", "both"}
 
 // Directive is the directive-only part of a record; the rule text is Record.Text.
 type Directive struct {
-	Title     string `json:"title" bson:"title"`
-	Priority  int    `json:"priority" bson:"priority"`
-	AppliesTo string `json:"applies_to" bson:"applies_to"`
+	// SourceScope binds an automatically approved rule to its original memory scope.
+	SourceScope *Scope `json:"source_scope,omitempty" bson:"source_scope,omitempty"`
+	SourceRule  string `json:"source_rule,omitempty" bson:"source_rule,omitempty"`
+	Independent bool   `json:"independent,omitempty" bson:"independent,omitempty"`
+	// SourceState is derived at read time, never persisted.
+	SourceState string `json:"-" bson:"-"`
+	Title       string `json:"title" bson:"title"`
+	Priority    int    `json:"priority" bson:"priority"`
+	AppliesTo   string `json:"applies_to" bson:"applies_to"`
 }
 
 type DirectiveInput struct {
@@ -51,19 +58,20 @@ type DirectiveInput struct {
 }
 
 type DirectiveView struct {
-	ID        string    `json:"id"`
-	Revision  int64     `json:"revision"`
-	Scope     Scope     `json:"scope"`
-	Title     string    `json:"title"`
-	Rule      string    `json:"rule"`
-	Priority  int       `json:"priority"`
-	AppliesTo string    `json:"applies_to"`
-	Active    bool      `json:"active"`
-	Proposed  bool      `json:"proposed,omitempty"`
-	Tags      []string  `json:"tags"`
-	CreatedBy string    `json:"created_by"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	SourceState string    `json:"source_state,omitempty"`
+	ID          string    `json:"id"`
+	Revision    int64     `json:"revision"`
+	Scope       Scope     `json:"scope"`
+	Title       string    `json:"title"`
+	Rule        string    `json:"rule"`
+	Priority    int       `json:"priority"`
+	AppliesTo   string    `json:"applies_to"`
+	Active      bool      `json:"active"`
+	Proposed    bool      `json:"proposed,omitempty"`
+	Tags        []string  `json:"tags"`
+	CreatedBy   string    `json:"created_by"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type DirectiveList struct {
@@ -81,7 +89,7 @@ func viewDirective(r Record) DirectiveView {
 	if tags == nil {
 		tags = []string{}
 	}
-	return DirectiveView{ID: r.ID, Revision: r.Revision, Scope: r.Scope, Title: r.Directive.Title, Rule: r.Text, Priority: r.Directive.Priority,
+	return DirectiveView{SourceState: r.Directive.SourceState, ID: r.ID, Revision: r.Revision, Scope: r.Scope, Title: r.Directive.Title, Rule: r.Text, Priority: r.Directive.Priority,
 		AppliesTo: r.Directive.AppliesTo, Active: r.Status == "active", Proposed: r.Status == obsProposed, Tags: tags, CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }
 
@@ -179,6 +187,10 @@ func (s *Service) GetDirective(ctx context.Context, token string, scope Scope, i
 	if err != nil {
 		return DirectiveView{}, err
 	}
+	r, err = s.resolveDirectiveSource(ctx, r)
+	if err != nil {
+		return DirectiveView{}, err
+	}
 	return viewDirective(r), nil
 }
 
@@ -206,6 +218,8 @@ func (s *Service) UpdateDirective(ctx context.Context, token, id string, in Dire
 		r.UpdatedAt = time.Now().UTC()
 		r.Text, r.Tags, r.Status = strings.TrimSpace(in.Rule), in.Tags, directiveStatus(in.Active)
 		r.Directive = &Directive{Title: strings.TrimSpace(in.Title), Priority: in.Priority, AppliesTo: in.AppliesTo}
+		// An explicit human edit establishes an independent rule.
+		r.Directive.Independent = r.Proposal != nil
 		if err = tx.Replace(ctx, colDirectives, r, prev); err != nil {
 			return err
 		}
@@ -285,6 +299,13 @@ func (s *Service) directives(ctx context.Context, scope Scope, target string) ([
 		if target != "" && (r.Status != "active" || r.Directive.AppliesTo != target && r.Directive.AppliesTo != "both") {
 			continue
 		}
+		r, err = s.resolveDirectiveSource(ctx, r)
+		if err != nil {
+			return nil, err
+		}
+		if target != "" && r.Status != "active" {
+			continue
+		}
 		out = append(out, r)
 	}
 	slices.SortStableFunc(out, func(a, b Record) int {
@@ -294,6 +315,49 @@ func (s *Service) directives(ctx context.Context, scope Scope, target string) ([
 		return strings.Compare(a.ID, b.ID)
 	})
 	return out, nil
+}
+
+// resolveDirectiveSource preserves linked rules in the management view even when
+// their source is no longer usable. Legacy rows without a scope binding require
+// human review; searching other users' scopes by ID would weaken isolation.
+func (s *Service) resolveDirectiveSource(ctx context.Context, r Record) (Record, error) {
+	if r.Proposal == nil || r.Proposal.Collection != colMemories || r.Directive.Independent {
+		return r, nil
+	}
+	d := *r.Directive
+	r.Directive = &d
+	inactivate := func(state string) (Record, error) {
+		d.SourceState = state
+		r.Status = "inactive"
+		return r, nil
+	}
+	if d.SourceScope == nil || d.SourceRule == "" {
+		return inactivate("needs_review")
+	}
+	if projectScope(*d.SourceScope) != projectScope(r.Scope) {
+		return inactivate("needs_review")
+	}
+	var memory Record
+	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		checked := searchReadTx{Tx: tx}
+		var err error
+		memory, err = checked.Get(ctx, colMemories, *d.SourceScope, r.Proposal.ID)
+		if err != nil || !live(memory) || memory.ContentErased {
+			return err
+		}
+		return checkSources(ctx, checked, memory)
+	})
+	if errors.Is(err, ErrNotFound) || errors.Is(err, ErrDenied) || errors.Is(err, ErrConflict) {
+		return inactivate("unavailable")
+	}
+	if err != nil {
+		return Record{}, err
+	}
+	if memory.Scope != *d.SourceScope || memory.ID != r.Proposal.ID || memory.ApprovedBy == "" || memory.Revision < r.Proposal.Revision || !live(memory) || memory.ContentErased || memory.Text != r.Text || ruleOf(memory) != d.SourceRule {
+		return inactivate("inactive")
+	}
+	d.SourceState = "active"
+	return r, nil
 }
 
 // directivesForTags keeps the untagged directives and the tagged ones sharing a tag with the request.

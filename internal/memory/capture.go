@@ -462,7 +462,11 @@ func captureClaimKeys(in CaptureInput, c CaptureClaim, scope Scope) (CaptureClai
 	if c.MemoryContext != nil {
 		key = "capture-" + ContentHash(key+"\n"+memoryContextKey(c.MemoryContext))
 	}
-	return c, captureEvidenceKey(key, c), key
+	legacyKey := key
+	if c.Kind == "episodic" && c.occurred != nil {
+		key = "capture-" + ContentHash(key+"\nevent-v1\n"+structuredText(c.occurred))
+	}
+	return c, captureEvidenceKey(key, c), legacyKey
 }
 
 func (s *Service) captureArchiveRefs(ctx context.Context, token string, in CaptureInput, c CaptureClaim, scope Scope) error {
@@ -604,7 +608,13 @@ func (s *Service) captureEnsurePreparation(ctx context.Context, token string, in
 // names the generator whenever the source is not purely the user's words.
 func captureSourceText(in CaptureInput, c CaptureClaim) (string, *Generator) {
 	sourceText := c.Text
+	if c.Kind == "episodic" && c.occurred != nil {
+		sourceText += "\n[해석된 사건 시각 · 사용자 원문 아님]\n" + structuredText(c.occurred)
+	}
 	var sourceGenerator *Generator
+	if c.Kind == "episodic" && c.occurred != nil {
+		sourceGenerator = in.Generator
+	}
 	if c.Repo != "" && c.Kind != "user" {
 		sourceGenerator = in.Generator
 		sourceText += "\n[저장소 맥락 메타데이터 · 사용자 원문 아님]\n" + structuredText(c.Repo)

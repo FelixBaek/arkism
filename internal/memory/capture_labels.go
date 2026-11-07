@@ -134,7 +134,7 @@ func ruleDirective(ctx context.Context, tx Tx, memory Record, d Decision) error 
 	}
 	now := time.Now().UTC()
 	dir := Record{ID: ID(), Scope: scope, Kind: directiveKind, Status: "active", Revision: 1, Text: strings.TrimSpace(in.Rule), Tags: []string{},
-		Directive: &Directive{Title: in.Title, Priority: in.Priority, AppliesTo: in.AppliesTo}, Proposal: &Ref{Collection: colMemories, ID: memory.ID, Revision: memory.Revision},
+		Directive: &Directive{Title: in.Title, Priority: in.Priority, AppliesTo: in.AppliesTo, SourceScope: &memory.Scope, SourceRule: ruleOf(memory)}, Proposal: &Ref{Collection: colMemories, ID: memory.ID, Revision: memory.Revision},
 		CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role}
 	if err := tx.Insert(ctx, colDirectives, dir); err != nil {
 		return err
@@ -151,11 +151,28 @@ func (s *Service) applyEntityRelations(ctx context.Context, actor string, r Reco
 	if len(r.EntityRelations) == 0 || r.ApprovedBy == "" || !ok || err != nil {
 		return
 	}
-	g, err := loadEntityGraph(ctx, store, r.Scope)
+	edges, err := approvedEntityRelations(ctx, store, r)
 	if err != nil {
 		slog.Warn("entity relations after approval: graph unreadable", "memory", r.ID, "error", err)
 		return
 	}
+	for _, edge := range edges {
+		edge.AssertedBy = actor
+		if err := kg.PutKnowledgeRelation(ctx, edge); err != nil {
+			slog.Warn("entity relation after approval not stored", "memory", r.ID, "error", err)
+		}
+	}
+}
+
+func approvedEntityRelations(ctx context.Context, store namedEntityStore, r Record) ([]KnowledgeRelation, error) {
+	g, err := loadEntityGraph(ctx, store, r.Scope)
+	if err != nil {
+		return nil, err
+	}
+	if g.truncated {
+		return nil, ErrUnavailable
+	}
+	var edges []KnowledgeRelation
 	// A stated name resolves to its live entity of whatever type it was stored as.
 	node := func(name string) (GraphEntity, bool) {
 		for _, c := range g.byKey[entityKey(name)] {
@@ -172,9 +189,8 @@ func (s *Service) applyEntityRelations(ctx context.Context, actor string, r Reco
 			continue
 		}
 		edge := KnowledgeRelation{KnowledgeRelationInput: KnowledgeRelationInput{Scope: r.Scope, Source: src, Target: dst, Relation: rel.Relation,
-			Evidence: Ref{Collection: colMemories, ID: r.ID, Revision: r.Revision}}, AssertedBy: actor}
-		if err := kg.PutKnowledgeRelation(ctx, edge); err != nil {
-			slog.Warn("entity relation after approval not stored", "memory", r.ID, "error", err)
-		}
+			Evidence: Ref{Collection: colMemories, ID: r.ID, Revision: r.Revision}}}
+		edges = append(edges, edge)
 	}
+	return edges, nil
 }

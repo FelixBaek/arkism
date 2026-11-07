@@ -129,6 +129,19 @@ func (s *Service) applyEntityExtraction(ctx context.Context, scope Scope, actor 
 			// Deduplication needs every entity of the scope in view.
 			return ErrUnavailable
 		}
+		checked := searchReadTx{Tx: tx}
+		for _, f := range found {
+			current, e := checked.Get(ctx, colMemories, scope, f.Memory.ID)
+			if e != nil {
+				return e
+			}
+			if !validKnowledgeEvidence(current, Ref{Collection: colMemories, ID: f.Memory.ID, Revision: f.Memory.Revision}, scope) {
+				return ErrConflict
+			}
+			if e = checkSources(ctx, checked, current); e != nil {
+				return e
+			}
+		}
 		plan := newEntityPlan(g, cfg.EntityResolution)
 		for _, f := range found {
 			// Names found anywhere in the batch exist before weak ones are linked.

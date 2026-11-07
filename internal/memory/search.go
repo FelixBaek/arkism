@@ -880,6 +880,11 @@ func (s *Service) WorkOnce(ctx context.Context, workerToken string) (result erro
 		handled = e == nil
 		return e
 	}
+	if job.Kind == approvedEntitiesJobKind {
+		e = s.runApprovedEntities(ctx, workerToken, job)
+		success = e == nil
+		return e
+	}
 	if job.Kind == captureMergeGateKind {
 		e = s.runDeferredMergeGate(ctx, workerToken, job)
 		success = e == nil
