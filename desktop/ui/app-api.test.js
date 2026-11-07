@@ -33,6 +33,16 @@ test("binary requests return the file's bytes from the app bridge, and an error 
   assert.equal("binary" in sent[2], false); // plain calls keep the old command shape
 });
 
+test("requests carry the app's language for the server's date reading, and no language sends none", async () => {
+  const { createAppApi } = await import("./modules/appApi.mjs");
+  const sent = [];
+  const deps = { state: { server: "http://s", token: "t", scope: {} }, trimSlash: (s) => s, readJSON: (t) => JSON.parse(t), lang: () => "de",
+    tauri: { invoke: async (cmd, a) => { sent.push(a); return { status: 200, body: "{}" }; } } };
+  await createAppApi(deps).request("/v1/recall");
+  await createAppApi({ ...deps, lang: () => "" }).request("/v1/recall");
+  assert.deepEqual(sent.map((a) => a.lang), ["de", null]);
+});
+
 test("a form upload goes to the app bridge as multipart bytes with its boundary, and a browser posts the same bytes", async () => {
   const { createAppApi } = await import("./modules/appApi.mjs");
   const calls = [];

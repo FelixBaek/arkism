@@ -295,7 +295,9 @@ export function startApp() {
     get readJSON() { return readJSON; },
     get state() { return state; },
     get tauri() { return tauri; },
-    get trimSlash() { return trimSlash; }
+    get trimSlash() { return trimSlash; },
+    // the app's language, sent as Accept-Language so the server reads numeric dates in its order
+    lang: () => document.documentElement.lang
   });
 
   const memoryPaging = createMemoryPaging({

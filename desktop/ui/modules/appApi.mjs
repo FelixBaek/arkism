@@ -30,12 +30,12 @@ export function createAppApi(deps) {
         : await fetch(deps.trimSlash(deps.state.server) + path, { method: "POST", body: data, headers: { Authorization: `Bearer ${deps.state.token}`, "Content-Type": type } }).then(async (x) => ({ status: x.status, body: await x.text() }));
       status = r.status; text = r.body;
     } else if (deps.tauri) {
-      const r = await deps.tauri.invoke("api", { base: deps.trimSlash(deps.state.server), token: deps.state.token, method: options.method || "GET", path, body: options.body ?? null, ...(options.binary ? { binary: true } : {}) })
+      const r = await deps.tauri.invoke("api", { base: deps.trimSlash(deps.state.server), token: deps.state.token, method: options.method || "GET", path, body: options.body ?? null, lang: deps.lang?.() || null, ...(options.binary ? { binary: true } : {}) })
         .catch((e) => { throw new Error(String(e)); });
       status = r.status; text = r.body;
       if (options.binary && status >= 200 && status < 300) bytes = Uint8Array.from(atob(text), (c) => c.charCodeAt(0)); // the app sends a file base64
     } else {
-      const res = await fetch(deps.trimSlash(deps.state.server) + path, { ...options, headers: { Authorization: `Bearer ${deps.state.token}`, "Content-Type": "application/json" } });
+      const res = await fetch(deps.trimSlash(deps.state.server) + path, { ...options, headers: { Authorization: `Bearer ${deps.state.token}`, "Content-Type": "application/json", ...(deps.lang?.() ? { "Accept-Language": deps.lang() } : {}) } });
       status = res.status;
       if (options.binary && res.ok) bytes = new Uint8Array(await res.arrayBuffer()); else text = await res.text();
     }

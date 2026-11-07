@@ -657,18 +657,18 @@ fn api_agent() -> &'static ureq::Agent {
 }
 
 #[tauri::command]
-async fn api(rt: tauri::State<'_, Arc<runtime::Runtime>>, base: String, token: String, method: String, path: String, body: Option<String>, binary: Option<bool>) -> Result<Reply, String> {
-    api_with_gate(rt.gate(), base, token, method, path, body, binary.unwrap_or(false)).await
+async fn api(rt: tauri::State<'_, Arc<runtime::Runtime>>, base: String, token: String, method: String, path: String, body: Option<String>, binary: Option<bool>, lang: Option<String>) -> Result<Reply, String> {
+    api_with_gate(rt.gate(), base, token, method, path, body, binary.unwrap_or(false), lang).await
 }
 
 /// A file the UI saves (a kept original, the wiki archive) comes back base64 up to this size.
 const API_BINARY_MAX: u64 = 64 << 20;
 
-async fn api_with_gate(gate: Arc<lifecycle::Gate>, base: String, token: String, method: String, path: String, body: Option<String>, binary: bool) -> Result<Reply, String> {
+async fn api_with_gate(gate: Arc<lifecycle::Gate>, base: String, token: String, method: String, path: String, body: Option<String>, binary: bool, lang: Option<String>) -> Result<Reply, String> {
     if !allowed(&method, &path) {
         return Err("path_not_allowed".into());
     }
-    send(gate, api_agent(), base, token, method, path, body.map(String::into_bytes), "application/json".into(), binary).await
+    send(gate, api_agent(), base, token, method, path, body.map(String::into_bytes), "application/json".into(), binary, lang).await
 }
 
 /// 기억 후보 만들기 › 파일 goes to this one route as a multipart body the WebView builds.
@@ -695,14 +695,21 @@ async fn upload_with_gate(gate: Arc<lifecycle::Gate>, base: String, token: Strin
     if !content_type.starts_with("multipart/form-data; boundary=") || content_type.contains(['\r', '\n']) {
         return Err("upload_body_invalid".into());
     }
-    send(gate, upload_agent(), base, token, "POST".into(), UPLOAD_PATH.into(), Some(body), content_type, false).await
+    send(gate, upload_agent(), base, token, "POST".into(), UPLOAD_PATH.into(), Some(body), content_type, false, None).await
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn send(gate: Arc<lifecycle::Gate>, agent: &'static ureq::Agent, base: String, token: String, method: String, path: String, body: Option<Vec<u8>>, content_type: String, binary: bool) -> Result<Reply, String> {
+/// The app's language tag as the request's Accept-Language (the server reads numeric dates and
+/// writes notices in it); anything that is not a short plain language tag is dropped.
+fn accept_language(lang: Option<String>) -> Option<String> {
+    lang.filter(|l| !l.is_empty() && l.len() <= 35 && l.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))
+}
+
+async fn send(gate: Arc<lifecycle::Gate>, agent: &'static ureq::Agent, base: String, token: String, method: String, path: String, body: Option<Vec<u8>>, content_type: String, binary: bool, lang: Option<String>) -> Result<Reply, String> {
     if !valid_base(&base) {
         return Err("server_address_invalid".into());
     }
+    let lang = accept_language(lang);
     tauri::async_runtime::spawn_blocking(move || {
         let _activity = gate.activity()?;
         let req = ureq::http::Request::builder()
@@ -710,6 +717,7 @@ async fn send(gate: Arc<lifecycle::Gate>, agent: &'static ureq::Agent, base: Str
             .uri(format!("{base}{path}"))
             .header("Authorization", format!("Bearer {token}"))
             .header("Content-Type", content_type);
+        let req = match lang { Some(l) => req.header("Accept-Language", l), None => req };
         let res = match body {
             Some(b) => req.body(b).map_err(|e| e.to_string()).and_then(|r| agent.run(r).map_err(|e| format!("server_unreachable: {e}"))),
             None => req.body(()).map_err(|e| e.to_string()).and_then(|r| agent.run(r).map_err(|e| format!("server_unreachable: {e}"))),
@@ -1275,7 +1283,7 @@ mod tests {
         let gate = Arc::new(lifecycle::Gate::default());
         let _lease = gate.lease().unwrap();
         let result = tauri::async_runtime::block_on(api_with_gate(gate.clone(), "http://127.0.0.1:1".into(),
-            "fixture".into(), "POST".into(), "/v1/memories".into(), Some("{}".into()), false));
+            "fixture".into(), "POST".into(), "/v1/memories".into(), Some("{}".into()), false, None));
         assert_eq!(result.err().as_deref(), Some("update_runtime_busy"));
     }
 
@@ -1310,25 +1318,27 @@ mod tests {
     #[test]
     fn api_returns_error_status_body_and_sends_json() {
         let (base, server) = serve_once("HTTP/1.1 404 Not Found\r\nContent-Length: 13\r\nConnection: close\r\n\r\n{\"error\":\"x\"}");
-        let reply = tauri::async_runtime::block_on(api_with_gate(Arc::new(lifecycle::Gate::default()), base, "t0k".into(), "POST".into(), "/v1/memories".into(), Some("{\"a\":1}".into()), false)).unwrap();
+        let reply = tauri::async_runtime::block_on(api_with_gate(Arc::new(lifecycle::Gate::default()), base, "t0k".into(), "POST".into(), "/v1/memories".into(), Some("{\"a\":1}".into()), false, Some("ko-KR".into()))).unwrap();
         assert_eq!((reply.status, reply.body.as_str()), (404, "{\"error\":\"x\"}"));
         let request = server.join().unwrap();
         assert!(request.starts_with("POST /v1/memories HTTP/1.1\r\n"), "{request}");
         assert!(request.contains("authorization: Bearer t0k") || request.contains("Authorization: Bearer t0k"), "{request}");
         assert!(request.ends_with("{\"a\":1}"), "{request}");
+        assert!(request.to_ascii_lowercase().contains("accept-language: ko-kr"), "{request}");
+        assert_eq!(accept_language(Some("en\r\nX: y".into())), None);
 
         let (base, server) = serve_once("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok");
-        let reply = tauri::async_runtime::block_on(api_with_gate(Arc::new(lifecycle::Gate::default()), base, "t".into(), "GET".into(), "/readyz".into(), None, false)).unwrap();
+        let reply = tauri::async_runtime::block_on(api_with_gate(Arc::new(lifecycle::Gate::default()), base, "t".into(), "GET".into(), "/readyz".into(), None, false, None)).unwrap();
         assert_eq!((reply.status, reply.body.as_str()), (200, "ok"));
         assert!(server.join().unwrap().starts_with("GET /readyz HTTP/1.1"));
 
         // binary: a file body comes back base64, an error body stays text
         let (base, server) = serve_once("HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: close\r\n\r\n\x01\x02\x03");
-        let reply = tauri::async_runtime::block_on(api_with_gate(Arc::new(lifecycle::Gate::default()), base, "t".into(), "GET".into(), "/v1/wiki/export".into(), None, true)).unwrap();
+        let reply = tauri::async_runtime::block_on(api_with_gate(Arc::new(lifecycle::Gate::default()), base, "t".into(), "GET".into(), "/v1/wiki/export".into(), None, true, None)).unwrap();
         assert_eq!((reply.status, reply.body.as_str()), (200, "AQID"));
         server.join().unwrap();
         let (base, server) = serve_once("HTTP/1.1 413 Payload Too Large\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}");
-        let reply = tauri::async_runtime::block_on(api_with_gate(Arc::new(lifecycle::Gate::default()), base, "t".into(), "GET".into(), "/v1/wiki/export".into(), None, true)).unwrap();
+        let reply = tauri::async_runtime::block_on(api_with_gate(Arc::new(lifecycle::Gate::default()), base, "t".into(), "GET".into(), "/v1/wiki/export".into(), None, true, None)).unwrap();
         assert_eq!((reply.status, reply.body.as_str()), (413, "{}"));
         server.join().unwrap();
         // upload: the multipart bytes go as they are to the batch route only, with their own content type
