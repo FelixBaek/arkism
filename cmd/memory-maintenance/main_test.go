@@ -74,3 +74,16 @@ func TestMaintenanceDispatchAndFailBeforeConnection(t *testing.T) {
 		t.Fatal("secret echoed")
 	}
 }
+
+func TestMaintenanceHelpStatesClientBoundaryWithoutConnecting(t *testing.T) {
+	var out bytes.Buffer
+	open := func(context.Context, string) (backend, error) { t.Fatal("help opened database"); return nil, nil }
+	if e := runArgs(context.Background(), []string{"--help"}, func(string) string { return "" }, &out, open); e != nil {
+		t.Fatal(e)
+	}
+	for _, part := range []string{"--allow-global-downtime", "all older clients", "raw administrative SQL bypass it", "cannot attest"} {
+		if !strings.Contains(out.String(), part) {
+			t.Fatalf("missing client boundary %q", part)
+		}
+	}
+}

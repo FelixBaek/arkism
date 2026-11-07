@@ -19,8 +19,13 @@ memory-maintenance advance|hold|release|cancel --expected-revision N
 
 MEMORY_DATABASE_URL must be an administrative connection. Begin also requires
 MEMORY_MAINTENANCE_TOKEN or a private token file for an authorized human.
-Beginning maintenance fences normal database operations globally. Advance commits
-one bounded step. Release only resumes held work; it does not reopen the service.
+--allow-global-downtime acknowledges ALL of these operator prerequisites:
+all remaining Arkism clients use the maintenance-aware code, all older clients
+are stopped, and direct administrative SQL writes are stopped for the job.
+The gate fences updated Arkism clients globally; older running binaries and
+raw administrative SQL bypass it. A migrated schema does not prove that all
+clients are updated. The CLI cannot attest these operational prerequisites.
+Advance commits one bounded step. Release only resumes held work; it does not reopen the service.
 Only successful completion reopens service after mutation. Cancel is restricted
 to privacy discovery before any quarantine or mutation; it cannot cancel stale
 maintenance. There is no force-unlock.
@@ -54,7 +59,7 @@ func parseOptions(args []string) (options, bool, error) {
 	fs.StringVar(&o.memoryID, "memory-id", "", "memory ID")
 	fs.StringVar(&o.tokenFile, "token-file", "", "private token file")
 	fs.Int64Var(&o.revision, "expected-revision", 0, "current maintenance revision")
-	fs.BoolVar(&o.downtime, "allow-global-downtime", false, "explicit global service fence acknowledgement")
+	fs.BoolVar(&o.downtime, "allow-global-downtime", false, "acknowledge global downtime, updated clients, older clients stopped and no direct SQL writes")
 	fs.DurationVar(&o.timeout, "timeout", 30*time.Second, "bounded operation timeout")
 	// Repeated options are mistakes, not last-value-wins administrative requests.
 	seen := map[string]bool{}
