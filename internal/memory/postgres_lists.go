@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -617,6 +618,12 @@ func memoryOutcomeWhere(in MemoryOutcomeQuery) (string, []any) {
 // memory's verdicts, numbered after args (which start at $6).
 func memoryOutcomeFilter(in MemoryOutcomeQuery, args []any) (string, []any) {
 	w := `kind='memory_outcome' AND status='active' AND COALESCE((doc->>'content_erased')::boolean,false)=false AND COALESCE((doc->>'privacy_quarantined')::boolean,false)=false AND (doc->'expires_at' IS NULL OR (doc->'expires_at'->>'$date')::timestamptz > now()) AND doc->'target'->>'collection'='memories' AND (doc->'tags' ? 'dimension:personal_compliance' OR doc->'tags' ? 'dimension:work_task')`
+	if in.ContentHashes != nil {
+		raw, _ := json.Marshal(in.ContentHashes)
+		w += fmt.Sprintf(` AND doc->>'memory_outcome_content_hash' = ($%d::jsonb ->> (doc->'target'->>'id'))`, len(args)+6)
+		args = append(args, string(raw))
+	}
+
 	if in.Dimension != "" {
 		w += fmt.Sprintf(` AND doc->'tags' ? $%d`, len(args)+6)
 		args = append(args, "dimension:"+in.Dimension)

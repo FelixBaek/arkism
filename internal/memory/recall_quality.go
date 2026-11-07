@@ -56,13 +56,14 @@ const (
 
 // SpaceRecallQuality is the recall_quality block; the block is inherited whole.
 type SpaceRecallQuality struct {
-	RelevanceGate         *bool  `json:"relevance_gate,omitempty" bson:"relevance_gate,omitempty"`
-	ConflictPending       string `json:"conflict_pending,omitempty" bson:"conflict_pending,omitempty"`
-	Provisional           *bool  `json:"provisional,omitempty" bson:"provisional,omitempty"`
-	ProvisionalVectors    bool   `json:"provisional_vectors,omitempty" bson:"provisional_vectors,omitempty"`
-	AutoCloseOnCorrection bool   `json:"auto_close_on_correction,omitempty" bson:"auto_close_on_correction,omitempty"`
-	Diversity             *bool  `json:"diversity,omitempty" bson:"diversity,omitempty"`
-	Expand                bool   `json:"expand,omitempty" bson:"expand,omitempty"`
+	SignalPolicy          *SignalPolicy `json:"signal_policy,omitempty" bson:"signal_policy,omitempty"`
+	RelevanceGate         *bool         `json:"relevance_gate,omitempty" bson:"relevance_gate,omitempty"`
+	ConflictPending       string        `json:"conflict_pending,omitempty" bson:"conflict_pending,omitempty"`
+	Provisional           *bool         `json:"provisional,omitempty" bson:"provisional,omitempty"`
+	ProvisionalVectors    bool          `json:"provisional_vectors,omitempty" bson:"provisional_vectors,omitempty"`
+	AutoCloseOnCorrection bool          `json:"auto_close_on_correction,omitempty" bson:"auto_close_on_correction,omitempty"`
+	Diversity             *bool         `json:"diversity,omitempty" bson:"diversity,omitempty"`
+	Expand                bool          `json:"expand,omitempty" bson:"expand,omitempty"`
 	// Recall defaults (applyRecallDefaults).
 	RerankOptions      *RerankOptions `json:"rerank_options,omitempty" bson:"rerank_options,omitempty"`
 	PreferObservations bool           `json:"prefer_observations,omitempty" bson:"prefer_observations,omitempty"`
@@ -72,7 +73,7 @@ type SpaceRecallQuality struct {
 
 func (q *SpaceRecallQuality) valid() bool {
 	return q == nil || (q.ConflictPending == "" || q.ConflictPending == conflictPendingAttach || q.ConflictPending == conflictPendingExclude) &&
-		q.ChunksMaxTokens >= 0 && q.ChunksMaxTokens <= includeTokensMax
+		q.SignalPolicy.valid() && q.ChunksMaxTokens >= 0 && q.ChunksMaxTokens <= includeTokensMax
 }
 
 // applyRecallDefaults fills the recall options the request left unset from the space.

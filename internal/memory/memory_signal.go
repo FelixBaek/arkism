@@ -191,9 +191,10 @@ func (s *Service) outcomeWeights(ctx context.Context, scope Scope, rows []Scored
 		return nil
 	}
 	weights := map[string]float64{}
+	records := s.signalRecords(ctx, scope, rows)
 	for _, r := range rows {
-		rec, e := s.Repo.Get(ctx, colJobs, scope, memorySignalID(scope, r.ID))
-		if e != nil || rec.Kind != memorySignalKind || rec.MemorySignal == nil || rec.MemorySignal.Memory.ID != r.ID {
+		rec, ok := records[r.ID]
+		if !ok {
 			continue
 		}
 		if w := outcomeFactor(rec.MemorySignal) * workFactor(rec.MemorySignal.Work); w != 1 {

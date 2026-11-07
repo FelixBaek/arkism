@@ -22,13 +22,14 @@ const (
 )
 
 type MemoryOutcomeQuery struct {
-	Scope     Scope      `json:"scope"`
-	MemoryIDs []string   `json:"memory_ids"`
-	Dimension string     `json:"dimension,omitempty"`
-	From      *time.Time `json:"from,omitempty"`
-	To        *time.Time `json:"to,omitempty"`
-	Limit     int        `json:"limit,omitempty"`
-	Cursor    string     `json:"cursor,omitempty"`
+	ContentHashes map[string]string `json:"-"`
+	Scope         Scope             `json:"scope"`
+	MemoryIDs     []string          `json:"memory_ids"`
+	Dimension     string            `json:"dimension,omitempty"`
+	From          *time.Time        `json:"from,omitempty"`
+	To            *time.Time        `json:"to,omitempty"`
+	Limit         int               `json:"limit,omitempty"`
+	Cursor        string            `json:"cursor,omitempty"`
 }
 
 func (v *MemoryOutcomeQuery) UnmarshalJSON(data []byte) error {
@@ -139,7 +140,7 @@ func outcomeDimension(r Record) string {
 func memoryOutcomeMatches(r Record, in MemoryOutcomeQuery) bool {
 	d := outcomeDimension(r)
 	return r.Scope == in.Scope && r.Kind == memoryOutcomeKind && r.Status == "active" && live(r) && !r.ContentErased && !r.PrivacyQuarantined && r.Target != nil && r.Target.Collection == colMemories && slices.Contains(in.MemoryIDs, r.Target.ID) &&
-		(d == "personal_compliance" || d == "work_task") && (in.Dimension == "" || d == in.Dimension) && (in.From == nil || !r.CreatedAt.Before(*in.From)) && (in.To == nil || r.CreatedAt.Before(*in.To))
+		(in.ContentHashes == nil || in.ContentHashes[r.Target.ID] != "" && in.ContentHashes[r.Target.ID] == r.MemoryOutcomeContentHash) && (d == "personal_compliance" || d == "work_task") && (in.Dimension == "" || d == in.Dimension) && (in.From == nil || !r.CreatedAt.Before(*in.From)) && (in.To == nil || r.CreatedAt.Before(*in.To))
 }
 
 func parseMemoryOutcomeQuery(raw, id string) (MemoryOutcomeQuery, error) {

@@ -631,7 +631,14 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   // ------------------------------------------------------------ 규칙 detail and form
   const ruleFields = (r) => ({ title: r.title, rule: r.rule, priority: r.priority, applies_to: r.applies_to, active: r.active, tags: r.tags || [] });
   // An agent's rule waits as proposed (never applied) until a person saves it: 승인 saves it on, 거절 deletes it.
-  const ruleState = (r) => (r.proposed ? "AI 제안" : r.active ? "켜짐" : "꺼짐");
+  const RULE_SOURCE = {
+    needs_review: ["원본 재검토 필요", "이전 자동 규칙의 원본 연결을 확인할 수 없어 적용을 멈췄어요."],
+    inactive: ["원본 비활성", "원본 기억이 만료·대체·격리되었거나 내용과 규칙 조건이 바뀌어 적용을 멈췄어요."],
+    unavailable: ["원본 조회 불가", "원본 기억이나 출처를 읽지 못해 적용을 멈췄어요."]
+  };
+  const needsRuleReview = (r) => !!RULE_SOURCE[r?.source_state];
+  const independentRuleNote = "다시 승인하면 원본과 독립된 수동 규칙이 돼요. 이후 원본이 바뀌거나 비활성화되어도 이 규칙은 유지돼요.";
+  const ruleState = (r) => RULE_SOURCE[r.source_state]?.[0] || (r.proposed ? "AI 제안" : r.active ? "켜짐" : "꺼짐");
   function ruleError(e) {
     return { revision_conflict: "그사이 다른 곳에서 바뀌었어요. 새로 불러왔어요.", access_denied: "이 계정은 규칙을 바꿀 수 없어요.",
       secret_detected: "비밀번호나 키처럼 보이는 내용은 규칙에 넣을 수 없어요." }[e?.message] || `처리하지 못했어요 (${e?.message})`;
@@ -650,12 +657,13 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   }
   const saveRule = (fields, prev) => writeRule(() => request(prev ? `/v1/directives/${encodeURIComponent(prev.id)}` : "/v1/directives",
     { method: "POST", body: JSON.stringify({ scope: state.scope, ...fields, ...(prev ? { expected_revision: prev.revision } : {}) }) }),
-  prev ? (prev.proposed ? (fields.active ? "규칙을 승인했어요. 지금부터 지켜요." : "규칙을 승인했어요. 꺼 둔 채로 두었어요.") : fields.active === prev.active ? "규칙을 바꿨어요." : fields.active ? "규칙을 켰어요. 지금부터 지켜요." : "규칙을 껐어요.") : "규칙을 만들었어요. 지금부터 지켜요.");
+  prev ? (needsRuleReview(prev) ? "원본과 독립된 수동 규칙으로 승인했어요." : prev.proposed ? (fields.active ? "규칙을 승인했어요. 지금부터 지켜요." : "규칙을 승인했어요. 꺼 둔 채로 두었어요.") : fields.active === prev.active ? "규칙을 바꿨어요." : fields.active ? "규칙을 켰어요. 지금부터 지켜요." : "규칙을 껐어요.") : "규칙을 만들었어요. 지금부터 지켜요.");
   function ruleDetail(body) {
     const r = selected;
     if (!r) { body.append(el("h2", "", "규칙을 고르세요"), el("p", "lead", "AI가 답하거나 에이전트에게 기억을 줄 때 꼭 지키는 문장이에요. 사람이 적은 규칙만 쓰여요.")); return; }
     const head = el("div", "d-head");
     head.append(el("p", "d-kind", `규칙 · ${ruleState(r)}`), raw(el("h2", "", r.title)));
+    if (needsRuleReview(r)) head.append(el("p", "dg-warn", RULE_SOURCE[r.source_state][1]), el("p", "meta", independentRuleNote));
     if (r.proposed) head.append(el("p", "dg-warn", "에이전트가 제안한 규칙이에요. 사람이 승인하기 전에는 AI가 지키지 않아요."));
     const text = section("내용"); text.append(raw(el("p", "original-text", r.rule)));
     const use = section("언제 쓰나요");
@@ -664,7 +672,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     if (!human()) { body.append(el("p", "meta", r.proposed ? "승인과 거절은 사람만 할 수 있어요." : "규칙은 사람만 만들고 바꿀 수 있어요.")); return; }
     const btns = el("div", "d-buttons");
     const lock = () => btns.querySelectorAll("button").forEach((b) => { b.disabled = true; });
-    btns.append(button(r.proposed ? "승인" : r.active ? "끄기" : "켜기", "primary small", null, () => { lock(); void saveRule({ ...ruleFields(r), active: r.proposed || !r.active }, r); }),
+    btns.append(button(needsRuleReview(r) ? "수동 규칙으로 다시 승인" : r.proposed ? "승인" : r.active ? "끄기" : "켜기", "primary small", null, () => { lock(); void saveRule({ ...ruleFields(r), active: needsRuleReview(r) || r.proposed || !r.active }, r); }),
       button("고치기", "small", null, () => { editing = r; detail(); }),
       button(r.proposed ? "거절" : "지우기", "ghost small", null, async () => {
         if (!await window.ask(r.proposed ? "이 제안을 거절할까요?\n제안한 규칙을 지워요." : "이 규칙을 지울까요?\n지우면 AI가 더 이상 지키지 않아요.", r.proposed ? "거절" : "지우기")) return;
@@ -675,7 +683,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   }
   function ruleForm(body) {
     const r = editing.id ? editing : null, draft = !r && editing.rule ? editing : null;
-    body.append(el("h2", "", r ? "규칙 고치기" : "새 규칙"), el("p", "lead", r?.proposed ? "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요."
+    body.append(el("h2", "", r ? "규칙 고치기" : "새 규칙"), el("p", "lead", r?.source_state ? "저장하면 원본과 독립된 수동 규칙으로 승인해요. 이후 원본 상태가 바뀌어도 유지돼요." : r?.proposed ? "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요."
       : draft ? "AI 답에서 가져온 초안이에요. 읽고 고쳐서 저장해야 규칙이 돼요." : "AI가 꼭 지킬 문장을 적어 주세요. 저장하면 바로 쓰여요."));
     const form = el("form", "insight-edit");
     const title = el("input"); title.maxLength = 200; title.required = true; title.value = (r || draft)?.title || ""; title.placeholder = "예: 배포 규칙";
@@ -685,7 +693,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     where.value = r?.applies_to || "both";
     const priority = el("input"); priority.type = "number"; priority.min = "0"; priority.max = "100"; priority.value = r ? String(r.priority) : ""; priority.placeholder = "알아서";
     const btns = el("div", "d-buttons");
-    const save = button("저장", "primary small"); save.type = "submit";
+    const save = button(needsRuleReview(r) ? "수동 규칙으로 승인하고 저장" : "저장", "primary small"); save.type = "submit";
     btns.append(save, button("취소", "ghost small", null, () => { editing = null; detail(); }));
     form.append(field("제목", title), field("규칙 내용", rule), more(field("쓰는 때", where), field("우선순위 (0~100)", priority)), btns);
     form.addEventListener("submit", (e) => {
@@ -694,7 +702,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
       const p = priority.value === "" ? null : Number(priority.value);
       save.disabled = true;
       void saveRule({ title: title.value.trim(), rule: rule.value.trim(), applies_to: where.value, ...(Number.isInteger(p) && p >= 0 && p <= 100 ? { priority: p } : {}),
-        active: r ? r.active || !!r.proposed : true, tags: r?.tags || [] }, r);
+        active: r ? needsRuleReview(r) || r.active || !!r.proposed : true, tags: r?.tags || [] }, r);
     });
     body.append(form);
     title.focus();

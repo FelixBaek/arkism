@@ -78,7 +78,7 @@ func (s *Service) fuseRecallHits(ctx context.Context, token string, lists [][]Hi
 	rows = s.decisionRecall(ctx, token, in, rows, trace)
 	rows = s.modelRerankRows(ctx, token, in, rows, trace)
 	if recall {
-		now, weights := s.recallClock(in), s.outcomeWeights(ctx, in.Scope, rows)
+		now, weights := s.recallClock(in), s.policyOutcomeWeights(ctx, in, rows)
 		trace.noteBoosts(rows, now, weights)
 		if in.space.recallQuality().diversityOn() {
 			return selectDiverse(decayByRecency(rows, now, weights, len(rows)), in.Limit), nil

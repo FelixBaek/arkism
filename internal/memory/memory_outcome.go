@@ -119,7 +119,7 @@ func (s *Service) RecordMemoryOutcome(ctx context.Context, token string, in Memo
 		}
 		now := time.Now().UTC()
 		passed := in.Passed
-		record := Record{NativeOutcomeCaptureStamp: stamp, ID: id, Scope: in.Scope, Kind: "memory_outcome", Status: "active", Revision: 1, Text: "Independent pinned memory checker " + in.CheckerSHA256, Tags: []string{"dimension:" + in.Dimension}, Sources: sources, Relations: relations, Target: &in.Target, Evaluation: &Evaluation{EvalType: "automated_check", Passed: &passed}, Passed: passed, RequestHash: hash, CreatedBy: actor.PrincipalID, CreatedByType: actor.Role, CreatedAt: now, UpdatedAt: now}
+		record := Record{MemoryOutcomeContentHash: signalContentHash(HitFromRecord(colMemories, target)), NativeOutcomeCaptureStamp: stamp, ID: id, Scope: in.Scope, Kind: "memory_outcome", Status: "active", Revision: 1, Text: "Independent pinned memory checker " + in.CheckerSHA256, Tags: []string{"dimension:" + in.Dimension}, Sources: sources, Relations: relations, Target: &in.Target, Evaluation: &Evaluation{EvalType: "automated_check", Passed: &passed}, Passed: passed, RequestHash: hash, CreatedBy: actor.PrincipalID, CreatedByType: actor.Role, CreatedAt: now, UpdatedAt: now}
 		if e = checkEvaluationEvidence(ctx, tx, record); e != nil {
 			return e
 		}

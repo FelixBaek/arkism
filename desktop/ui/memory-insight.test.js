@@ -531,3 +531,34 @@ test("search and ask can attach the kept original files: each shows its kind and
   assert.deepEqual(body(sentTo(a, "/v1/reflect")[0]).include, { attachments: true });
   assert.match(a.h.$("#table").textContent, /보관된 원본 파일PDF/);
 });
+
+test("source-bound rules explain suspension and explicitly approve as independent manual rules", async () => {
+  for (const [source_state, label] of [["needs_review", "원본 재검토 필요"], ["inactive", "원본 비활성"], ["unavailable", "원본 조회 불가"]]) {
+    let current = rule({ active: false, source_state });
+    const t = setup("rules", [["/v1/directives?", () => ({ items: [current], next_cursor: "" })],
+      ["/v1/directives/d1", (_, o) => (current = { ...rule(), ...JSON.parse(o.body), source_state: undefined, revision: 4 })]]);
+    t.view.draw(); await dom.flush();
+    assert.match(t.h.$("#table").textContent, new RegExp(label));
+    t.h.$("#table .original-row").click();
+    assert.match(t.h.$("#detail").textContent, /적용을 멈췄어요/);
+    assert.match(t.h.$("#detail").textContent, /원본과 독립된 수동 규칙/);
+    dom.buttons(t.h.$("#detail"), "수동 규칙으로 다시 승인")[0].click(); await dom.flush();
+    const sent = t.calls.find(([p, o]) => p === "/v1/directives/d1" && o?.method === "POST");
+    assert.equal(body(sent).active, true); assert.equal(body(sent).expected_revision, 3);
+    assert.equal(body(sent).source_state, undefined);
+    assert.match(t.notices.at(-1), /독립된 수동 규칙으로 승인/);
+    assert.match(t.h.$("#detail").textContent, /켜짐/);
+  }
+});
+
+test("editing a suspended source rule explains manual approval; agents cannot approve", async () => {
+  const current = rule({ active: false, source_state: "needs_review" });
+  const routes = [["/v1/directives?", () => ({ items: [current], next_cursor: "" })], ["/v1/directives/d1", (_, o) => ({ ...rule(), ...JSON.parse(o.body), revision: 4 })]];
+  const t = setup("rules", routes);t.view.draw();await dom.flush();t.h.$("#table .original-row").click();
+  dom.buttons(t.h.$("#detail"), "고치기")[0].click();
+  assert.match(t.h.$("#detail").textContent, /저장하면 원본과 독립된 수동 규칙/);
+  dom.fire(t.h.$("#detail form"), "submit");await dom.flush();
+  assert.equal(body(sentTo(t, "/v1/directives/d1")[0]).active, true);
+  const agent = setup("rules", routes, {role:"agent"});agent.view.draw();await dom.flush();agent.h.$("#table .original-row").click();
+  assert.equal(dom.buttons(agent.h.$("#detail"), "수동 규칙으로 다시 승인").length,0);
+});

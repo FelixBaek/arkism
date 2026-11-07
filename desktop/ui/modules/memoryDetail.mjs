@@ -91,6 +91,7 @@ export function createMemoryDetail(deps) {
     more.append(...deps.privacy.memorySections(m)); // 만료일 · 개인정보 지우기 wait under 자세히 too
     body.append(management);
     window.ArkismMemoryEvaluation.mount({ container: body, record: m, scope: { ...deps.state.scope },
+      onFix: m.status === "active" && deps.state.caps?.actions?.propose ? () => openMemoryFix(m) : undefined,
       request: deps.request, el: deps.el, section: deps.section, facts: deps.facts });
     // 변경 이력 (design 198:630): a vertical date briefing (memoryTimeline.mjs) the lineage walk fills once it answers;
     // a memory that never changed has none. A correction waiting on this memory sits on top.
