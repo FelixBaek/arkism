@@ -193,6 +193,17 @@ func pgSearchWhere(criteria SearchCriteria, collection string, now time.Time, ex
 	if collection == "memory_candidates" || collection == "sources" {
 		parts = append(parts, "COALESCE((doc->>'content_erased')::boolean,false)=false")
 	}
+	// Side lanes cannot return restricted sources/candidates, or conflicted
+	// candidates. Apply exactly those caller checks before any lane LIMIT so
+	// inaccessible rows cannot starve eligible results. Main recall is unchanged.
+	conversation := collection == "sources" && slices.Equal(criteria.Kinds, []string{conversationSourceKind})
+	pending := collection == "memory_candidates" && criteria.pending
+	if conversation || pending {
+		parts = append(parts, "COALESCE(doc->>'sensitivity','')<>'restricted'")
+	}
+	if pending {
+		parts = append(parts, "COALESCE(doc->>'conflict_id','')=''")
+	}
 	if collection == colReflections {
 		parts = append(parts, "COALESCE((doc->'reflection'->>'verified')::boolean,false)=true", "COALESCE((doc->'reflection'->>'secret_checked')::boolean,false)=true")
 	}
