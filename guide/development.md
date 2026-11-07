@@ -299,11 +299,14 @@ Each adapter offers the same three pieces in the framework's own shape:
 No adapter approves anything: model output always stays a candidate in the
 review queue.
 
-Offline tests use fake server answers. A framework that is not installed makes
-its adapter's tests skip with the reason, so CI (which installs no framework)
-runs them as skips; install the framework next to the adapter to run them:
+Offline tests use fake server answers. CI installs each framework at a pinned
+version (`sdk/python/adapters/langchain/requirements-test.txt` with hashes,
+`sdk/typescript/adapters/ai-sdk/package-lock.json`) and runs them; without the
+framework installed, an adapter's tests skip with the reason. To run them locally:
 
 ```bash
+python3 -m pip install --require-hashes -r sdk/python/adapters/langchain/requirements-test.txt
+npm ci --prefix sdk/typescript/adapters/ai-sdk --legacy-peer-deps --ignore-scripts
 for d in sdk/python/adapters/*/tests; do python3 -m unittest discover -s "$d"; done
 node --experimental-strip-types --test sdk/typescript/adapters/*/test/*.test.ts
 ```

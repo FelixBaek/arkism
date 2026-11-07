@@ -131,8 +131,11 @@ jobs:
         run: python3 tools/generate_sdk.py --check
       - name: Python client tests (offline)
         run: python3 -m unittest discover -s sdk/python/tests
-      - name: Framework adapter tests (offline; skip when the framework is not installed)
-        run: for d in sdk/python/adapters/*/tests; do python3 -m unittest discover -s "$d" || exit 1; done
+      - name: Install pinned framework for the adapter tests
+        run: |
+          python3 -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --target "$RUNNER_TEMP/adapter-deps" -r sdk/python/adapters/langchain/requirements-test.txt
+      - name: Framework adapter tests (offline)
+        run: for d in sdk/python/adapters/*/tests; do PYTHONPATH="$RUNNER_TEMP/adapter-deps" python3 -m unittest discover -s "$d" || exit 1; done
       - name: Haiku quality evidence agrees with its own rows (config/harness-quality.json)
         run: python3 tools/check_harness_model_quality.py
       - name: Pinned research baseline and roadmap file ownership
@@ -274,7 +277,10 @@ jobs:
         run: |
           desktop/frontend/node_modules/.bin/tsc -p sdk/typescript
           node --experimental-strip-types --test sdk/typescript/test/*.test.ts
-          node --experimental-strip-types --test sdk/typescript/adapters/*/test/*.test.ts
+      - name: Install pinned framework for the adapter tests
+        run: npm ci --prefix sdk/typescript/adapters/ai-sdk --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - name: Framework adapter tests (offline)
+        run: node --experimental-strip-types --test sdk/typescript/adapters/*/test/*.test.ts
 
   ui-browser-windows:
     runs-on: windows-2022

@@ -32,5 +32,6 @@ Tests (offline, against the SDK's local fake server; they skip when
 `langchain-core` is not installed):
 
 ```bash
+python3 -m pip install --require-hashes -r sdk/python/adapters/langchain/requirements-test.txt
 python3 -m unittest discover -s sdk/python/adapters/langchain/tests
 ```

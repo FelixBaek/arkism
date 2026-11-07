@@ -32,8 +32,9 @@ Model output never becomes an active memory here: `remember` and
 review queue.
 
 Tests (offline, fake server answers; they skip when `ai` is not installed
-next to the adapter):
+next to the adapter, so install the pinned versions first):
 
 ```bash
+npm ci --prefix sdk/typescript/adapters/ai-sdk --legacy-peer-deps --ignore-scripts
 node --experimental-strip-types --test sdk/typescript/adapters/ai-sdk/test/*.test.ts
 ```
