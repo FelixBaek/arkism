@@ -50,6 +50,15 @@ func (s *Service) runApprovedEntities(ctx context.Context, token string, job Rec
 		return err
 	}
 	return s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		// Match extraction: acquire the scope entity lock before fencing memory
+		// and source rows, so the two writers cannot form a lock-order cycle.
+		store, e := entityTx(tx)
+		if e != nil {
+			return e
+		}
+		if e = store.LockNamedEntities(ctx, job.Scope); e != nil {
+			return e
+		}
 		checked := searchReadTx{Tx: tx}
 		current, e := checked.Get(ctx, colMemories, job.Scope, r.ID)
 		if e != nil {
@@ -61,13 +70,7 @@ func (s *Service) runApprovedEntities(ctx context.Context, token string, job Rec
 		if e = checkSources(ctx, checked, current); e != nil {
 			return e
 		}
-		store, e := entityTx(tx)
-		if e != nil {
-			return e
-		}
-		if e = store.LockNamedEntities(ctx, job.Scope); e != nil {
-			return e
-		}
+
 		edges, e := approvedEntityRelations(ctx, store, current)
 		if e != nil {
 			return e

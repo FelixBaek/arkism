@@ -1174,6 +1174,11 @@ func enqueue(ctx context.Context, tx Tx, col string, r Record) error {
 			return err
 		}
 	}
+	return enqueueEmbedding(ctx, tx, col, r)
+}
+
+// Reindexing changes vectors only; it must not replay approval side effects.
+func enqueueEmbedding(ctx context.Context, tx Tx, col string, r Record) error {
 	now := time.Now().UTC()
 	return tx.Insert(ctx, "jobs", Record{ID: ID(), Scope: r.Scope, Kind: "embedding", Status: "pending", Revision: 1, CreatedAt: now, UpdatedAt: now, Target: &Ref{Collection: col, ID: r.ID, Revision: r.Revision}})
 }

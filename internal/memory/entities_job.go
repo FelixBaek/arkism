@@ -78,7 +78,7 @@ func (s *Service) ExtractEntities(ctx context.Context, token string, in EntityEx
 	var memories []Record
 	var found []memoryEntities
 	for _, r := range rows {
-		if entityExtractable(r) && r.Scope == in.Scope {
+		if entityExtractable(r) && live(r) && r.Scope == in.Scope {
 			memories = append(memories, r)
 			found = append(found, memoryEntityFinds(r, cfg)...)
 		}
@@ -129,7 +129,12 @@ func (s *Service) applyEntityExtraction(ctx context.Context, scope Scope, actor 
 			// Deduplication needs every entity of the scope in view.
 			return ErrUnavailable
 		}
-		checked := searchReadTx{Tx: tx}
+		// Preview validates the same evidence without writing fence counters.
+		// Persisted extraction still fences against concurrent source changes.
+		var checked Tx = tx
+		if !dryRun {
+			checked = searchReadTx{Tx: tx}
+		}
 		for _, f := range found {
 			current, e := checked.Get(ctx, colMemories, scope, f.Memory.ID)
 			if e != nil {

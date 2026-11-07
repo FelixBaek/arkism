@@ -41,7 +41,7 @@ WHERE collection = ANY($1) AND embedding_space IS DISTINCT FROM $2 ORDER BY coll
 				return nil
 			}
 			queued++
-			return enqueue(ctx, tx, t.col, r)
+			return enqueueEmbedding(ctx, tx, t.col, r)
 		})
 		if err != nil {
 			return queued, err

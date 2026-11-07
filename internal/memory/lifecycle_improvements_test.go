@@ -378,3 +378,123 @@ func TestCaptureDatedLegacyPointerCompatibility(t *testing.T) {
 		t.Fatal("different date legacy merged", next)
 	}
 }
+
+func TestPostgresReindexPreservesApprovedEntityOutbox(t *testing.T) {
+	for _, status := range []string{JobStatusPending, JobStatusDone} {
+		t.Run(status, func(t *testing.T) {
+			p := isolatedPostgres(t)
+			f := newFixture(t)
+			f.svc.Repo = p
+			claim := CaptureClaim{Subject: "Team assignment", Text: "Mira belongs to the Cedar team", Kind: "semantic", Basis: "explicit_user", Reason: "stated fact", Entities: []EntityInput{{Name: "Mira", Type: "person"}, {Name: "Cedar", Type: "organization"}}, Relations: []EntityRelationInput{{Source: "Mira", Relation: "member_of", Target: "Cedar"}}}
+			m := f.approveCandidate(oneCandidate(t, f.capture(f.human, captureInput(scopeA, "reindex-approved", claim))))
+			var job Record
+			before := 0
+			for _, r := range pgCollection(t, p, colJobs) {
+				if r.Kind == approvedEntitiesJobKind {
+					job = r
+				}
+				if r.Kind == "embedding" && r.Target != nil && r.Target.ID == m.ID {
+					before++
+				}
+			}
+			if job.ID == "" {
+				t.Fatal("approval outbox missing")
+			}
+			if status == JobStatusDone {
+				job.Status = status
+				job.Revision++
+				if e := p.Replace(testCtx, colJobs, job, job.Revision-1); e != nil {
+					t.Fatal(e)
+				}
+			}
+			queued, e := p.EnqueueReindex(testCtx, "test:new-space:1024d")
+			if e != nil || queued != 1 {
+				t.Fatal("reindex collided with approval outbox", queued, e)
+			}
+			after, count := 0, 0
+			for _, r := range pgCollection(t, p, colJobs) {
+				if r.Kind == approvedEntitiesJobKind {
+					count++
+					if structuredText(r) != structuredText(job) {
+						t.Fatal("reindex altered approval job", r)
+					}
+				}
+				if r.Kind == "embedding" && r.Target != nil && r.Target.ID == m.ID && r.Target.Revision == m.Revision {
+					after++
+				}
+			}
+			if count != 1 || after != before+1 {
+				t.Fatal("reindex lost embedding or duplicated recovery", count, before, after)
+			}
+		})
+	}
+}
+
+func TestPostgresEntityExtractionReadOnlyAndLiveBatch(t *testing.T) {
+	for _, mode := range []string{"dry_run", "mixed_liveness"} {
+		t.Run(mode, func(t *testing.T) {
+			p := isolatedPostgres(t)
+			f := newFixture(t)
+			f.svc.Repo = p
+			seed := func(id, name string, offset int) Record {
+				r := graphMemory(t, f, p, id)
+				r.Entities = []EntityInput{{Name: name, Type: "person"}}
+				r.Revision++
+				when := time.Now().Add(time.Duration(offset) * time.Hour)
+				if offset < 0 {
+					r.ExpiresAt = &when
+				}
+				if offset > 0 {
+					r.EffectiveAt = &when
+				}
+				if e := p.Replace(testCtx, colMemories, r, r.Revision-1); e != nil {
+					t.Fatal(e)
+				}
+				return r
+			}
+			current := seed("current-memory", "Mira", 0)
+			if mode == "mixed_liveness" {
+				seed("expired-memory", "ExpiredPerson", -1)
+				seed("future-memory", "FuturePerson", 1)
+			}
+			beforeMemory, e := p.Get(testCtx, colMemories, scopeA, current.ID)
+			if e != nil {
+				t.Fatal(e)
+			}
+			beforeSource, e := p.Get(testCtx, "sources", scopeA, current.Sources[0].SourceID)
+			if e != nil {
+				t.Fatal(e)
+			}
+			out, e := f.svc.ExtractEntities(testCtx, f.human, EntityExtractInput{Scope: scopeA, DryRun: mode == "dry_run"})
+			if e != nil || out.Memories != 1 || out.NewEntities != 1 {
+				t.Fatal("live extraction batch", out, e)
+			}
+			g, e := loadEntityGraph(testCtx, p, scopeA)
+			if e != nil {
+				t.Fatal(e)
+			}
+			if mode == "dry_run" {
+				afterMemory, e := p.Get(testCtx, colMemories, scopeA, current.ID)
+				if e != nil {
+					t.Fatal(e)
+				}
+				afterSource, e := p.Get(testCtx, "sources", scopeA, current.Sources[0].SourceID)
+				if e != nil {
+					t.Fatal(e)
+				}
+				if beforeMemory.MemoryReferenceFence != afterMemory.MemoryReferenceFence || beforeSource.MemoryReferenceFence != afterSource.MemoryReferenceFence || len(g.entities) != 0 || len(g.mentions) != 0 {
+					t.Fatal("dry run wrote fences or graph", beforeMemory.MemoryReferenceFence, afterMemory.MemoryReferenceFence, beforeSource.MemoryReferenceFence, afterSource.MemoryReferenceFence)
+				}
+			} else {
+				if len(g.entities) != 1 {
+					t.Fatal("non-live entity extracted", g.entities)
+				}
+				for _, ent := range g.entities {
+					if ent.Name != "Mira" {
+						t.Fatal("wrong entity extracted", ent)
+					}
+				}
+			}
+		})
+	}
+}
