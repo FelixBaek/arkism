@@ -152,7 +152,7 @@ func expandedLanes(in SearchInput, trace *recallTrace) [][]Hit {
 	for _, x := range in.expanded {
 		sub := in
 		sub.Query = x.query
-		out = append(out, relevanceGate(sub, laneFloors(sub, x.lists, trace), trace)...)
+		out = append(out, weighKeywordCoverage(sub, relevanceGate(sub, laneFloors(sub, x.lists, trace), trace))...)
 	}
 	return out
 }

@@ -424,6 +424,7 @@ func (s *Service) sideLane(ctx context.Context, collection string, in SearchInpu
 	if err != nil {
 		return nil, err
 	}
+	lists = weighKeywordCoverage(lane, lists)
 	original := slices.Clone(lists)
 	if in.expandStatus == "local_applied" {
 		for _, expanded := range in.expanded {
@@ -436,7 +437,7 @@ func (s *Service) sideLane(ctx context.Context, collection string, in SearchInpu
 				}
 				return fuseWeighted(original, provisionalLaneLimit, nil), nil
 			}
-			lists = append(lists, extra...)
+			lists = append(lists, weighKeywordCoverage(sub, extra)...)
 		}
 	}
 	return fuseWeighted(lists, provisionalLaneLimit, nil), nil

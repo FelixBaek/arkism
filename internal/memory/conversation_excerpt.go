@@ -25,36 +25,63 @@ func conversationQueryExcerpt(query, text string, budget int) string {
 	for i, line := range lines {
 		lengths[i] = utf8.RuneCountInString(line)
 		matches[i] = make([]bool, len(terms))
+		have := map[string]bool{}
+		for _, token := range SearchTokens(line) {
+			have[token] = true
+		}
 		for j, term := range terms {
-			found, _ := conceptsFound([]string{term}, Hit{Text: line})
-			if found > 0 {
+			found := false
+			for _, word := range searchConceptWords(term) {
+				found = found || have[word]
+			}
+			if found {
 				matches[i][j] = true
 				counts[j]++
 			}
 		}
 	}
+	// All weights are nonnegative, so a sliding complete-line window finds
+	// the optimum in O(lines * query terms), even for many short/empty lines.
+	weights := make([]float64, len(terms))
+	for j := range terms {
+		weights[j] = 1 + math.Log(float64(len(lines)+1)/float64(counts[j]+1))
+	}
 	bestScore, bestStart, bestEnd := -1.0, 0, 0
-	for start := range lines {
-		used := 0
-		seen := make([]bool, len(terms))
-		score := 0.0
-		for end := start; end < len(lines); end++ {
-			if end > start {
-				used++
+	present := make([]int, len(terms))
+	start, used := 0, 0
+	for end := range lines {
+		used += lengths[end]
+		if end > start {
+			used++
+		}
+		for j, yes := range matches[end] {
+			if yes {
+				present[j]++
 			}
-			used += lengths[end]
-			if used > budget {
-				break
+		}
+		for used > budget && start <= end {
+			used -= lengths[start]
+			if start < end {
+				used--
 			}
-			for j, yes := range matches[end] {
-				if yes && !seen[j] {
-					seen[j] = true
-					score += 1 + math.Log(float64(len(lines)+1)/float64(counts[j]+1))
+			for j, yes := range matches[start] {
+				if yes {
+					present[j]--
 				}
 			}
-			if score > bestScore || score == bestScore && end-start > bestEnd-bestStart {
-				bestScore, bestStart, bestEnd = score, start, end
+			start++
+		}
+		if start > end {
+			continue
+		}
+		score := 0.0
+		for j, n := range present {
+			if n > 0 {
+				score += weights[j]
 			}
+		}
+		if score > bestScore || score == bestScore && end-start > bestEnd-bestStart {
+			bestScore, bestStart, bestEnd = score, start, end
 		}
 	}
 	if bestScore <= 0 {

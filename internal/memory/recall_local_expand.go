@@ -22,34 +22,38 @@ func localRecallQueries(query string) []string {
 	}
 	terms := searchQueryTerms(query)
 	add(terms)
-	// Properly capitalized interior words are anchors. A second query retains
-	// the predicate to avoid embedding every answer around a frequently named
-	// person; candidates still undergo all source, scope and visibility checks.
-	anchors := map[string]bool{}
-	for i, w := range strings.Fields(query) {
-		r, _ := utf8.DecodeRuneInString(w)
-		if i > 0 && unicode.IsUpper(r) {
-			for _, t := range SearchTokens(w) {
-				anchors[t] = true
+	// For an explicit "Name and Name" pair, preserve the common predicate
+	// with each anchor. Removing all names would mix other people's facts;
+	// splitting at "and" alone would drop the predicate from one side.
+	words := strings.Fields(query)
+	for i := 1; i+1 < len(words); i++ {
+		if !strings.EqualFold(words[i], "and") {
+			continue
+		}
+		left, right := words[i-1], words[i+1]
+		lr, _ := utf8.DecodeRuneInString(left)
+		rr, _ := utf8.DecodeRuneInString(right)
+		if i <= 1 || !unicode.IsUpper(lr) || !unicode.IsUpper(rr) {
+			continue
+		}
+		a, b := searchQueryTerms(left), searchQueryTerms(right)
+		if len(a) != 1 || len(b) != 1 {
+			continue
+		}
+		var predicate []string
+		for _, term := range terms {
+			if term != a[0] && term != b[0] {
+				predicate = append(predicate, term)
 			}
 		}
-	}
-	var predicate []string
-	for _, t := range terms {
-		if !anchors[t] {
-			predicate = append(predicate, t)
+		if len(predicate) == 0 {
+			continue
 		}
-	}
-	add(predicate)
-	// Explicit coordinated clauses can supply complementary evidence. Short
-	// fragments stay out; at most four queries share the normal expansion bound.
-	for _, clause := range strings.Split(query, " and ") {
-		if len(out) >= recallExpandMax {
-			break
+		add(append([]string{a[0]}, predicate...))
+		if len(out) < recallExpandMax {
+			add(append([]string{b[0]}, predicate...))
 		}
-		if clause != query {
-			add(searchQueryTerms(clause))
-		}
+		break // One explicit pair; never combinatorial expansion.
 	}
 	return out[:min(len(out), recallExpandMax)]
 }

@@ -57047,6 +57047,11 @@
             "type": "string",
             "maxLength": 256,
             "description": "Optional runtime-declared origin agent for explicitly configured shared audience. Metadata only; authenticated principal and exact scope authorization remain authoritative."
+          },
+          "task_key": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "Optional stable task key scoped to the authenticated run producer, scope and task type. Reuse across retries to count the first completed eligible outcome once; raw history remains."
           }
         },
         "allOf": [
@@ -57154,6 +57159,9 @@
           "max_duration_ms": {
             "type": "integer",
             "minimum": 1
+          },
+          "holdout": {
+            "$ref": "#/components/schemas/SkillHoldoutPlan"
           }
         }
       },
@@ -58422,6 +58430,11 @@
             "type": "string",
             "maxLength": 256,
             "description": "Optional runtime-declared origin agent for explicitly configured shared audience. Metadata only; authenticated principal and exact scope authorization remain authoritative."
+          },
+          "task_key": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "Optional stable task key scoped to the authenticated run producer, scope and task type. Reuse across retries to count the first completed eligible outcome once; raw history remains."
           }
         },
         "required": [
@@ -61742,6 +61755,13 @@
           },
           "conversation_order": {
             "$ref": "#/components/schemas/WireResponseConversationOrder"
+          },
+          "memory_outcome_task_hash": {
+            "type": "string"
+          },
+          "memory_outcome_completed_at": {
+            "type": "string",
+            "format": "date-time"
           }
         },
         "additionalProperties": false,
@@ -61990,6 +62010,9 @@
           },
           "max_duration_ms": {
             "type": "integer"
+          },
+          "holdout": {
+            "$ref": "#/components/schemas/WireResponseSkillHoldoutPlan"
           }
         },
         "additionalProperties": false,
@@ -63977,6 +64000,9 @@
           "finished_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "task_key": {
+            "type": "string"
           }
         },
         "additionalProperties": false,
@@ -74341,6 +74367,16 @@
           },
           "max_duration_ms": {
             "type": "integer"
+          },
+          "holdout": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WireRequestSkillHoldoutPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -78665,6 +78701,9 @@
           },
           "signal_policy": {
             "$ref": "#/components/schemas/WireResponseSignalPolicy"
+          },
+          "local_expand": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false,
@@ -79825,6 +79864,9 @@
                 "type": "null"
               }
             ]
+          },
+          "local_expand": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false,
@@ -80177,6 +80219,186 @@
         "x-go-type": "memory.MemorySignalExplanation",
         "x-go-source": "internal/memory/memory_signal_explanation.go",
         "description": "MemorySignalExplanation describes the baseline factor at server time. It is\nobservation data, not proof that a memory caused success or a model used it."
+      },
+      "WireResponseSkillHoldoutPlan": {
+        "type": "object",
+        "properties": {
+          "development_tasks": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tasks": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireResponseSkillHoldoutTask"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "min_category_score": {
+            "type": "number"
+          },
+          "min_category_cases": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "development_tasks",
+          "tasks",
+          "min_category_score",
+          "min_category_cases"
+        ],
+        "x-go-type": "memory.SkillHoldoutPlan",
+        "x-go-source": "internal/memory/skill_holdout.go",
+        "description": "These manifests declare task identity; hashes cannot prove that developers\ndisclosed every task, or that two different tasks are semantically independent.\nThe independent comparison recorder remains responsible for that provenance."
+      },
+      "WireResponseSkillHoldoutTask": {
+        "type": "object",
+        "properties": {
+          "case_sha256": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "case_sha256",
+          "category"
+        ],
+        "x-go-type": "memory.SkillHoldoutTask",
+        "x-go-source": "internal/memory/skill_holdout.go"
+      },
+      "WireRequestSkillHoldoutPlan": {
+        "type": "object",
+        "properties": {
+          "development_tasks": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tasks": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireRequestSkillHoldoutTask"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "min_category_score": {
+            "type": "number"
+          },
+          "min_category_cases": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SkillHoldoutPlan",
+        "x-go-source": "internal/memory/skill_holdout.go",
+        "description": "These manifests declare task identity; hashes cannot prove that developers\ndisclosed every task, or that two different tasks are semantically independent.\nThe independent comparison recorder remains responsible for that provenance."
+      },
+      "WireRequestSkillHoldoutTask": {
+        "type": "object",
+        "properties": {
+          "case_sha256": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SkillHoldoutTask",
+        "x-go-source": "internal/memory/skill_holdout.go"
+      },
+      "SkillHoldoutTask": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "case_sha256",
+          "category"
+        ],
+        "properties": {
+          "case_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        }
+      },
+      "SkillHoldoutPlan": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "development_tasks",
+          "tasks",
+          "min_category_score",
+          "min_category_cases"
+        ],
+        "properties": {
+          "development_tasks": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 128,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "tasks": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 62,
+            "items": {
+              "$ref": "#/components/schemas/SkillHoldoutTask"
+            }
+          },
+          "min_category_score": {
+            "type": "number",
+            "minimum": 0.9,
+            "maximum": 1
+          },
+          "min_category_cases": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 62
+          }
+        },
+        "description": "Opt-in declared disjoint development/holdout manifest. Server validates actual paired outcomes and every declared category; hashes alone do not prove semantic independence or complete development disclosure."
       }
     },
     "headers": {

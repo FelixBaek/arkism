@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 )
 
@@ -118,5 +119,70 @@ func TestLocalSideFailurePreservesOriginalConversation(t *testing.T) {
 	f.svc.conversationTurns(testCtx, f.agent, in, colMemories, &out)
 	if len(out.Conversation) != 1 || out.Conversation[0].ID != turn.ID || !slices.Contains(out.Degraded, "local_expansion") {
 		t.Fatal(out)
+	}
+}
+
+func TestLocalExpansionNativeKeepsExpandedBaseline(t *testing.T) {
+	for _, mode := range []string{"on", "dynamic"} {
+		t.Run(mode, func(t *testing.T) {
+			runtime := nativeFSRuntime(t, mode, "V3-P1-NOTIME")
+			f, q, _ := nativeFSSearchFixture(t, runtime)
+			cfg, e := f.svc.GetSpaceConfig(testCtx, f.human, scopeA)
+			if e != nil {
+				t.Fatal(e)
+			}
+			_, e = f.svc.PutSpaceConfig(testCtx, f.human, scopeA, SpaceConfigInput{ExpectedRevision: cfg.Revision, RecallQuality: &SpaceRecallQuality{LocalExpand: true}}, false)
+			if e != nil {
+				t.Fatal(e)
+			}
+			q.Query = "What 설계 방식?" // produces a local query without using model generation
+			q.IncludeInactive = false
+			now := time.Now().UTC()
+			q.QueryTime = &now
+			baseline, e := f.svc.Search(testCtx, "native", q)
+			if e != nil {
+				t.Fatal(e)
+			}
+			f.svc.NativeSearchShadow = runtime
+			out, e := f.svc.Search(testCtx, "native", q)
+			if e != nil {
+				t.Fatal(e)
+			}
+			observed := runtime.Observations()
+			if nativeFSStrip(out) != nativeFSStrip(baseline) || len(observed) != 1 || observed[0].Reason != "unsupported_context" || !observed[0].BaselineReturned || observed[0].Served {
+				t.Fatal(out, observed)
+			}
+		})
+	}
+}
+
+func TestLocalExpansionKeepsBothAnchorsAndSharedPredicate(t *testing.T) {
+	queries := localRecallQueries("What hobbies do Rowan and Avery share?")
+	if !slices.Contains(queries, "rowan hobbies share") || !slices.Contains(queries, "avery hobbies share") || slices.Contains(queries, "hobbies share") {
+		t.Fatal(queries)
+	}
+	if got := localRecallQueries("What did Rowan repair?"); len(got) != 1 || got[0] != "rowan repair" {
+		t.Fatal(got)
+	}
+}
+func TestExpandedKeywordCoverageDoesNotManufactureFullMatches(t *testing.T) {
+	partial := Hit{ID: "partial", Origin: "memory", Collection: colMemories, Text: "Rowan", Reasons: []string{reasonTextSearch}}
+	full := Hit{ID: "full", Origin: "memory", Collection: colMemories, Text: "Rowan repair", Reasons: []string{reasonTextSearch}}
+	in := SearchInput{Query: "Rowan repair", expanded: []expandedQuery{{query: "Rowan repair", lists: [][]Hit{{partial, full}}}}}
+	lists := expandedLanes(in, &recallTrace{})
+	if len(lists) != 1 || lists[0][0].termShare != .5 || lists[0][1].termShare != 1 {
+		t.Fatal(lists)
+	}
+	ranked := fuseWeighted(lists, 2, nil)
+	if ranked[0].ID != "full" {
+		t.Fatal(ranked)
+	}
+}
+
+func TestConversationQueryExcerptBoundsManyEmptyTurns(t *testing.T) {
+	text := strings.Repeat("\n", 10000) + "Avery: copper pump pressure is stable.\n" + strings.Repeat("ordinary note\n", 1000)
+	got := conversationQueryExcerpt("copper pump pressure", text, 180)
+	if !strings.Contains(got, "pressure is stable") || utf8.RuneCountInString(got) > 180 || !strings.Contains(text, got) {
+		t.Fatal(got)
 	}
 }

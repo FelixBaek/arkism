@@ -43,6 +43,13 @@ class RecallGateTest(unittest.TestCase):
         for threshold in (.89, float("nan"), float("inf")):
             with self.assertRaises(ValueError): compare(base, base, threshold)
         self.assertEqual(compare(base, base)["unscored"], 0)
+        base = fixture()
+        for row in base.values():
+            row["evidence"] = [str(i) for i in range(10)]
+            row["@10"]["items"] = [{"dia": row["evidence"][:]}]
+        changed = copy.deepcopy(base)
+        changed["single-hop"]["@10"]["items"][0]["dia"].pop()
+        self.assertFalse(compare(base, changed)["passed"])
 
 
 if __name__ == "__main__": unittest.main()

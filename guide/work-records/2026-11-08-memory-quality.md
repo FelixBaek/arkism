@@ -51,7 +51,7 @@ they are never converted into successful answers.
   consumed context. A shortened/middle excerpt cannot be stitched to a neighboring
   batch across omitted turns that could contain a correction.
 - Optional `recall_quality.local_expand` removes question scaffolding and searches
-  predicate/explicit conjunction fragments, at most four, using only words already
+  shared predicates for explicit coordinated names, at most four, using only words already
   present in the query. It makes no language-model generation calls. Authorized
   local query embeddings and normal visibility/source checks still apply. Original
   and complementary lanes are fused; both memory and conversation candidates can
@@ -63,7 +63,7 @@ they are never converted into successful answers.
   invent synonyms, fact names or dates and cannot promise semantic completeness.
 - Independent review caught two issues before acceptance: optional side queries
   dropping baseline results on failure, and connecting middle excerpts across
-  omitted turns. Fixes include focused regressions; their final run is pending.
+  omitted turns. Fixes include focused regressions; the focused actual database and delivery run passed (0.874s).
 
 The new retrieval setting is configured through the existing space API. No new
 UI screen is added, and no existing space is enabled automatically.
@@ -73,3 +73,26 @@ UI screen is added, and no existing space is enabled automatically.
 See the task-specific work records after integration. The implementation status
 and any unmet acceptance gate will be updated from actual test results, never
 inferred from code completion.
+
+
+Independent review also found native serving could replace the expanded result
+with candidates frozen before expansion. Local expansion now triggers the
+existing unsupported-context baseline fallback. The first combined regression
+used a history-enabled helper (where expansion intentionally does not run); the
+fixture was corrected to normal recall at a fixed query clock so recency is identical. API contracts and SDK now include local
+expansion, producer task keys and holdout plans. Eight SDK tests passed, including
+actual TypeScript no-emit checks and local Python transport.
+
+
+Further independent review found keyword coverage discount applied only to the
+original memory query. Expanded and side-lane queries now apply the same per-query
+coverage discount so a common-name-only match cannot acquire full repeated votes.
+Explicit coordinated names retain their common predicate in each local fragment;
+anchorless predicates are not added. These are general rules, not question/answer
+lookup tables. The first frozen run is retained as a development attempt; a new
+comparison is required after these changes.
+
+The native fallback/expansion/context regression selection passed (1.305s) after
+using a fixed query clock. The excerpt window search was then made linear in
+line count times query-term count, avoiding repeated window scans on many empty
+turns; the long-input regression and integration rerun remain pending.

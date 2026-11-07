@@ -989,3 +989,36 @@ The binary must be executable by uid 65532, because the backup job runs part of 
 To keep these running, write a systemd unit for each long-running command (`memoryd`, `memoryd --worker`, `arkism-crew serve`, `arkism discord run`). Keep binaries in `/srv/arkism/bin` and settings and tokens in `/srv/arkism/config`, and load machine-specific values with `EnvironmentFile=/srv/arkism/config/arkism.env`. The repository does not ship unit files.
 
 Backups for a server: [backup-restore.md](backup-restore.md). Discord bots: [discord.md](discord.md).
+
+### Local recall query expansion
+
+`recall_quality.local_expand` is an optional space setting (default `false`). It
+searches bounded fragments made from the original question's own words and uses
+the configured query embedder only when the caller may use it. It makes no
+language-model generation calls. It may increase query embedding and database
+work; enable only after a representative retrieval comparison. If model `expand`
+is also requested, that existing model expansion takes precedence. Frozen views,
+history and related-record searches keep their existing behavior; native dynamic
+ranking falls back to the ordinary expanded result for this unsupported combination.
+
+Conversation-source excerpts keep their existing size budget but select relevant
+complete turns from a long batch. A partial excerpt is not stitched across omitted
+turns into a neighboring batch. These are unreviewed source data, not approved
+memories or generated answers.
+
+Completed run ingestion accepts an optional `task_key`. Reuse it across retries
+of one task to count only the first completed eligible outcome in the existing
+independent-evidence policy. Scope, authenticated producer and task type form its
+namespace; an outcome checker cannot change it. Raw failures, costs and evaluations
+remain available. Omit it for existing per-trace behavior. A key asserts task
+identity; the service does not infer that different keys describe identical work.
+
+Skill comparison plans may opt into `holdout`: declare disjoint
+`development_tasks` hashes and `tasks` entries (`case_sha256`, `category`), plus
+`min_category_score` (0.9–1) and `min_category_cases`. Every held-out task must have
+paired baseline/candidate evidence. Each declared category must independently
+meet its threshold; aggregate scores cannot hide a failing category. The CLI
+checks the manifest before running adapters and the server recomputes recorded
+cases before promotion. This verifies the declared split, not semantic novelty
+or undisclosed development exposure. Existing plans without `holdout` retain
+their original contract.
