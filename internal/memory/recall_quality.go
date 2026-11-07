@@ -438,7 +438,9 @@ func (s *Service) sideLane(ctx context.Context, collection string, in SearchInpu
 	if err != nil {
 		return nil, err
 	}
-	lists = weighKeywordCoverage(lane, lists)
+	if in.space.recallQuality().LocalExpand {
+		lists = weighKeywordCoverage(lane, lists)
+	}
 	original := slices.Clone(lists)
 	if in.expandStatus == "local_applied" {
 		for _, expanded := range in.expanded {

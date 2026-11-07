@@ -29,6 +29,7 @@ func TestPostgresConversationExcerptDeliversEligibleWindow(t *testing.T) {
 	f := newFixture(t)
 	f.svc.Repo = isolatedPostgres(t)
 	setCaptureDensity(t, f, captureDensityConversation)
+	setLocalExpansionForTest(t, f, true)
 	text, want := excerptEligibilityFixture()
 	source := conversationTurn(f, text)
 	out := f.search(f.agent, SearchInput{Scope: scopeA, Query: "copper turbine overhaul", Modes: []string{"fts"}, Include: []string{"sources"}})

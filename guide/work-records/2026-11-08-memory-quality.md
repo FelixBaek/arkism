@@ -45,7 +45,7 @@ they are never converted into successful answers.
 
 ## MQ1 / MQ2 implementation
 
-- Conversation excerpts select a contiguous verbatim window of complete turns
+- Opt-in conversation excerpts select a contiguous verbatim window of complete turns
   relevant to the query instead of invariably clipping the first600 characters.
   Existing per-entry and whole-lane character budgets remain. Private fragments
   are redacted before scoring. Full source versions are preserved and fenced in
@@ -234,3 +234,24 @@ opt-in research/export/live-model/scale/copy tests are not claimed as executed;
 the subprocess helper runs only through its parent test. The latest retrieval
 code also passed scoped static vet. No product release or production maintenance
 was run.
+
+## Default behavior boundary
+
+The new conversation-window selection and side-lane/expanded-query weighting are
+now all scoped to `recall_quality.local_expand=true`. With the option off, the
+existing prefix selection and side-lane/model-expansion weighting are retained.
+Privacy redaction still happens before clipping, unavailable side-lane candidates
+remain filtered before limits, and excerpts are never stitched across omitted
+turns. These correctness safeguards do not depend on opting into retrieval tuning.
+
+The combined actual PostgreSQL search/conversation/context/opt-in selection passed
+(6.039s). After avoiding redundant prefix work on the enabled branch, the on/off
+and legacy-model-expansion regressions passed (0.391s); scoped vet also passed.
+The frozen run uses snapshot `5e2b2379` with local expansion enabled. Subsequent
+changes are functional fixtures/docs and these disabled-option safeguards; the
+measured enabled-path algorithms and budgets are unchanged. This is not a separate
+full-corpus quality measurement of the disabled/default path.
+
+The earlier evidence-dependent ANN-index and snapshot-reuse research holds remain
+in place. Neither a passing functional suite nor partial retrieval scores remove
+those holds or satisfy the90% per-category acceptance gate.

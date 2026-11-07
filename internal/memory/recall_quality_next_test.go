@@ -91,6 +91,7 @@ func TestLocalExpansionOptInPreservesBoundaries(t *testing.T) {
 func TestConversationMiddleExcerptNeverStitchesAcrossOmission(t *testing.T) {
 	f := newFixture(t)
 	setCaptureDensity(t, f, captureDensityConversation)
+	setLocalExpansionForTest(t, f, true)
 	body := strings.Repeat("unrelated warmup. ", 45) + "\nRowan: copper pump is ready.\n" + strings.Repeat("later unrelated discussion. ", 45)
 	anchor := conversationBatch(f, body, "excerpt-middle", 0)
 	conversationBatch(f, "Avery: continue with the next steps.", "excerpt-middle", 1)
@@ -168,7 +169,7 @@ func TestLocalExpansionKeepsBothAnchorsAndSharedPredicate(t *testing.T) {
 func TestExpandedKeywordCoverageDoesNotManufactureFullMatches(t *testing.T) {
 	partial := Hit{ID: "partial", Origin: "memory", Collection: colMemories, Text: "Rowan", Reasons: []string{reasonTextSearch}}
 	full := Hit{ID: "full", Origin: "memory", Collection: colMemories, Text: "Rowan repair", Reasons: []string{reasonTextSearch}}
-	in := SearchInput{Query: "Rowan repair", expanded: []expandedQuery{{query: "Rowan repair", lists: [][]Hit{{partial, full}}}}}
+	in := SearchInput{Query: "Rowan repair", space: &SpaceConfig{RecallQuality: &SpaceRecallQuality{LocalExpand: true}}, expanded: []expandedQuery{{query: "Rowan repair", lists: [][]Hit{{partial, full}}}}}
 	lists := expandedLanes(in, &recallTrace{})
 	if len(lists) != 1 || lists[0][0].termShare != .5 || lists[0][1].termShare != 1 {
 		t.Fatal(lists)
@@ -176,6 +177,11 @@ func TestExpandedKeywordCoverageDoesNotManufactureFullMatches(t *testing.T) {
 	ranked := fuseWeighted(lists, 2, nil)
 	if ranked[0].ID != "full" {
 		t.Fatal(ranked)
+	}
+	in.space = nil
+	legacy := expandedLanes(in, &recallTrace{})
+	if legacy[0][0].termShare != 0 || fuseWeighted(legacy, 2, nil)[0].ID != "partial" {
+		t.Fatal("legacy expansion weighting changed")
 	}
 }
 

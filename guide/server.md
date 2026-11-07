@@ -996,14 +996,17 @@ Backups for a server: [backup-restore.md](backup-restore.md). Discord bots: [dis
 searches bounded fragments made from the original question's own words and uses
 the configured query embedder only when the caller may use it. It makes no
 language-model generation calls. It may increase query embedding and database
-work; enable only after a representative retrieval comparison. In this mode,
+work; enable only after a representative retrieval comparison. The new side-lane
+weights and query-focused conversation excerpts also require this setting.
+With it off, prefix selection and existing side-lane/model-expansion weighting
+remain in use. In this mode,
 partial exact-keyword matches to a compound question receive proportionate
 weight; intentional whole-keyword and one-concept lookups keep their full weight. If model `expand`
 is also requested, that existing model expansion takes precedence. Frozen views,
 history and related-record searches keep their existing behavior; native dynamic
 ranking falls back to the ordinary expanded result for this unsupported combination.
 
-Conversation-source excerpts keep their existing size budget but select relevant
+In this opt-in mode, conversation-source excerpts keep their existing size budget but select relevant
 complete turns from a long batch. A partial excerpt is not stitched across omitted
 turns into a neighboring batch. These are unreviewed source data, not approved
 memories or generated answers.

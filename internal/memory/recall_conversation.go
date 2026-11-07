@@ -62,7 +62,13 @@ func (s *Service) conversationTurns(ctx context.Context, token string, in Search
 			continue
 		}
 		h := HitFromRecord("sources", r)
-		h.Origin, h.Text, h.Reasons, h.Authority, h.CollectedAt = conversationSourceKind, conversationQueryExcerpt(in.Query, h.Text, sessionLaneRunes), []string{conversationSourceKind}, AuthorityDataOnly, r.CollectedAt
+		var text string
+		if in.space.recallQuality().LocalExpand {
+			text = conversationQueryExcerpt(in.Query, h.Text, sessionLaneRunes)
+		} else {
+			text = runeCutString(redactSessionPrivate(h.Text), sessionLaneRunes)
+		}
+		h.Origin, h.Text, h.Reasons, h.Authority, h.CollectedAt = conversationSourceKind, text, []string{conversationSourceKind}, AuthorityDataOnly, r.CollectedAt
 		if slices.Contains(row.Hit.Reasons, reasonVector) || lexicallyRelevant(terms, h) {
 			out.Conversation = append(out.Conversation, h)
 			selected[r.ID] = r
