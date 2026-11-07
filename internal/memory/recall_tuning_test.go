@@ -414,3 +414,27 @@ func TestIncludeEntityObservationsStayInBounds(t *testing.T) {
 		t.Fatalf("observations without the read grant: %+v", got)
 	}
 }
+
+// A keyword hit that holds only one of the question's concepts (a shared name) no longer ties
+// a semantic hit of the whole question; one holding every concept keeps its full credit.
+func TestKeywordCoverageWeighsFusion(t *testing.T) {
+	in := SearchInput{Query: "Where has Melanie camped with her kids?"}
+	name := Hit{ID: "name", Origin: "memory", Collection: colMemories, Text: "Melanie had a wedding day.", Reasons: []string{reasonTextSearch}}
+	full := Hit{ID: "full", Origin: "memory", Collection: colMemories, Text: "Melanie camped with her kids at the lake.", Reasons: []string{reasonTextSearch}}
+	semantic := Hit{ID: "sem", Origin: "memory", Collection: colMemories, Text: "A family trip to the forest.", Reasons: []string{reasonVector}}
+	lists := weighKeywordCoverage(in, [][]Hit{{name, full}, {semantic}})
+	if s := lists[0][0].termShare; s <= 0 || s >= 1 {
+		t.Fatal("name-only share", s)
+	}
+	if lists[0][1].termShare != 1 || lists[1][0].termShare != 0 {
+		t.Fatal(lists)
+	}
+	got := fuseWeighted(lists, 3, nil)
+	if got[0].ID != "sem" || got[1].ID != "full" || got[2].ID != "name" {
+		t.Fatal(got[0].ID, got[1].ID, got[2].ID)
+	}
+	// Unweighted, the name-only keyword hit at rank 1 ties the semantic rank 1 and wins.
+	if plain := fuseWeighted([][]Hit{{name, full}, {semantic}}, 3, nil); plain[2].ID == "name" {
+		t.Fatal("expected the unweighted order to favour the name-only hit")
+	}
+}

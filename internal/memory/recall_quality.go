@@ -220,24 +220,55 @@ func relevanceGate(in SearchInput, lists [][]Hit, trace *recallTrace) [][]Hit {
 // lexicallyRelevant: the hit's text, summary and keywords hold one of the query's topic
 // concepts, or two once the query has three or more (the keyword lane's own rule).
 func lexicallyRelevant(terms []string, h Hit) bool {
-	concepts := searchQueryConcepts(terms)
-	if len(concepts) == 0 {
+	found, concepts := conceptsFound(terms, h)
+	if concepts == 0 {
 		return false
+	}
+	need := 1
+	if concepts >= 3 {
+		need = 2
+	}
+	return found >= need
+}
+
+// conceptsFound counts the query's topic concepts the hit's text, summary and keywords hold,
+// out of how many the query has.
+func conceptsFound(terms []string, h Hit) (found, concepts int) {
+	concepts = len(searchQueryConcepts(terms))
+	if concepts == 0 {
+		return 0, 0
 	}
 	// The same text the keyword lane indexes (search_tokens), conditions included.
 	have := SearchTokens(searchTokensRecordText(Record{Text: h.Text, Summary: h.Summary, Keywords: h.keywords, MemoryContext: h.MemoryContext}))
-	found := map[string]bool{}
+	seen := map[string]bool{}
 	for _, t := range terms {
 		// Any spelling of the concept counts, as in the keyword lane's tsquery.
 		if slices.ContainsFunc(searchConceptWords(t), func(w string) bool { return slices.Contains(have, w) }) {
-			found[searchQueryConcepts([]string{t})[0]] = true
+			seen[searchQueryConcepts([]string{t})[0]] = true
 		}
 	}
-	need := 1
-	if len(concepts) >= 3 {
-		need = 2
+	return len(seen), concepts
+}
+
+// weighKeywordCoverage gives each keyword lane hit the share of the query's topic concepts it
+// holds, which fusion multiplies into the hit's lane credit: a hit that matches only a word
+// most of the space shares (a person's name, a project name) no longer ties a semantic match
+// of the whole question, while a hit holding every concept counts as before.
+func weighKeywordCoverage(in SearchInput, lists [][]Hit) [][]Hit {
+	terms := searchQueryTerms(in.Query)
+	out := make([][]Hit, len(lists))
+	for i, list := range lists {
+		out[i] = slices.Clone(list)
+		for j, h := range out[i] {
+			if !slices.Contains(h.Reasons, reasonTextSearch) {
+				continue
+			}
+			if found, concepts := conceptsFound(terms, h); concepts > 0 && found > 0 {
+				out[i][j].termShare = float64(found) / float64(concepts)
+			}
+		}
 	}
-	return len(found) >= need
+	return out
 }
 
 // probeAllowed asks whether the caller holds action without a denial audit row: optional

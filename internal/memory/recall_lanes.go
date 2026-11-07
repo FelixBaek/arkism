@@ -196,7 +196,7 @@ func (s *Service) recallLanes(ctx context.Context, in SearchInput, collection st
 	}
 	lists = laneFloors(in, lists, trace)
 	if collection == colMemories {
-		lists = relevanceGate(in, lists, trace)
+		lists = weighKeywordCoverage(in, relevanceGate(in, lists, trace))
 		for _, hits := range expandedLanes(in, trace) {
 			lists, trace.lanes = append(lists, hits), append(trace.lanes, "expanded")
 		}
