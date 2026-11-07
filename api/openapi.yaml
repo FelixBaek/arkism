@@ -48679,6 +48679,16 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "source_state": {
+            "type": "string",
+            "enum": [
+              "active",
+              "inactive",
+              "unavailable",
+              "needs_review"
+            ],
+            "description": "Read-time state of the memory behind an automatically created rule. Inactive includes expired/replaced/quarantined or changed content/rule; unavailable means the source cannot be verified; needs_review means legacy provenance is insufficient. These three states return active=false without deleting the stored rule. A person can explicitly approve it as an independent manual rule; source_state is then omitted and original provenance retained. Active describes the source, not whether a manually disabled rule is enabled."
           }
         }
       },
@@ -52851,6 +52861,21 @@
           "expand": {
             "type": "boolean",
             "description": "Let the server model write up to 4 short sub-queries for a question that needs several facts; they search the same lanes as the query and join its fusion, and the result still holds at most limit items. Opt-in (omitted takes the space's recall_quality.expand): one model call per recall under operation recall_expand, needs generate:recall_expand, capped at 500 calls per project a day, only the query is sent (never with a private marker), and any failure keeps plain recall. Plain memory recall only."
+          },
+          "conversation_context": {
+            "type": "boolean",
+            "default": false,
+            "description": "Opt in to packing unreviewed conversation sources in context_data after memory items and provisional candidates, under the same character and token budgets. Requires conversation capture mode and source read permission. Excluded from frozen views and external destinations. Native dynamic serving falls back to the baseline search for this option."
+          },
+          "whole_items": {
+            "type": "boolean",
+            "default": false,
+            "description": "Opt in to whole memory items under max_chars. Skip any item that cannot fit, including a long top-ranked unique fact, so later short facts can survive. Existing order among retained items is preserved; no quality improvement is guaranteed. Explain.dropped reports character/token budget exclusions. Native dynamic serving falls back to baseline."
+          },
+          "best_effort_lanes": {
+            "type": "boolean",
+            "default": false,
+            "description": "Opt in to partial success only for unavailable optional temporal/graph/causal storage reads. Degraded identifies failed lanes. Authorization, cancellation, final source checks, usage writes and errors in cleaning still fail the request. Explicitly selected base modes retain their existing contracts."
           }
         },
         "required": [
@@ -52918,6 +52943,32 @@
                 }
               }
             }
+          },
+          {
+            "if": {
+              "required": [
+                "agent"
+              ],
+              "properties": {
+                "agent": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "conversation_context": {
+                  "const": false
+                },
+                "whole_items": {
+                  "const": false
+                },
+                "best_effort_lanes": {
+                  "const": false
+                }
+              }
+            }
           }
         ]
       },
@@ -52935,7 +52986,7 @@
               "expand": {"type": "string", "enum": ["applied", "failed", "denied", "budget_exceeded", "model_not_configured"], "description": "Outcome of query expansion; omitted when it was off. Anything but applied ran plain recall."},
               "expand_queries": {"type": "array", "items": {"type": "string"}, "description": "The model's sub-queries that were searched (expand applied)."},
               "min_score_dropped": {"type": "integer", "minimum": 1, "description": "hits min_score removed; omitted when none."},
-              "dropped": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}, "description": "hits each other stage removed (semantic, keyword, reranker floors of min_scores; model_prune, model_dedup of rerank_options; decision_prune, decision_dedup of the recall decision engine); omitted when none."},
+              "dropped": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}, "description": "Counts removed at recall filtering or context packing. Includes character_budget, character_truncated, summary_truncated, token_budget, provisional_token_budget, conversation_character_budget and conversation_token_budget; truncation describes an altered retained item rather than a fully removed item."},
               "lane_weights": {"type": "object", "additionalProperties": {"type": "number"}, "description": "lane weights other than 1 that fusion used (request over space over server)."},
               "lane_ms": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}, "description": "Wall time per lane in whole milliseconds (summed over collections), plus rerank when it ran. Coarse, for debugging only."},
               "rerank_chain": {"type": "array", "maxItems": 3, "description": "Each configured reranker tried, in order: ok (its scores were used), failed (the next one was tried) or not_allowed (the request may not send text to it). Omitted when reranking did not run.", "items": {"type": "object", "properties": {"provider": {"type": "string"}, "model": {"type": "string"}, "outcome": {"type": "string", "enum": ["ok", "failed", "not_allowed"]}}}},              "lane_hits": {"type": "object", "additionalProperties": {"type": "array", "maxItems": 20, "items": {"type": "object", "required": ["collection", "id", "revision"], "properties": {"collection": {"type": "string"}, "id": {"type": "string"}, "revision": {"type": "integer"}}}}, "description": "Each lane's own list before fusion, in lane order (at most 20 per lane), including hits fusion or a floor left out. Ids only: open each with its own read."},
@@ -52988,6 +53039,47 @@
           },
           "directives": {
             "$ref": "#/components/schemas/DirectiveSection"
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArchiveMessageView"
+            },
+            "description": "Opt-in session-archive lane (space setting recall_session_archives, default off): up to 3 raw past session messages matching the query, at most 600 characters each. Unreviewed text kept apart from items, for checking what happened; never a memory. Present only for search purpose answer (or none)."
+          },
+          "conversation": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Hit"
+            },
+            "description": "Unreviewed conversation sources retained in context_data when conversation_context is true; data_only_untrusted, within the same total token budget."
+          },
+          "empty_reason": {
+            "type": "string",
+            "enum": [
+              "below_relevance_floor"
+            ],
+            "description": "Set when items is empty because the space's relevance floor (recall_quality.relevance_gate, default on) removed every exact or keyword hit as off-topic."
+          },
+          "provisional": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "$ref": "#/components/schemas/Hit"
+            },
+            "description": "With the space's recall_quality.provisional on (the default) and read:memory_candidates: at most 3 pending candidates (collection memory_candidates, origin provisional) matching the query, found by the exact, keyword and (with provisional_vectors) vector lanes. Never approved memory; never part of items, an export, a frozen context view or an external destination. Each passes the same read check as items; with a context budget they are packed into context_data after items, within what the budget leaves."
+          },
+          "provisional_notice": {
+            "type": "string",
+            "description": "Label that comes with provisional, in the space's memory_language, else the request's Accept-Language, else the query's script."
+          },
+          "history": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/HistoricalHit"
+            },
+            "description": "Inspection-only inactive approved memories from include_inactive. Excluded from model context_data, token budget and memory-use items. Combined items+history obey limit and max_chars before active token packing."
           }
         },
         "required": [
@@ -53245,6 +53337,21 @@
             "additionalProperties": false,
             "properties": {"prune": {"type": "boolean"}, "dedup": {"type": "boolean"}},
             "description": "With rerank \"model\", in the same model call: prune drops snippets the model marks off-topic, dedup drops snippets it marks as repeating a higher one; the model's first pick is never dropped. With the space's decision_models.recall set, its decision engine does the same first in its own call (the top result is never a repeat)."
+          },
+          "conversation_context": {
+            "type": "boolean",
+            "default": false,
+            "description": "Opt in to packing unreviewed conversation sources in context_data after memory items and provisional candidates, under the same character and token budgets. Requires conversation capture mode and source read permission. Excluded from frozen views and external destinations. Native dynamic serving falls back to the baseline search for this option."
+          },
+          "whole_items": {
+            "type": "boolean",
+            "default": false,
+            "description": "Opt in to whole memory items under max_chars. Skip any item that cannot fit, including a long top-ranked unique fact, so later short facts can survive. Existing order among retained items is preserved; no quality improvement is guaranteed. Explain.dropped reports character/token budget exclusions. Native dynamic serving falls back to baseline."
+          },
+          "best_effort_lanes": {
+            "type": "boolean",
+            "default": false,
+            "description": "Opt in to partial success only for unavailable optional temporal/graph/causal storage reads. Degraded identifies failed lanes. Authorization, cancellation, final source checks, usage writes and errors in cleaning still fail the request. Explicitly selected base modes retain their existing contracts."
           }
         },
         "required": [
@@ -53383,6 +53490,29 @@
               "properties": {
                 "related_to": {
                   "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "conversation_context"
+              ],
+              "properties": {
+                "conversation_context": {
+                  "const": true
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "budget_tokens",
+                "token_encoding"
+              ],
+              "properties": {
+                "budget_tokens": {
+                  "minimum": 1
                 }
               }
             }
@@ -53859,7 +53989,7 @@
               "expand": {"type": "string", "enum": ["applied", "failed", "denied", "budget_exceeded", "model_not_configured"], "description": "Outcome of query expansion; omitted when it was off. Anything but applied ran plain recall."},
               "expand_queries": {"type": "array", "items": {"type": "string"}, "description": "The model's sub-queries that were searched (expand applied)."},
               "min_score_dropped": {"type": "integer", "minimum": 1, "description": "hits min_score removed; omitted when none."},
-              "dropped": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}, "description": "hits each other stage removed (semantic, keyword, reranker floors of min_scores; model_prune, model_dedup of rerank_options; decision_prune, decision_dedup of the recall decision engine); omitted when none."},
+              "dropped": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}, "description": "Counts removed at recall filtering or context packing. Includes character_budget, character_truncated, summary_truncated, token_budget, provisional_token_budget, conversation_character_budget and conversation_token_budget; truncation describes an altered retained item rather than a fully removed item."},
               "lane_weights": {"type": "object", "additionalProperties": {"type": "number"}, "description": "lane weights other than 1 that fusion used (request over space over server)."},
               "lane_ms": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}, "description": "Wall time per lane in whole milliseconds (summed over collections), plus rerank when it ran. Coarse, for debugging only."},
               "rerank_chain": {"type": "array", "maxItems": 3, "description": "Each configured reranker tried, in order: ok (its scores were used), failed (the next one was tried) or not_allowed (the request may not send text to it). Omitted when reranking did not run.", "items": {"type": "object", "properties": {"provider": {"type": "string"}, "model": {"type": "string"}, "outcome": {"type": "string", "enum": ["ok", "failed", "not_allowed"]}}}},              "lane_hits": {"type": "object", "additionalProperties": {"type": "array", "maxItems": 20, "items": {"type": "object", "required": ["collection", "id", "revision"], "properties": {"collection": {"type": "string"}, "id": {"type": "string"}, "revision": {"type": "integer"}}}}, "description": "Each lane's own list before fusion, in lane order (at most 20 per lane), including hits fusion or a floor left out. Ids only: open each with its own read."},
@@ -61068,6 +61198,9 @@
             "items": {
               "$ref": "#/components/schemas/WireResponseEntityRelationInput"
             }
+          },
+          "memory_outcome_content_hash": {
+            "type": "string"
           }
         },
         "additionalProperties": false,
@@ -76075,6 +76208,15 @@
           },
           "applies_to": {
             "type": "string"
+          },
+          "source_scope": {
+            "$ref": "#/components/schemas/WireResponseScope"
+          },
+          "source_rule": {
+            "type": "string"
+          },
+          "independent": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false,
@@ -77973,6 +78115,9 @@
           },
           "expand": {
             "type": "boolean"
+          },
+          "signal_policy": {
+            "$ref": "#/components/schemas/WireResponseSignalPolicy"
           }
         },
         "additionalProperties": false,
@@ -79123,6 +79268,16 @@
           },
           "expand": {
             "type": "boolean"
+          },
+          "signal_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WireRequestSignalPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -79239,6 +79394,47 @@
         "x-go-type": "memory.SpaceRecallBudget",
         "x-go-source": "internal/memory/reflect_models_settings.go",
         "description": "SpaceRecallBudget maps a budget level (low, mid, high) to how many records a reflect or\nmental-model recall reads when the request sets no limit. fixed takes the level's count;\nadaptive takes round(recall tokens x the level's ratio), clamped to [min, max]. Unset\n(the default) keeps the shipped mapping; an unset level keeps its shipped count."
+      },
+      "WireResponseSignalPolicy": {
+        "type": "object",
+        "properties": {
+          "dimension": {
+            "type": "string"
+          },
+          "window_days": {
+            "type": "integer"
+          },
+          "min_samples": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "dimension",
+          "window_days",
+          "min_samples"
+        ],
+        "x-go-type": "memory.SignalPolicy",
+        "x-go-source": "internal/memory/memory_signal_policy.go",
+        "description": "SignalPolicy opts into bounded, content-specific recent observations. Historical\noutcomes remain available; missing content attribution is never guessed."
+      },
+      "WireRequestSignalPolicy": {
+        "type": "object",
+        "properties": {
+          "dimension": {
+            "type": "string"
+          },
+          "window_days": {
+            "type": "integer"
+          },
+          "min_samples": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SignalPolicy",
+        "x-go-source": "internal/memory/memory_signal_policy.go",
+        "description": "SignalPolicy opts into bounded, content-specific recent observations. Historical\noutcomes remain available; missing content attribution is never guessed."
       }
     },
     "headers": {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http/httptest"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -17,6 +18,7 @@ func TestContextDeliveryConversationHTTPAndBudget(t *testing.T) {
 	f := newFixture(t)
 	setCaptureDensity(t, f, captureDensityConversation)
 	source := conversationTurn(f, "Avery: the copper valve arrived Friday.")
+	var wireCases []apiContractCase
 	for _, on := range []bool{false, true} {
 		body := map[string]any{"scope": scopeA, "task": "copper valve", "modes": []string{"fts"}, "token_encoding": "cl100k_base", "budget_tokens": 2000, "conversation_context": on}
 		w := httptest.NewRecorder()
@@ -27,6 +29,8 @@ func TestContextDeliveryConversationHTTPAndBudget(t *testing.T) {
 		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &out) != nil {
 			t.Fatal(w.Code, w.Body.String())
 		}
+		wireCases = append(wireCases, apiContractCase{Operation: "POST /v1/context/build", Status: w.Code,
+			Body: append(json.RawMessage(nil), w.Body.Bytes()...), Request: json.RawMessage(structuredText(body))})
 		var data ContextBundle
 		if json.Unmarshal([]byte(out.ContextData), &data) != nil {
 			t.Fatal(out.ContextData)
@@ -41,6 +45,15 @@ func TestContextDeliveryConversationHTTPAndBudget(t *testing.T) {
 		n, _ := codec.Count(out.ContextData)
 		if n != out.TokensUsed || n > 2000 {
 			t.Fatal(n, out.TokensUsed)
+		}
+	}
+	if dest := os.Getenv("ARKISM_CONTEXT_DELIVERY_CASES"); dest != "" {
+		encoded, err := json.Marshal(wireCases)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(dest, encoded, 0600); err != nil {
+			t.Fatal(err)
 		}
 	}
 	q := SearchInput{Scope: scopeA, Query: "copper valve", Modes: []string{"fts"}, BudgetTokens: 50, TokenEncoding: "cl100k_base", ConversationContext: true, Explain: true}
