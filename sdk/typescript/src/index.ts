@@ -20,7 +20,7 @@ export type KnowledgeRelationInput = { "scope": Scope; "source": GraphEntity; "t
 export type KnowledgeRelation = { "scope": Scope; "source": GraphEntity; "target": GraphEntity; "relation": string; "evidence": (Ref & { "collection"?: "memories" }); "asserted_by": string };
 export type KnowledgeGraphInput = { "scope": Scope; "start": GraphEntity; "max_depth"?: number; "limit"?: number };
 export type KnowledgeGraphResult = { "items": Array<KnowledgeRelation>; "authority": "data_only_untrusted"; "truncated": boolean };
-export type RoleSearchInput = (unknown & unknown & unknown & unknown & unknown);
+export type RoleSearchInput = ({ "kinds"?: (Array<string> | null); "filters"?: SearchFilters; "modes"?: (Array<"exact" | "fts" | "vector" | "relation"> | null); "scope": Scope; "query": string; "limit"?: number; "max_chars"?: number; "purpose"?: "answer" | "knowledge"; "runtime"?: string; "destination"?: string; "run_id"?: string; "budget_tokens"?: number; "token_encoding"?: "cl100k_base" | "o200k_base"; "include_inactive"?: (boolean | null); "related_to"?: ((null | (Ref & { "collection"?: "sources" | "memories" | "evaluations"; "id"?: unknown }))); "role": "researcher" | "implementer" | "reviewer" });
 export type RecentWorkInput = { "scope": Scope; "repository": string; "session_id": string; "limit"?: number; "max_age_days"?: number };
 export type RecentWorkOutput = { "items": Array<{ "id": string; "revision": number; "authority": "data_only_untrusted"; "archive_messages"?: Array<ArchiveMessageRef>; "package": { [key: string]: unknown }; "updated_at": string }>; "authority": "data_only_untrusted" };
 export type Capabilities = { "scope": Scope; "principal_id"?: string; "role"?: string; "actions": { [key: string]: boolean }; "advisory": boolean; "assist_request_lookup"?: boolean };
@@ -35,7 +35,7 @@ export type RecoveryDeletionLedger = { "version": 2; "scope": { "workspace_id": 
 export type SessionArchiveChunksInput = { "scope": { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }; "parent_id": string; "sha256": string; "data": string };
 export type SessionArchiveCommitInput = { "scope": { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }; "id": string; "session_id": string; "device": string; "origin": string; "format": string; "observed_at": string; "sha256": string; "chunks": Array<string>; "text": string };
 export type ArchiveMessageRef = { "sqlite_step"?: string; "record_key"?: string; "message_sha256"?: string; "archive_id": string; "sha256": string; "chunk_index": number; "chunk_offset": number };
-export type ArchiveSearchInput = (unknown | { "q"?: unknown });
+export type ArchiveSearchInput = ({ "archive_id"?: string; "scope": { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }; "q": string; "after"?: string; "limit"?: number } & (unknown | { "q"?: unknown }));
 export type ArchiveMessageInput = { "scope": { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }; "ref": ArchiveMessageRef; "text_offset"?: number };
 export type ArchiveMessageView = { "ref": ArchiveMessageRef; "role": "user" | "assistant"; "text": string; "text_offset": number; "next_text_offset"?: number; "raw_bytes": number; "authority": "data_only_untrusted" };
 export type ArchiveSearchOutput = { "unsupported_records"?: number; "items": Array<ArchiveMessageView>; "next_cursor"?: string; "scanned_bytes": number; "oversized_records": number; "invalid_records": number; "secret_records": number; "unsupported_archives": number; "authority": "data_only_untrusted" };
@@ -56,7 +56,7 @@ export type PrivacyFenceInput = { "scope": Scope; "source_event_ids"?: (Array<st
 export type PrivacyFenceResult = { "allowed": boolean; "deletion_request_ids": (Array<string> | null) };
 export type PrivacyImpact = { "source_event_ids": (Array<string> | null); "trace_ids": (Array<string> | null); "thread_ids": (Array<string> | null); "expected_run_ids": (Array<string> | null); "records": (Array<Ref> | null) };
 export type PrivacyPurgeReport = { "live_access_removed": boolean; "runtime_purged": boolean; "derived_purged": boolean; "artifacts_purged": boolean; "backup_expiry_pending": boolean; "backup_oldest_retained_at"?: string };
-export type PrivacyDeletion = { "requester_type": string; "requester_id": string; "target_type": string; "reason": string; "legal_hold_status": string; "legal_hold_policy_ref"?: string; "retention_policy_ref": string; "error_summary"?: string; "idempotency_key": string; "correlation_id": string; "purge_report_ref"?: string; "state": "requested" | "authorized" | "quarantined" | "discovering_impact" | "purging_runtime" | "purging_derived" | "waiting_for_retention_or_backup" | "held" | "verifying" | "completed" | "partial" | "failed" | "cancelled"; "target_ids": (Array<string> | null); "request_hash": string; "impact": PrivacyImpact; "runtime_receipt"?: PrivacyRuntimeReceipt; "report": PrivacyPurgeReport; "requested_at": string; "authorized_at"?: string; "completed_at"?: string };
+export type PrivacyDeletion = { "requester_type": string; "requester_id": string; "target_type": string; "reason": string; "legal_hold_status": string; "legal_hold_policy_ref"?: string; "retention_policy_ref": string; "error_summary"?: string; "idempotency_key": string; "correlation_id": string; "purge_report_ref"?: string; "state": "requested" | "authorized" | "quarantined" | "discovering_impact" | "purging_runtime" | "purging_derived" | "waiting_for_retention_or_backup" | "held" | "verifying" | "completed" | "partial" | "failed" | "cancelled"; "target_ids": (Array<string> | null); "request_hash": string; "impact": PrivacyImpact; "runtime_receipt"?: PrivacyRuntimeReceipt; "report": PrivacyPurgeReport; "requested_at": string; "authorized_at"?: string; "completed_at"?: string; "purge_source_offset"?: number; "purge_record_offset"?: number };
 export type PrivacyDeletionStatus = { "id": string; "job_status": string; "revision": number; "privacy_deletion": PrivacyDeletion };
 export type Scope = { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string };
 export type SourceRef = { "source_id": string; "locator": string; "span"?: SourceSpan };
@@ -65,18 +65,18 @@ export type HistoricalHit = { "trust_level"?: "user_authored" | "user_verified" 
 export type Hit = { "explain"?: { "lane_ranks"?: { [key: string]: number }; "fused_score"?: number; "rerank_score"?: number; "model_rank"?: number; "graph_hops"?: number; "recency"?: number; "outcome"?: number }; "source_traces"?: Array<SourceTrace>; "entities"?: Array<{ "id": string; "name": string; "type": string; "summary"?: string; "observations"?: Array<IncludedFact> }>; "source_facts"?: Array<IncludedFact>; "reach"?: "personal" | "general" | "project"; "occurred"?: { "phrase"?: string; "from": string; "to": string }; "reach_project"?: string; "score"?: number; "lanes"?: Array<"exact" | "keyword" | "vector" | "relation" | "temporal" | "graph" | "causal" | "semantic">; "path_check"?: "missing"; "missing_paths"?: Array<string>; "conflict_pending"?: boolean; "pending_correction"?: { "candidate_id"?: string; "text"?: string; "notice": string }; "valid_to_proposal"?: { "at": string; "by": Ref }; "supersedes"?: Array<Ref>; "superseded_by"?: Ref; "trust_level"?: "user_authored" | "user_verified" | "system_verified" | "agent_proposed" | "model_inferred" | "external_untrusted"; "created_at"?: (string | null); "tags"?: (Array<string> | null); "id": string; "collection": string; "origin": string; "scope": Scope; "status": "active"; "revision": number; "text": string; "summary"?: string; "sources": Array<SourceRef>; "source_url"?: string; "image_url"?: string; "updated_at": string; "trust": number; "relations"?: Array<Ref>; "reasons": Array<string>; "authority": "data_only_untrusted"; "sensitivity"?: "public" | "internal" | "private" | "restricted"; "kind"?: string; "digest"?: string; "review_status"?: string; "rank"?: number; "collected_at"?: (string | null); "effective_at": (string | null); "source_event_id"?: string; "trace_id"?: string; "verification_status"?: "candidate" | "verified"; "memory_context"?: MemoryContext; "vector_match"?: { "space": string; "distance": number; "max_distance": number }; "approval_origin"?: string; "created_by"?: string; "attachments"?: Array<{ "id": string; "source_id": string; "kind": string; "mime": string; "bytes": number }> };
 export type CaptureClaim = { "tags"?: Array<string>; "metadata"?: { [key: string]: string }; "risk"?: "high" | "medium" | "low"; "risk_reasons"?: Array<string>; "evidence_span"?: string; "dup_hint"?: string; "rule"?: "always" | "never"; "decision_status"?: "proposed" | "confirmed" | "dropped"; "temporary"?: boolean; "relations"?: Array<{ "source": string; "relation": string; "target": string }>; "occurred_from"?: string; "occurred_to"?: string; "subject": string; "text": string; "kind": "user" | "decision" | "procedural" | "lesson" | "episodic" | "semantic"; "basis": "explicit_user" | "assistant_result" | "inferred"; "reason": string; "confidence"?: (number | null); "supersedes"?: Ref; "archive_messages"?: Array<ArchiveMessageRef>; "source_refs"?: Array<Ref>; "memory_context"?: MemoryContext; "entities"?: Array<{ "name": string; "type"?: string }> };
 export type CaptureInput = { "scope": Scope; "event": { "id": string; "type": "turn_completed" | "run_completed" | "handoff_completed" | "user_corrected_fact" | "explicit_remember" | "session_end" | "backfill"; "origin_product": string; "session_id"?: string; "trace_id"?: string; "occurred_at": string }; "claims": Array<CaptureClaim>; "generator": Generator; "automated"?: boolean };
-export type CreateInput = { "archive_messages"?: Array<ArchiveMessageRef>; "trust_level"?: "" | "external_untrusted" | "user_authored"; "confidence"?: (number | null); "tags"?: (Array<string> | null); "scope": Scope; "kind"?: string; "text": string; "summary"?: string; "keywords"?: Array<string>; "sources"?: Array<SourceRef>; "relations"?: Array<Ref>; "expires_at"?: (string | null); "skill_id"?: string; "base_version"?: string; "target"?: Ref; "passed"?: boolean; "reflection"?: Reflection; "on_secret"?: "block" | "redact"; "sensitivity"?: "public" | "internal" | "private" | "restricted"; "idempotency_key"?: string; "generator"?: Generator; "generated"?: boolean; "origin_product"?: string; "source_ref"?: string; "collected_at"?: string; "tool_call"?: ToolCall; "run"?: RunDetails; "evaluation"?: Evaluation; "effective_at"?: string; "source_event_id"?: string; "trace_id"?: string; "memory_context"?: MemoryContext; "entities"?: Array<{ "name": string; "type"?: string }> };
+export type CreateInput = { "archive_messages"?: Array<ArchiveMessageRef>; "trust_level"?: "" | "external_untrusted" | "user_authored"; "confidence"?: (number | null); "tags"?: (Array<string> | null); "scope": Scope; "kind"?: string; "text": string; "summary"?: string; "keywords"?: Array<string>; "sources"?: Array<SourceRef>; "relations"?: Array<Ref>; "expires_at"?: ((string | null)); "skill_id"?: string; "base_version"?: string; "target"?: Ref; "passed"?: boolean; "reflection"?: Reflection; "on_secret"?: "block" | "redact"; "sensitivity"?: "public" | "internal" | "private" | "restricted"; "idempotency_key"?: string; "generator"?: Generator; "generated"?: boolean; "origin_product"?: string; "source_ref"?: string; "collected_at"?: string; "tool_call"?: ToolCall; "run"?: RunDetails; "evaluation"?: Evaluation; "effective_at"?: string; "source_event_id"?: string; "trace_id"?: string; "memory_context"?: MemoryContext; "entities"?: Array<{ "name": string; "type"?: string }>; "conversation_order"?: ConversationOrder };
 export type ChangeInput = { "scoped_trial_evidence"?: Array<{ "scope": Scope; "source": Ref; "evaluation": Ref }>; "trial_id"?: string; "trial_evidence"?: Array<Ref>; "scope": Scope; "expected_revision": number; "status"?: "approved" | "active" | "superseded" | "rejected" | "expired"; "validation_id"?: string; "version_id"?: string };
 export type IncludedFact = { "id": string; "text": string };
 export type TagTest = { "tags"?: Array<string>; "match"?: "any" | "all" | "any_strict" | "all_strict" | "exact"; "resolve"?: "fuzzy"; "not"?: boolean; "and"?: Array<TagTest>; "or"?: Array<TagTest> };
 export type SearchFilters = ({ "tags"?: (Array<string> | null); "tags_match"?: "any" | "all" | "any_strict" | "all_strict" | "exact"; "tag_groups"?: Array<Array<TagTest>>; "created_from"?: (string | null); "created_to"?: (string | null); "updated_from"?: (string | null); "updated_to"?: (string | null); "statuses"?: (Array<"active" | "superseded" | "conflicted" | "rejected" | "expired"> | null); "created_by"?: (Array<string> | null); "generator_models"?: (Array<string> | null); "file_digests"?: (Array<string> | null) } | { "tags"?: (Array<string> | null); "tags_match"?: "any" | "all" | "any_strict" | "all_strict" | "exact"; "tag_groups"?: Array<Array<TagTest>>; "created_from"?: (string | null); "created_to"?: (string | null); "updated_from"?: (string | null); "updated_to"?: (string | null); "statuses"?: (Array<"active" | "superseded" | "conflicted" | "rejected" | "expired"> | null); "created_by"?: (Array<string> | null); "generator_models"?: (Array<string> | null); "file_digests"?: (Array<string> | null) });
-export type ContextBuildInput = (unknown & unknown & unknown);
-export type ContextPack = { "explain"?: { "lanes"?: Array<string>; "reranked"?: boolean; "model_rerank"?: "applied" | "failed" | "denied" | "nothing_to_send" | "budget_exceeded" | "model_not_configured"; "expand"?: "applied" | "failed" | "denied" | "budget_exceeded" | "model_not_configured"; "expand_queries"?: Array<string>; "min_score_dropped"?: number; "dropped"?: { [key: string]: number }; "lane_weights"?: { [key: string]: number }; "lane_ms"?: { [key: string]: number }; "rerank_chain"?: Array<{ "provider"?: string; "model"?: string; "outcome"?: "ok" | "failed" | "not_allowed" }>; "lane_hits"?: { [key: string]: Array<{ "collection": string; "id": string; "revision": number }> }; "time_window"?: { "phrase"?: string; "from"?: string; "to"?: string } }; "authority": "data_only_untrusted"; "items": Array<Hit>; "degraded"?: Array<string>; "context_id": string; "context_data": string; "tokens_used": number; "token_encoding": "cl100k_base" | "o200k_base"; "partial": boolean; "notice": string; "context_view"?: ContextViewObservationV1; "directives"?: DirectiveSection; "sessions"?: Array<ArchiveMessageView>; "conversation"?: Array<Hit>; "empty_reason"?: "below_relevance_floor"; "provisional"?: Array<Hit>; "provisional_notice"?: string; "history"?: Array<HistoricalHit> };
+export type ContextBuildInput = ({ "explain"?: boolean; "timezone"?: string; "scope": Scope; "kinds"?: (Array<string> | null); "filters"?: (SearchFilters & { "statuses"?: unknown }); "modes"?: (Array<"exact" | "fts" | "vector" | "relation"> | null); "destination"?: string; "agent"?: string; "run_id"?: string; "token_encoding": "cl100k_base" | "o200k_base"; "task": string; "max_items"?: (number | null); "budget_tokens"?: (number | null); "related_to"?: ((null | (Ref & { "collection"?: "sources" | "memories" | "evaluations"; "id"?: unknown }))); "context_view"?: ((ContextInvocationViewV1 | null)); "expand_causal"?: boolean; "query_time"?: string; "graph_depth"?: number; "min_score"?: number; "rerank"?: ((boolean | "model")); "prefer_observations"?: boolean; "expand"?: boolean; "conversation_context"?: boolean; "whole_items"?: boolean; "best_effort_lanes"?: boolean; "temporal_window"?: { "from": string; "to": string }; "temporal_windows"?: Array<{ "from": string; "to": string }> });
+export type ContextPack = { "explain"?: { "lanes"?: Array<string>; "reranked"?: boolean; "model_rerank"?: "applied" | "failed" | "denied" | "nothing_to_send" | "budget_exceeded" | "model_not_configured"; "expand"?: "applied" | "failed" | "denied" | "budget_exceeded" | "model_not_configured"; "expand_queries"?: Array<string>; "min_score_dropped"?: number; "dropped"?: { [key: string]: number }; "lane_weights"?: { [key: string]: number }; "lane_ms"?: { [key: string]: number }; "rerank_chain"?: Array<{ "provider"?: string; "model"?: string; "outcome"?: "ok" | "failed" | "not_allowed" }>; "lane_hits"?: { [key: string]: Array<{ "collection": string; "id": string; "revision": number }> }; "time_window"?: { "phrase"?: string; "from"?: string; "to"?: string }; "time_windows"?: Array<{ "phrase"?: string; "from"?: string; "to"?: string }> }; "authority": "data_only_untrusted"; "items": Array<Hit>; "degraded"?: Array<string>; "context_id": string; "context_data": string; "tokens_used": number; "token_encoding": "cl100k_base" | "o200k_base"; "partial": boolean; "notice": string; "context_view"?: ContextViewObservationV1; "directives"?: DirectiveSection; "sessions"?: Array<ArchiveMessageView>; "conversation"?: Array<Hit>; "empty_reason"?: "below_relevance_floor"; "provisional"?: Array<Hit>; "provisional_notice"?: string; "history"?: Array<HistoricalHit> };
 export type SkillAvailabilityInput = { "scope": Scope; "expected_revision": number; "status": "active" | "deprecated"; "compatibility"?: ({ [key: string]: "supported" | "unsupported" | "untested" | "requires_adapter" } | null) };
-export type SearchInput = (unknown & unknown & unknown & unknown & unknown & unknown);
+export type SearchInput = ({ "explain"?: boolean; "timezone"?: string; "project_key"?: string; "kinds"?: (Array<string> | null); "filters"?: SearchFilters; "modes"?: (Array<"exact" | "fts" | "vector" | "relation"> | null); "scope": Scope; "query": string; "limit"?: number; "max_chars"?: number; "purpose"?: "answer" | "skills" | "self_improvement" | "risk" | "skill_validation" | "knowledge"; "runtime"?: string; "destination"?: string; "run_id"?: string; "budget_tokens"?: number; "token_encoding"?: "cl100k_base" | "o200k_base"; "include_inactive"?: (boolean | null); "related_to"?: ((null | (Ref & { "collection"?: "sources" | "memories" | "evaluations"; "id"?: unknown }))); "expand_causal"?: boolean; "query_time"?: string; "graph_depth"?: number; "min_score"?: number; "rerank"?: ((boolean | "model")); "prefer_observations"?: boolean; "expand"?: boolean; "include"?: Array<"sources" | "entities" | "source_facts" | "attachments">; "include_options"?: { "sources"?: { "max_tokens"?: number; "max_tokens_per_observation"?: number }; "entities"?: { "max_tokens"?: number; "max_tokens_per_observation"?: number }; "source_facts"?: { "max_tokens"?: number; "max_tokens_per_observation"?: number } }; "lane_weights"?: { [key: string]: number }; "temporal_window"?: { "from": string; "to": string }; "min_scores"?: { "semantic"?: number; "keyword"?: number; "reranker"?: number; "final"?: number }; "rerank_options"?: { "prune"?: boolean; "dedup"?: boolean }; "conversation_context"?: boolean; "whole_items"?: boolean; "best_effort_lanes"?: boolean; "temporal_windows"?: Array<{ "from": string; "to": string }> });
 export type Embedding = { "provider": string; "model": string; "revision": string; "dimension": 1024; "space": string; "embedded_at": string; "content_hash": string };
-export type Record = { "reach"?: "personal" | "general" | "project"; "occurred"?: { "phrase"?: string; "from": string; "to": string }; "reach_project"?: string; "reach_suggestion"?: (ReachSuggestion); "reach_suggestion_dismissed"?: string; "skill_bundle"?: SkillBundle; "skill_bundle_sha256"?: string; "skill_trial"?: SkillTrial; "skill_basis"?: SkillBasis; "comparison_plan"?: SkillComparisonPlan; "comparison_plan_sha256"?: string; "archive_messages"?: Array<ArchiveMessageRef>; "audit"?: { "request_id": string; "decision": "allow" | "deny"; "policy_decision_id"?: string }; "trust_level"?: "user_authored" | "user_verified" | "system_verified" | "agent_proposed" | "model_inferred" | "external_untrusted"; "normalized_key"?: string; "confidence"?: (number | null); "tags"?: (Array<string> | null); "scope": Scope; "kind"?: string; "text": string; "summary"?: string; "keywords"?: Array<string>; "sources": (Array<SourceRef> | null); "relations"?: Array<Ref>; "expires_at"?: (string | null); "skill_id"?: string; "base_version"?: string; "target"?: { "id": string; "collection"?: string; "revision"?: number }; "passed"?: boolean; "id": string; "status": "candidate" | "approved" | "active" | "superseded" | "rejected" | "expired" | "conflicted"; "revision": number; "created_at": string; "updated_at": string; "created_by": string; "trust"?: number; "version_history"?: Array<string>; "skill_origin"?: SkillOrigin; "skill_compatibility"?: { [key: string]: "supported" | "unsupported" | "untested" | "requires_adapter" }; "active_version"?: string; "approved_by"?: string; "validation_id"?: string; "embedding"?: Embedding; "reflection"?: Reflection; "analysis"?: SkillAnalysis; "inspection"?: Inspection; "sensitivity"?: "public" | "internal" | "private" | "restricted"; "content_hash"?: string; "duplicate"?: boolean; "generator"?: Generator; "created_by_type"?: "human" | "agent" | "service" | "pipeline"; "origin_product"?: string; "source_ref"?: string; "collected_at"?: string; "review"?: ReviewDecision; "superseded_by"?: Ref; "supersedes"?: Array<Ref>; "conflict_id"?: string; "conflict"?: ConflictDetails; "proposal"?: Ref; "usage"?: ContextUsage; "tool_call"?: ToolCall; "run"?: RunDetails; "evaluation"?: Evaluation; "content_erased"?: boolean; "effective_at"?: string; "source_event_id"?: string; "trace_id"?: string; "verification_status"?: "candidate" | "verified"; "code_reviews"?: CodeReviews; "memory_context"?: MemoryContext; "review_due_at"?: string };
-export type ContextBundle = { "sessions"?: Array<ArchiveMessageView>; "conversation"?: Array<Hit>; "explain"?: { "lanes"?: Array<string>; "reranked"?: boolean; "model_rerank"?: "applied" | "failed" | "denied" | "nothing_to_send" | "budget_exceeded" | "model_not_configured"; "expand"?: "applied" | "failed" | "denied" | "budget_exceeded" | "model_not_configured"; "expand_queries"?: Array<string>; "min_score_dropped"?: number; "dropped"?: { [key: string]: number }; "lane_weights"?: { [key: string]: number }; "lane_ms"?: { [key: string]: number }; "rerank_chain"?: Array<{ "provider"?: string; "model"?: string; "outcome"?: "ok" | "failed" | "not_allowed" }>; "lane_hits"?: { [key: string]: Array<{ "collection": string; "id": string; "revision": number }> }; "time_window"?: { "phrase"?: string; "from"?: string; "to"?: string } }; "authority": "data_only_untrusted"; "items": Array<Hit>; "empty_reason"?: "below_relevance_floor"; "provisional"?: Array<Hit>; "provisional_notice"?: string; "degraded"?: Array<string>; "context_id": string; "context_data"?: string; "tokens_used"?: number; "token_encoding"?: "cl100k_base" | "o200k_base"; "history"?: Array<HistoricalHit> };
+export type Record = { "reach"?: "personal" | "general" | "project"; "occurred"?: { "phrase"?: string; "from": string; "to": string }; "reach_project"?: string; "reach_suggestion"?: (ReachSuggestion); "reach_suggestion_dismissed"?: string; "skill_bundle"?: SkillBundle; "skill_bundle_sha256"?: string; "skill_trial"?: SkillTrial; "skill_basis"?: SkillBasis; "comparison_plan"?: SkillComparisonPlan; "comparison_plan_sha256"?: string; "archive_messages"?: Array<ArchiveMessageRef>; "audit"?: { "request_id": string; "decision": "allow" | "deny"; "policy_decision_id"?: string }; "trust_level"?: "user_authored" | "user_verified" | "system_verified" | "agent_proposed" | "model_inferred" | "external_untrusted"; "normalized_key"?: string; "confidence"?: (number | null); "tags"?: (Array<string> | null); "scope": Scope; "kind"?: string; "text": string; "summary"?: string; "keywords"?: Array<string>; "sources": ((Array<SourceRef> | null)); "relations"?: Array<Ref>; "expires_at"?: ((string | null)); "skill_id"?: string; "base_version"?: string; "target"?: { "id": string; "collection"?: string; "revision"?: number }; "passed"?: boolean; "id": string; "status": "candidate" | "approved" | "active" | "superseded" | "rejected" | "expired" | "conflicted"; "revision": number; "created_at": string; "updated_at": string; "created_by": string; "trust"?: number; "version_history"?: Array<string>; "skill_origin"?: SkillOrigin; "skill_compatibility"?: { [key: string]: "supported" | "unsupported" | "untested" | "requires_adapter" }; "active_version"?: string; "approved_by"?: string; "validation_id"?: string; "embedding"?: Embedding; "reflection"?: Reflection; "analysis"?: SkillAnalysis; "inspection"?: Inspection; "sensitivity"?: "public" | "internal" | "private" | "restricted"; "content_hash"?: string; "duplicate"?: boolean; "generator"?: Generator; "created_by_type"?: "human" | "agent" | "service" | "pipeline"; "origin_product"?: string; "source_ref"?: string; "collected_at"?: string; "review"?: ReviewDecision; "superseded_by"?: Ref; "supersedes"?: Array<Ref>; "conflict_id"?: string; "conflict"?: ConflictDetails; "proposal"?: Ref; "usage"?: ContextUsage; "tool_call"?: ToolCall; "run"?: RunDetails; "evaluation"?: Evaluation; "content_erased"?: boolean; "effective_at"?: string; "source_event_id"?: string; "trace_id"?: string; "verification_status"?: "candidate" | "verified"; "code_reviews"?: CodeReviews; "memory_context"?: MemoryContext; "review_due_at"?: string; "conversation_order"?: ConversationOrder };
+export type ContextBundle = { "sessions"?: Array<ArchiveMessageView>; "conversation"?: Array<Hit>; "explain"?: { "lanes"?: Array<string>; "reranked"?: boolean; "model_rerank"?: "applied" | "failed" | "denied" | "nothing_to_send" | "budget_exceeded" | "model_not_configured"; "expand"?: "applied" | "failed" | "denied" | "budget_exceeded" | "model_not_configured"; "expand_queries"?: Array<string>; "min_score_dropped"?: number; "dropped"?: { [key: string]: number }; "lane_weights"?: { [key: string]: number }; "lane_ms"?: { [key: string]: number }; "rerank_chain"?: Array<{ "provider"?: string; "model"?: string; "outcome"?: "ok" | "failed" | "not_allowed" }>; "lane_hits"?: { [key: string]: Array<{ "collection": string; "id": string; "revision": number }> }; "time_window"?: { "phrase"?: string; "from"?: string; "to"?: string }; "time_windows"?: Array<{ "phrase"?: string; "from"?: string; "to"?: string }> }; "authority": "data_only_untrusted"; "items": Array<Hit>; "empty_reason"?: "below_relevance_floor"; "provisional"?: Array<Hit>; "provisional_notice"?: string; "degraded"?: Array<string>; "context_id": string; "context_data"?: string; "tokens_used"?: number; "token_encoding"?: "cl100k_base" | "o200k_base"; "history"?: Array<HistoricalHit> };
 export type Error = { "code": "invalid_request" | "access_denied" | "not_found" | "revision_conflict" | "dependency_unavailable" | "request_timeout" | "secret_detected" | "candidate_daily_limit" | "dynamics_queue_full" | "payload_too_large" | "digest_mismatch" | "semantic_lane_unavailable" | "authentication_required" | "flow_depth_limit" | "flow_child_limit" | "flow_concurrency_limit" | "flow_budget_limit" | "flow_budget_unsupported" | "attempt_replay_blocked" | "flow_time_limit" | "flow_legacy_run" | "effect_outcome_unknown" | "unsupported_media_type" };
 export type Authorization = { "action": string; "scope": Scope; "resource_id"?: string; "content"?: string; "context": ContextScopeV1 };
 export type Decision = { "allowed": boolean; "principal_id": string; "role": "human" | "agent" | "service" | "pipeline"; "scope": Scope; "external_transfer": boolean; "content_safe": boolean; "context": ContextScopeV1; "decision_id": string };
@@ -87,8 +87,8 @@ export type SkillComparisonResult = { "format_version": 1; "candidate": Ref; "ba
 export type RecordSkillComparisonInput = { "scope": Scope; "event_id": string; "result": SkillComparisonResult; "trial_id"?: string };
 export type RecordSkillComparisonResult = { "source_id": string; "runs": Array<Ref>; "evaluation": Ref; "authority": "data_only_untrusted" };
 export type GenerateSkillInput = { "scope": Scope; "event_id": string; "skill_id": string; "path": string; "lessons": Array<Ref>; "comparison_plan": SkillComparisonPlan };
-export type ProposeSkillInput = { "skill": (ImportSkillInput & unknown); "lessons": Array<Ref>; "generator": Generator };
-export type SkillBundle = { "sha256": string; "files": Array<({ "path": string; "sha256": string; "content": string } | { "path": string; "sha256": string; "size": number; "omitted": "binary" | "too_large" | "limit" | "secret" })> };
+export type ProposeSkillInput = { "skill": (ImportSkillInput); "lessons": Array<Ref>; "generator": Generator };
+export type SkillBundle = { "sha256": string; "files": Array<(({ "path": string; "sha256": string; "content": string } | { "path": string; "sha256": string; "size": number; "omitted": "binary" | "too_large" | "limit" | "secret" }))> };
 export type ImportSkillInput = { "bundle"?: SkillBundle; "comparison_plan"?: SkillComparisonPlan; "scope": Scope; "skill_id": string; "path": string; "content": string; "analysis": SkillAnalysis; "redact_secrets"?: boolean; "origin"?: SkillOrigin; "compatibility"?: { [key: string]: "supported" | "unsupported" | "untested" | "requires_adapter" } };
 export type ImportSkillResult = { "comparison_plan_sha256"?: string; "skill": Record; "record": Record; "reused": boolean; "version": number };
 export type SkillOrigin = { "source_type": "import" | "manual" | "derived"; "repository"?: string; "commit"?: string; "original_format"?: string; "original_runtime"?: string; "derived_from"?: string };
@@ -117,15 +117,15 @@ export type CandidateReviewInput = { "conflict"?: CandidateReviewConflict; "oper
 export type ReviewDecision = { "action": "approve" | "edit_approve" | "reject"; "by": string; "at": string; "reason"?: string; "receipt_id"?: string; "actor_role"?: string; "channel"?: string; "reach"?: string; "reach_overridden"?: boolean };
 export type CandidateReviewBatchItem = { "conflict"?: CandidateReviewConflict; "operation_id"?: string; "expected_revision": number; "action": "approve" | "edit_approve" | "reject"; "content"?: string; "reason"?: string; "id": string; "automated"?: boolean };
 export type CandidateReviewBatchInput = { "scope": Scope; "items": Array<CandidateReviewBatchItem> };
-export type CandidateReviewBatchOutput = { "items": Array<({ "status"?: 200 } | { "status"?: 400 | 403 | 404 | 409 | 422 | 503 })> };
+export type CandidateReviewBatchOutput = { "items": Array<({ "index": number; "status": 200 | 400 | 403 | 404 | 409 | 422 | 503; "code"?: string; "record"?: Record } & ({ "status"?: 200 } | { "status"?: 400 | 403 | 404 | 409 | 422 | 503 }))> };
 export type ReachSuggestion = { "reach": "personal" | "general" | "project"; "reach_project"?: string; "reason": string; "confidence": number };
 export type ReachSuggestionItem = { "memory_id": string; "revision": number; "kind": string; "text": string; "reach": "personal" | "general" | "project"; "reach_project"?: string; "used_projects": number; "suggestion": ReachSuggestion };
 export type ReachSuggestionPage = { "items": Array<ReachSuggestionItem>; "next_cursor": string; "authority": "data_only_untrusted" };
 export type ReachSuggestionDismissInput = { "scope": Scope; "expected_revision": number; "reach": "personal" | "general" | "project"; "reach_project"?: string };
 export type MemoryReachInput = { "scope": Scope; "expected_revision": number; "reach": "personal" | "general" | "project"; "reach_project"?: string };
-export type SupersedeInput = (unknown | unknown);
+export type SupersedeInput = ({ "tags"?: (Array<string> | null); "scope": Scope; "expected_revision": number; "reason": string; "replacement_memory_id"?: string; "replacement_expected_revision"?: number; "new_content"?: string; "sources"?: Array<SourceRef>; "sensitivity"?: "public" | "internal" | "private" | "restricted" } & (unknown | unknown));
 export type SupersedeOutput = { "old": Record; "new": Record; "relation": Record };
-export type ConflictInput = ({ "action"?: "mark" } | { "action"?: "resolve" });
+export type ConflictInput = ({ "scope": Scope; "memories": Array<(Ref & { "collection"?: "memories" | "memory_candidates" })>; "action": "mark" | "resolve"; "reason": string; "hold"?: "both" | "first" | "second"; "conflict_id"?: string; "expected_revision"?: number; "resolution"?: "keep_first" | "keep_second" | "keep_both" | "reject_both" | "first_supersedes_second" | "second_supersedes_first" } & ({ "action"?: "mark" } | { "action"?: "resolve" }));
 export type ConflictDetails = { "hold": "both" | "first" | "second"; "resolution"?: "keep_first" | "keep_second" | "keep_both" | "reject_both" | "first_supersedes_second" | "second_supersedes_first"; "resolution_reason"?: string; "resolved_by"?: string; "missing"?: Array<Ref>; "replacement"?: Ref };
 export type ConflictOutput = { "memories": Array<Record>; "relation": Record; "replacement"?: Record };
 export type SourceTrace = { "archive_messages"?: Array<ArchiveMessageRef>; "source_id": string; "state": "available" | "hidden" | "unavailable" | "inactive" | "changed" | "invalid" | "deleted"; "reference"?: SourceRef; "source"?: Ref; "origin_product"?: string; "source_ref"?: string; "collected_at"?: string; "excerpt"?: string; "deleted_at"?: string; "origin_agent_id"?: string };
@@ -140,7 +140,7 @@ export type UsagePage = { "items": Array<UsageEntry>; "authority": "data_only_un
 export type ExpireCandidatesInput = { "scope": Scope; "before": string; "limit"?: number };
 export type ExpireCandidatesOutput = { "expired": Array<Ref> };
 export type ToolCall = { "name": string; "outcome": "success" | "partial" | "failed"; "started_at": string; "finished_at": string };
-export type RunDetails = (unknown);
+export type RunDetails = ({ "agent_id": string; "task_type": string; "outcome": "running" | "success" | "partial" | "failed"; "started_at": string; "finished_at"?: (string | null); "origin_agent_id"?: string });
 export type FinishRunInput = { "scope": Scope; "expected_revision": number; "outcome": "success" | "partial" | "failed"; "finished_at": string };
 export type SkillBasis = { "version": Ref; "content_sha256": string; "validation"?: Ref };
 export type SkillComparisonPlan = { "baseline_version": string; "dataset_sha256": string; "environment_sha256": string; "min_score_gain": number; "max_cost": number; "max_duration_ms": number };
@@ -158,7 +158,7 @@ export type RetrySourceDeletionInput = { "scope": Scope; "expected_revision": nu
 export type DependentErasureStatus = { "expected_jobs": number; "observed_jobs": number; "statuses": { "pending": number; "retry": number; "running": number; "done": number; "failed": number }; "tracking_complete": boolean; "complete": boolean };
 export type DeletionLedger = { "version": 1; "scope": { "workspace_id": string; "project_id": string; "user_id": string; "agent_id": string }; "targets": Array<{ "collection": "sources" | "memories" | "memory_candidates"; "id": string }> };
 export type ContextScopeV1 = { "workspace_id": string; "project_id": string; "user_id": string; "agent_id"?: string; "principal_id": string; "purpose": string; "destination": string; "request_id": string };
-export type FileSourceInput = { "entities"?: Array<{ "name": string; "type"?: string }>; "archive_messages"?: Array<ArchiveMessageRef>; "trust_level"?: "" | "external_untrusted" | "user_authored"; "confidence"?: null; "tags"?: (Array<string> | null); "scope": Scope; "kind": string; "text"?: string; "summary"?: string; "keywords"?: Array<string>; "sources"?: Array<SourceRef>; "relations"?: Array<Ref>; "expires_at"?: (string | null); "skill_id"?: string; "base_version"?: string; "target"?: Ref; "passed"?: boolean; "reflection"?: Reflection; "on_secret"?: "block" | "redact"; "sensitivity"?: "public" | "internal" | "private" | "restricted"; "idempotency_key"?: string; "generator"?: Generator; "generated"?: boolean; "origin_product": string; "source_ref": string; "collected_at": string; "tool_call"?: ToolCall; "run"?: RunDetails; "evaluation"?: Evaluation; "effective_at"?: null; "source_event_id"?: string; "trace_id"?: string; "memory_context"?: MemoryContext };
+export type FileSourceInput = { "entities"?: Array<{ "name": string; "type"?: string }>; "archive_messages"?: Array<ArchiveMessageRef>; "trust_level"?: "" | "external_untrusted" | "user_authored"; "confidence"?: null; "tags"?: (Array<string> | null); "scope": Scope; "kind": string; "text"?: string; "summary"?: string; "keywords"?: Array<string>; "sources"?: Array<SourceRef>; "relations"?: Array<Ref>; "expires_at"?: ((string | null)); "skill_id"?: string; "base_version"?: string; "target"?: Ref; "passed"?: boolean; "reflection"?: Reflection; "on_secret"?: "block" | "redact"; "sensitivity"?: "public" | "internal" | "private" | "restricted"; "idempotency_key"?: string; "generator"?: Generator; "generated"?: boolean; "origin_product": string; "source_ref": string; "collected_at": string; "tool_call"?: ToolCall; "run"?: RunDetails; "evaluation"?: Evaluation; "effective_at"?: null; "source_event_id"?: string; "trace_id"?: string; "memory_context"?: MemoryContext };
 export type FileArtifactSpec = { "kind": "code" | "ocr" | "tool_output"; "mime": "text/plain" | "application/json"; "digest"?: string };
 export type FileIngestInput = { "source": FileSourceInput; "artifact": FileArtifactSpec };
 export type FileArtifactResult = { "kind": "code" | "ocr" | "tool_output"; "mime": "text/plain" | "application/json"; "digest": string; "id": string; "bytes": number };
@@ -177,7 +177,7 @@ export type TraceIngestResult = { "trace": Ref; "run": Ref; "source_events": Arr
 export type SyntheticConsultationCreate = { "scope": Scope; "idempotency_key": string; "goal": string; "synthetic": true };
 export type SyntheticConsultationArtifact = { "id": string; "source_event_id": string; "title": string; "kind": "poster_concepts" | "image_prompts" | "print_spec"; "status": "draft" | "selected" | "approved" | "superseded"; "partial": boolean };
 export type SyntheticHandoffPackage = { "goal": string; "selected_user_choices": Array<string>; "constraints": Array<string>; "completed_work": Array<string>; "required_output": Array<string>; "references": Array<Ref>; "open_questions": Array<string>; "expected_return_contract": Array<string>; "scoped_permissions": Array<string>; "max_budget": number; "max_handoff_depth": number; "privacy_scope": Scope; "authority": "data_only_untrusted" };
-export type SyntheticConsultation = { "id": string; "revision": number; "scope": Scope; "status": "active" | "awaiting_hire_approval" | "awaiting_return" | "awaiting_specialist_input" | "integrating" | "completed" | "cancelled" | "failed"; "goal": string; "source_event_id": string; "trace_id"?: string; "root_consultation_id": string; "parent_consultation_id"?: string; "selected_options": Array<string>; "parent": { "id": string; "agent_id": string; "agent_run_id": string; "thread_id": string; "trace_id": string; "langsmith_run_id": string; "input_event_id": string; "output_event_id": string; "status": string }; "child": ({ "id": string; "agent_id": string; "agent_run_id": string; "thread_id": string; "trace_id": string; "langsmith_run_id": string; "input_event_id": string; "output_event_id": string; "status": string } | null); "handoff": ({ "consultation_id"?: string; "parent_agent_run_id"?: string; "child_agent_run_id"?: string; "from_agent_id"?: string; "to_agent_id"?: string; "handoff_type"?: string; "id": string; "status": "proposed" | "active" | "awaiting_user" | "returned" | "rejected" | "cancelled" | "failed"; "reason": string; "approval_request_id": string; "package": SyntheticHandoffPackage; "return_package"?: { "status": string; "summary": string; "artifacts": Array<string>; "decisions": Array<string>; "assumptions": Array<string>; "open_questions": Array<string>; "verification_status": string; "risks": Array<string>; "source_trace_references": Array<Ref>; "recommendation_to_parent": string; "authority": "data_only_untrusted" }; "estimated_budget": number; "estimated_duration_seconds": number; "depth": number; "approved_by"?: string; "capability_resolution"?: CapabilityResolution } | null); "artifacts": Array<SyntheticConsultationArtifact>; "events": Array<{ "event_id": string; "type": string; "at": string }>; "clarification_question"?: string; "clarification_answer"?: string; "summary"?: string; "synthetic": true };
+export type SyntheticConsultation = { "id": string; "revision": number; "scope": Scope; "status": "active" | "awaiting_hire_approval" | "awaiting_return" | "awaiting_specialist_input" | "integrating" | "completed" | "cancelled" | "failed"; "goal": string; "source_event_id": string; "trace_id"?: string; "root_consultation_id": string; "parent_consultation_id"?: string; "selected_options": Array<string>; "parent": { "id": string; "agent_id": string; "agent_run_id": string; "thread_id": string; "trace_id": string; "langsmith_run_id": string; "input_event_id": string; "output_event_id": string; "status": string }; "child": (({ "id": string; "agent_id": string; "agent_run_id": string; "thread_id": string; "trace_id": string; "langsmith_run_id": string; "input_event_id": string; "output_event_id": string; "status": string } | null)); "handoff": (({ "consultation_id"?: string; "parent_agent_run_id"?: string; "child_agent_run_id"?: string; "from_agent_id"?: string; "to_agent_id"?: string; "handoff_type"?: string; "id": string; "status": "proposed" | "active" | "awaiting_user" | "returned" | "rejected" | "cancelled" | "failed"; "reason": string; "approval_request_id": string; "package": SyntheticHandoffPackage; "return_package"?: { "status": string; "summary": string; "artifacts": Array<string>; "decisions": Array<string>; "assumptions": Array<string>; "open_questions": Array<string>; "verification_status": string; "risks": Array<string>; "source_trace_references": Array<Ref>; "recommendation_to_parent": string; "authority": "data_only_untrusted" }; "estimated_budget": number; "estimated_duration_seconds": number; "depth": number; "approved_by"?: string; "capability_resolution"?: CapabilityResolution } | null)); "artifacts": Array<SyntheticConsultationArtifact>; "events": Array<{ "event_id": string; "type": string; "at": string }>; "clarification_question"?: string; "clarification_answer"?: string; "summary"?: string; "synthetic": true };
 export type CapabilityResolution = { "context_hash": string; "authority": "data_only_untrusted"; "status": "resolved"; "version_pins": Array<{ "kind": string; "id": string; "version": string }>; "source_references": Array<SourceRef> };
 export type SyntheticConsultationEvent = { "scope": Scope; "event_id": string; "expected_revision": number; "type": "product_selected" | "hire_proposed" | "hire_approved" | "hire_rejected" | "clarification_requested" | "clarification_answered" | "artifacts_generated" | "artifact_selected" | "artifact_approved" | "handoff_returned" | "integrated" | "cancelled" | "retried" | "failed" | "timed_out" | "direct_continued" | "direct_completed" | "capability_resolved"; "payload"?: { "product"?: "Printable Poster" | "Digital Planner" | "Wedding Template" | "Sticker / Clipart Pack" | "Social Media Template"; "question"?: string; "answer"?: string; "artifact_id"?: string; "trace_id"?: string; "artifacts"?: Array<{ "title": string; "kind": "poster_concepts" | "image_prompts" | "print_spec"; "text": string }>; "max_handoff_depth"?: number; "max_active_specialists"?: number; "estimated_budget"?: number; "capability_resolution"?: CapabilityResolution } };
 export type SyntheticKnowledgeIngest = { "scope": Scope; "source_key": string; "filename": string; "mime_type": string; "synthetic": boolean; "content"?: string; "content_base64"?: string; "expected_revision"?: number; "parsers"?: Array<string> };
@@ -195,7 +195,7 @@ export type SkillTrialRecovery = { "state": string; "candidate": Ref; "baseline_
 export type SkillTrialCheckFinish = { "scope": Scope; "skill_id": string; "expected_revision": number; "lease_token": string; "outcome": "checked" | "unavailable" };
 export type SkillTrialCheckLease = { "id": string; "revision": number; "lease_token": string; "lease_until": string };
 export type MemorySignal = { "memory": Ref; "samples": number; "passed": number; "pass_rate": (number | null); "last_judged_at": (string | null); "personal_compliance": { "samples": number; "passed": number }; "work_task": { "samples": number; "passed": number }; "uses": number; "last_used_at": (string | null); "work"?: { "sessions": number; "diff": number; "tests_passed": number; "tests_failed": number; "ci_passed": number; "ci_failed": number }; "computed_at": string };
-export type MemorySignalView = { "memory_id": string; "available": boolean; "signal": (MemorySignal | null); "use_measurement_basis": "server_return"; "actual_use_status": "not_measured" };
+export type MemorySignalView = { "memory_id": string; "available": boolean; "signal": ((MemorySignal | null)); "use_measurement_basis": "server_return"; "actual_use_status": "not_measured" };
 export type MemorySignalPage = { "items": Array<MemorySignalView>; "authority": "data_only_untrusted" };
 export type MemorySignalQuery = { "scope": Scope; "memory_ids": Array<string> };
 export type MemorySignalRecomputeInput = { "scope": Scope; "limit"?: number; "cursor"?: string };
@@ -208,7 +208,7 @@ export type MemoryGraphMapNode = { "id": string; "label": string; "status": "act
 export type MemoryGraphMapEdge = { "from": string; "to": string; "type": "supersedes" | "conflicts" | "supports" | "human_link" | "same_session" | "similar" };
 export type MemoryGraphMap = { "nodes": Array<MemoryGraphMapNode>; "edges": Array<MemoryGraphMapEdge>; "truncated": boolean; "nodes_truncated": boolean; "edges_truncated": boolean; "authority": "data_only_untrusted" };
 export type MemoryOutcomeSummary = { "memory_id": string; "available": boolean; "total": number; "passed": number; "pass_rate": (number | null); "last_judged_at": (string | null) };
-export type MemoryOutcomeEntry = { "evaluation": Ref; "memory": Ref; "trace": (Ref | null); "dimension": "personal_compliance" | "work_task"; "passed": boolean; "judged_at": string };
+export type MemoryOutcomeEntry = { "evaluation": Ref; "memory": Ref; "trace": ((Ref | null)); "dimension": "personal_compliance" | "work_task"; "passed": boolean; "judged_at": string };
 export type MemoryOutcomePage = { "memory": Ref; "summary": MemoryOutcomeSummary; "items": Array<MemoryOutcomeEntry>; "next_cursor": string; "authority": "data_only_untrusted" };
 export type MemoryOutcomeSummaries = { "items": Array<MemoryOutcomeSummary>; "authority": "data_only_untrusted" };
 export type MemoryOutcomeGroup = { "sessions": number; "status": "ok" | "insufficient_data"; "passed": (number | null); "pass_rate": (number | null) };
@@ -237,52 +237,52 @@ export type ReviewRerun = { "id": string; "repo": string; "number": number; "sta
 export type ReviewItem = { "repo": string; "number": number; "title": string; "branch": string; "base": string; "head_sha": string; "commits": number; "url": string; "state": "running" | "done" | "failed"; "pr_state"?: string; "started_at"?: string; "finished_at"?: string; "quality"?: string; "model"?: string; "findings": (Array<ReviewFinding> | null); "steps"?: (Array<ReviewStep> | null) };
 export type CodeReviews = { "collected_at"?: string; "repos": (Array<ReviewRepo> | null); "items": (Array<ReviewItem> | null); "settings": ReviewSettings; "reruns": (Array<ReviewRerun> | null) };
 export type WireResponseCodeRepo = { "repo": string; "commit": string; "indexed_at"?: string; "updated_at": string; "revision": number; "stats": ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null); "files": number; "symbols": number; "edges": number };
-export type WireResponseRecord = { "memory_context"?: WireResponseMemoryContext; "reach"?: string; "reach_project"?: string; "reach_suggestion"?: WireResponseReachSuggestion; "reach_suggestion_dismissed"?: string; "skill_bundle"?: WireResponseSkillBundle; "skill_bundle_sha256"?: string; "skill_trial"?: WireResponseSkillTrial; "skill_basis"?: WireResponseSkillBasis; "comparison_plan"?: WireResponseSkillComparisonPlan; "archive_messages"?: Array<WireResponseArchiveMessageRef>; "knowledge_retrieval"?: WireResponseKnowledgeRetrievalLog; "knowledge"?: WireResponseKnowledgeRecord; "wiki"?: WireResponseWikiRecord; "consultation"?: WireResponseConsultation; "handoff"?: WireResponseSpecialistHandoff; "audit"?: WireResponseAuditMetadata; "trust_level"?: string; "normalized_key"?: string; "confidence"?: number; "tags"?: Array<string>; "content_erased"?: boolean; "privacy_quarantined"?: boolean; "privacy_deletion"?: WireResponsePrivacyDeletion; "memory_signal"?: WireResponseMemorySignal; "stale_mark"?: WireResponseStaleMark; "proof_count"?: number; "last_confirmed_at"?: string; "run"?: WireResponseRunDetails; "tool_call"?: WireResponseToolCall; "usage"?: WireResponseContextUsage; "cost"?: WireResponseProviderCost; "proposal"?: WireResponseRef; "conflict_id"?: string; "conflict"?: WireResponseConflictDetails; "superseded_by"?: WireResponseRef; "supersedes"?: Array<WireResponseRef>; "review"?: WireResponseReviewDecision; "classification"?: WireResponseCandidateClassification; "origin_product"?: string; "source_ref"?: string; "source_event_id"?: string; "trace_id"?: string; "verification_status"?: string; "collected_at"?: string; "generator"?: WireResponseGenerator; "created_by_type"?: string; "content_hash"?: string; "duplicate": boolean; "sensitivity"?: string; "inspection"?: WireResponseInspection; "reflection"?: WireResponseReflection; "analysis"?: WireResponseSkillAnalysis; "id": string; "scope": WireResponseScope; "kind": string; "status": string; "revision": number; "text": string; "summary"?: string; "keywords"?: Array<string>; "sources": (Array<WireResponseSourceRef> | null); "relations"?: Array<WireResponseRef>; "created_at": string; "updated_at": string; "effective_at"?: string; "expires_at"?: string; "review_due_at"?: string; "created_by": string; "trust": number; "skill_id"?: string; "active_version"?: string; "base_version"?: string; "version_history"?: Array<string>; "skill_origin"?: WireResponseSkillOrigin; "agent_tools"?: WireResponseAgentTools; "providers"?: WireResponseProviders; "image_prompt"?: WireResponseImagePrompt; "crew"?: WireResponseCrew; "crew_run"?: WireResponseCrewRun; "delivery"?: WireResponseFlowDelivery; "flow_effect"?: WireResponseFlowEffect; "flow_attempt"?: WireResponseFlowAttempt; "flow_budget"?: WireResponseFlowBudget; "flow_improvement"?: WireResponseFlowImprovement; "crew_assist"?: WireResponseCrewAssist; "crew_meeting"?: WireResponseCrewMeeting; "discord_bot"?: WireResponseDiscordBot; "discord_settings"?: WireResponseDiscordSettings; "routing"?: WireResponseRouting; "routing_call"?: WireResponseRoutingCall; "skill_route"?: WireResponseSkillRoute; "usage_session"?: WireResponseUsageSession; "code_reviews"?: WireResponseCodeReviews; "design_system"?: WireResponseDesignSystem; "maintenance"?: WireResponseMaintenanceProposal; "merge"?: WireResponseMergeRecord; "digest"?: WireResponseDigestData; "skill_compatibility"?: { [key: string]: string }; "approved_by"?: string; "validation_id"?: string; "evaluation"?: WireResponseEvaluation; "passed"?: boolean; "embedding"?: WireResponseEmbedding; "target"?: WireResponseRef; "reject_score"?: number; "removal"?: WireResponseRemoval; "routing_attribution"?: WireResponseRoutingAttribution; "observation"?: WireResponseObservationData; "mental_model"?: WireResponseMentalModelData; "directive"?: WireResponseDirective; "file_extract"?: WireResponseFileExtractJob; "occurred"?: WireResponseRecallTimeWindow; "entities"?: Array<WireResponseEntityInput>; "valid_to_proposal"?: WireResponseValidToProposal; "entity_relations"?: Array<WireResponseEntityRelationInput>; "memory_outcome_content_hash"?: string };
-export type WireResponseMemoryContext = { "domains": (Array<string> | null); "applicability"?: string; "evidence_kind": string; "uncertainty"?: string; "observed_at"?: string; "valid_from"?: string; "semantic_kind": string };
+export type WireResponseRecord = { "memory_context"?: WireResponseMemoryContext; "reach"?: string; "reach_project"?: string; "reach_suggestion"?: WireResponseReachSuggestion; "reach_suggestion_dismissed"?: string; "skill_bundle"?: WireResponseSkillBundle; "skill_bundle_sha256"?: string; "skill_trial"?: WireResponseSkillTrial; "skill_basis"?: WireResponseSkillBasis; "comparison_plan"?: WireResponseSkillComparisonPlan; "archive_messages"?: Array<WireResponseArchiveMessageRef>; "knowledge_retrieval"?: WireResponseKnowledgeRetrievalLog; "knowledge"?: WireResponseKnowledgeRecord; "wiki"?: WireResponseWikiRecord; "consultation"?: WireResponseConsultation; "handoff"?: WireResponseSpecialistHandoff; "audit"?: WireResponseAuditMetadata; "trust_level"?: string; "normalized_key"?: string; "confidence"?: number; "tags"?: Array<string>; "content_erased"?: boolean; "privacy_quarantined"?: boolean; "privacy_deletion"?: WireResponsePrivacyDeletion; "memory_signal"?: WireResponseMemorySignal; "stale_mark"?: WireResponseStaleMark; "proof_count"?: number; "last_confirmed_at"?: string; "run"?: WireResponseRunDetails; "tool_call"?: WireResponseToolCall; "usage"?: WireResponseContextUsage; "cost"?: WireResponseProviderCost; "proposal"?: WireResponseRef; "conflict_id"?: string; "conflict"?: WireResponseConflictDetails; "superseded_by"?: WireResponseRef; "supersedes"?: Array<WireResponseRef>; "review"?: WireResponseReviewDecision; "classification"?: WireResponseCandidateClassification; "origin_product"?: string; "source_ref"?: string; "source_event_id"?: string; "trace_id"?: string; "verification_status"?: string; "collected_at"?: string; "generator"?: WireResponseGenerator; "created_by_type"?: string; "content_hash"?: string; "duplicate": boolean; "sensitivity"?: string; "inspection"?: WireResponseInspection; "reflection"?: WireResponseReflection; "analysis"?: WireResponseSkillAnalysis; "id": string; "scope": WireResponseScope; "kind": string; "status": string; "revision": number; "text": string; "summary"?: string; "keywords"?: Array<string>; "sources": ((Array<WireResponseSourceRef> | null)); "relations"?: Array<WireResponseRef>; "created_at": string; "updated_at": string; "effective_at"?: string; "expires_at"?: string; "review_due_at"?: string; "created_by": string; "trust": number; "skill_id"?: string; "active_version"?: string; "base_version"?: string; "version_history"?: Array<string>; "skill_origin"?: WireResponseSkillOrigin; "agent_tools"?: WireResponseAgentTools; "providers"?: WireResponseProviders; "image_prompt"?: WireResponseImagePrompt; "crew"?: WireResponseCrew; "crew_run"?: WireResponseCrewRun; "delivery"?: WireResponseFlowDelivery; "flow_effect"?: WireResponseFlowEffect; "flow_attempt"?: WireResponseFlowAttempt; "flow_budget"?: WireResponseFlowBudget; "flow_improvement"?: WireResponseFlowImprovement; "crew_assist"?: WireResponseCrewAssist; "crew_meeting"?: WireResponseCrewMeeting; "discord_bot"?: WireResponseDiscordBot; "discord_settings"?: WireResponseDiscordSettings; "routing"?: WireResponseRouting; "routing_call"?: WireResponseRoutingCall; "skill_route"?: WireResponseSkillRoute; "usage_session"?: WireResponseUsageSession; "code_reviews"?: WireResponseCodeReviews; "design_system"?: WireResponseDesignSystem; "maintenance"?: WireResponseMaintenanceProposal; "merge"?: WireResponseMergeRecord; "digest"?: WireResponseDigestData; "skill_compatibility"?: { [key: string]: string }; "approved_by"?: string; "validation_id"?: string; "evaluation"?: WireResponseEvaluation; "passed"?: boolean; "embedding"?: WireResponseEmbedding; "target"?: WireResponseRef; "reject_score"?: number; "removal"?: WireResponseRemoval; "routing_attribution"?: WireResponseRoutingAttribution; "observation"?: WireResponseObservationData; "mental_model"?: WireResponseMentalModelData; "directive"?: WireResponseDirective; "file_extract"?: WireResponseFileExtractJob; "occurred"?: WireResponseRecallTimeWindow; "entities"?: Array<WireResponseEntityInput>; "valid_to_proposal"?: WireResponseValidToProposal; "entity_relations"?: Array<WireResponseEntityRelationInput>; "memory_outcome_content_hash"?: string; "conversation_order"?: WireResponseConversationOrder };
+export type WireResponseMemoryContext = { "domains": ((Array<string> | null)); "applicability"?: string; "evidence_kind": string; "uncertainty"?: string; "observed_at"?: string; "valid_from"?: string; "semantic_kind": string };
 export type WireResponseReachSuggestion = { "reach": string; "reach_project"?: string; "reason": string; "confidence": number };
-export type WireResponseSkillBundle = { "sha256": string; "files": (Array<WireResponseSkillBundleFile> | null) };
+export type WireResponseSkillBundle = { "sha256": string; "files": ((Array<WireResponseSkillBundleFile> | null)) };
 export type WireResponseSkillBundleFile = { "path": string; "sha256": string; "content": string; "size"?: number; "omitted"?: string };
 export type WireResponseSkillTrial = { "candidate": WireResponseRef; "baseline_version": string; "runtime": string; "ends_at": string; "stopped_by"?: string; "stopped_at"?: string };
 export type WireResponseRef = { "collection": string; "id": string; "revision": number };
 export type WireResponseSkillBasis = { "version": WireResponseRef; "content_sha256": string; "validation"?: WireResponseRef };
 export type WireResponseSkillComparisonPlan = { "baseline_version": string; "dataset_sha256": string; "environment_sha256": string; "min_score_gain": number; "max_cost": number; "max_duration_ms": number };
 export type WireResponseArchiveMessageRef = { "sqlite_step"?: string; "record_key"?: string; "message_sha256"?: string; "archive_id": string; "sha256": string; "chunk_index": number; "chunk_offset": number };
-export type WireResponseKnowledgeRetrievalLog = { "query_hash": string; "binding_ids": (Array<string> | null); "candidate_chunk_ids": (Array<string> | null); "selected": (Array<WireResponseKnowledgeSelection> | null); "exclusion_reasons": (Array<WireResponseKnowledgeExclusion> | null); "pins": (Array<WireResponseKnowledgePin> | null); "context_hash": string; "specialist_profile_id": string; "specialist_profile_version_id": string; "skill_id": string; "skill_version": string; "max_tokens": number; "adapter_version": string; "retrieval_mode"?: string; "requested_retrieval_mode"?: string; "retrieval_mode_fallback"?: string; "retrieval_fallback"?: string; "fallback_used"?: boolean; "embedding_model"?: string; "embedding_revision"?: string; "embedding_space_id"?: string; "embedding_dimension"?: number };
+export type WireResponseKnowledgeRetrievalLog = { "query_hash": string; "binding_ids": ((Array<string> | null)); "candidate_chunk_ids": ((Array<string> | null)); "selected": ((Array<WireResponseKnowledgeSelection> | null)); "exclusion_reasons": ((Array<WireResponseKnowledgeExclusion> | null)); "pins": ((Array<WireResponseKnowledgePin> | null)); "context_hash": string; "specialist_profile_id": string; "specialist_profile_version_id": string; "skill_id": string; "skill_version": string; "max_tokens": number; "adapter_version": string; "retrieval_mode"?: string; "requested_retrieval_mode"?: string; "retrieval_mode_fallback"?: string; "retrieval_fallback"?: string; "fallback_used"?: boolean; "embedding_model"?: string; "embedding_revision"?: string; "embedding_space_id"?: string; "embedding_dimension"?: number };
 export type WireResponseKnowledgeSelection = { "binding_id": string; "chunk_id": string; "chunk_revision": number; "content_hash": string; "rank"?: number; "vector_distance"?: number; "fusion_score"?: number };
 export type WireResponseKnowledgeExclusion = { "id": string; "reason": string };
 export type WireResponseKnowledgePin = { "binding_id": string; "binding_revision": number; "knowledge_source_id": string; "source_revision": number; "source_version": string; "document_id": string; "document_revision": number; "parser_version": string; "chunker_version": string };
-export type WireResponseKnowledgeRecord = { "document_ids"?: Array<string>; "lifecycle_status"?: string; "source_metadata"?: { [key: string]: string }; "title"?: string; "deleted_at": (string | null); "source_updated_at": (string | null); "knowledge_source_id"?: string; "source_type"?: string; "owner_user_id"?: string; "display_name"?: string; "trust_level"?: string; "ingestion_mode"?: string; "source_version"?: string; "document_id"?: string; "chunk_ids"?: Array<string>; "original_filename"?: string; "mime_type"?: string; "storage_ref"?: string; "parser_version"?: string; "chunker_version"?: string; "extraction_status"?: string; "error_code"?: string; "chunk_index": number; "section_path"?: string; "token_estimate"?: number; "index_ref"?: string; "index_status"?: string; "index_error"?: string; "specialist_profile_id"?: string; "specialist_profile_version_id"?: string; "skill_id"?: string; "trust_requirement"?: string; "access_mode"?: string; "valid_from"?: string; "valid_to"?: string };
+export type WireResponseKnowledgeRecord = { "document_ids"?: Array<string>; "lifecycle_status"?: string; "source_metadata"?: { [key: string]: string }; "title"?: string; "deleted_at": ((string | null)); "source_updated_at": ((string | null)); "knowledge_source_id"?: string; "source_type"?: string; "owner_user_id"?: string; "display_name"?: string; "trust_level"?: string; "ingestion_mode"?: string; "source_version"?: string; "document_id"?: string; "chunk_ids"?: Array<string>; "original_filename"?: string; "mime_type"?: string; "storage_ref"?: string; "parser_version"?: string; "chunker_version"?: string; "extraction_status"?: string; "error_code"?: string; "chunk_index": number; "section_path"?: string; "token_estimate"?: number; "index_ref"?: string; "index_status"?: string; "index_error"?: string; "specialist_profile_id"?: string; "specialist_profile_version_id"?: string; "skill_id"?: string; "trust_requirement"?: string; "access_mode"?: string; "valid_from"?: string; "valid_to"?: string };
 export type WireResponseWikiRecord = { "page"?: WireResponseWikiPage; "link"?: WireResponseWikiLink; "job"?: WireResponseWikiJob; "folder"?: WireResponseWikiFolder };
-export type WireResponseWikiPage = { "slug": string; "type": string; "locked": boolean; "review_state": string; "knowledge_source_ids": (Array<string> | null); "draft"?: WireResponseWikiBody; "reviewed"?: WireResponseWikiBody; "last_merge"?: string; "last_job_id"?: string; "stale_sources"?: Array<string>; "folder"?: string; "memory_ids"?: Array<string> };
-export type WireResponseWikiBody = { "title": string; "text": string; "links": (Array<string> | null); "by": string; "at": string; "citations"?: Array<string> };
+export type WireResponseWikiPage = { "slug": string; "type": string; "locked": boolean; "review_state": string; "knowledge_source_ids": ((Array<string> | null)); "draft"?: WireResponseWikiBody; "reviewed"?: WireResponseWikiBody; "last_merge"?: string; "last_job_id"?: string; "stale_sources"?: Array<string>; "folder"?: string; "memory_ids"?: Array<string> };
+export type WireResponseWikiBody = { "title": string; "text": string; "links": ((Array<string> | null)); "by": string; "at": string; "citations"?: Array<string> };
 export type WireResponseWikiLink = { "from_id": string; "to_id": string; "from_slug": string; "to_slug": string };
 export type WireResponseWikiJob = { "knowledge_source_id": string; "source_version": string; "max_total_tokens": number; "calls": number; "tokens": number; "error"?: string; "result"?: WireResponseWikiJobResult; "generator"?: WireResponseGenerator; "requested_by": string; "finished_at"?: string; "memory"?: WireResponseWikiMemoryRequest };
-export type WireResponseWikiJobResult = { "summary"?: string; "created": (Array<string> | null); "updated": (Array<string> | null); "unchanged": (Array<string> | null); "skipped_locked": (Array<string> | null); "rejected": (Array<WireResponsewikiRejection> | null) };
+export type WireResponseWikiJobResult = { "summary"?: string; "created": ((Array<string> | null)); "updated": ((Array<string> | null)); "unchanged": ((Array<string> | null)); "skipped_locked": ((Array<string> | null)); "rejected": ((Array<WireResponsewikiRejection> | null)) };
 export type WireResponsewikiRejection = { "path": string; "reason": string };
 export type WireResponseGenerator = { "model": string; "prompt_version": string; "pipeline_version": string };
-export type WireResponseConsultation = { "id": string; "revision": number; "scope": WireResponseScope; "status": string; "goal": string; "source_event_id": string; "trace_id"?: string; "root_consultation_id": string; "parent_consultation_id"?: string; "selected_options": (Array<string> | null); "parent": WireResponseConsultationAgent; "child": (WireResponseConsultationAgent | null); "handoff": (WireResponseSpecialistHandoff | null); "artifacts": (Array<WireResponseConsultationArtifact> | null); "events": (Array<WireResponseConsultationEvent> | null); "clarification_question"?: string; "clarification_answer"?: string; "summary"?: string; "synthetic": boolean };
+export type WireResponseConsultation = { "id": string; "revision": number; "scope": WireResponseScope; "status": string; "goal": string; "source_event_id": string; "trace_id"?: string; "root_consultation_id": string; "parent_consultation_id"?: string; "selected_options": ((Array<string> | null)); "parent": WireResponseConsultationAgent; "child": ((WireResponseConsultationAgent | null)); "handoff": ((WireResponseSpecialistHandoff | null)); "artifacts": ((Array<WireResponseConsultationArtifact> | null)); "events": ((Array<WireResponseConsultationEvent> | null)); "clarification_question"?: string; "clarification_answer"?: string; "summary"?: string; "synthetic": boolean };
 export type WireResponseScope = { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string };
 export type WireResponseConsultationAgent = { "langsmith_run_id": string; "input_event_id": string; "output_event_id": string; "id": string; "agent_id": string; "agent_run_id": string; "thread_id": string; "trace_id": string; "status": string };
 export type WireResponseSpecialistHandoff = { "consultation_id": string; "parent_agent_run_id": string; "child_agent_run_id"?: string; "from_agent_id": string; "to_agent_id": string; "handoff_type": string; "id": string; "status": string; "reason": string; "approval_request_id": string; "package": WireResponseHandoffPackage; "return_package"?: WireResponseHandoffReturn; "estimated_budget": number; "estimated_duration_seconds": number; "depth": number; "approved_by"?: string; "capability_resolution"?: WireResponseCapabilityResolution };
-export type WireResponseHandoffPackage = { "goal": string; "selected_user_choices": (Array<string> | null); "constraints": (Array<string> | null); "completed_work": (Array<string> | null); "required_output": (Array<string> | null); "references": (Array<WireResponseRef> | null); "open_questions": (Array<string> | null); "expected_return_contract": (Array<string> | null); "scoped_permissions": (Array<string> | null); "max_budget": number; "max_handoff_depth": number; "privacy_scope": WireResponseScope; "authority": string };
-export type WireResponseHandoffReturn = { "status": string; "summary": string; "artifacts": (Array<string> | null); "decisions": (Array<string> | null); "assumptions": (Array<string> | null); "open_questions": (Array<string> | null); "verification_status": string; "risks": (Array<string> | null); "source_trace_references": (Array<WireResponseRef> | null); "recommendation_to_parent": string; "authority": string };
-export type WireResponseCapabilityResolution = { "context_hash": string; "authority": string; "status": string; "version_pins": (Array<WireResponseCapabilityVersionPin> | null); "source_references": (Array<WireResponseSourceRef> | null) };
+export type WireResponseHandoffPackage = { "goal": string; "selected_user_choices": ((Array<string> | null)); "constraints": ((Array<string> | null)); "completed_work": ((Array<string> | null)); "required_output": ((Array<string> | null)); "references": ((Array<WireResponseRef> | null)); "open_questions": ((Array<string> | null)); "expected_return_contract": ((Array<string> | null)); "scoped_permissions": ((Array<string> | null)); "max_budget": number; "max_handoff_depth": number; "privacy_scope": WireResponseScope; "authority": string };
+export type WireResponseHandoffReturn = { "status": string; "summary": string; "artifacts": ((Array<string> | null)); "decisions": ((Array<string> | null)); "assumptions": ((Array<string> | null)); "open_questions": ((Array<string> | null)); "verification_status": string; "risks": ((Array<string> | null)); "source_trace_references": ((Array<WireResponseRef> | null)); "recommendation_to_parent": string; "authority": string };
+export type WireResponseCapabilityResolution = { "context_hash": string; "authority": string; "status": string; "version_pins": ((Array<WireResponseCapabilityVersionPin> | null)); "source_references": ((Array<WireResponseSourceRef> | null)) };
 export type WireResponseCapabilityVersionPin = { "kind": string; "id": string; "version": string };
 export type WireResponseSourceRef = { "span"?: WireResponseSourceSpan; "source_id": string; "locator": string };
 export type WireResponseSourceSpan = { "content_hash": string; "start": number; "end": number };
 export type WireResponseConsultationArtifact = { "text"?: string; "id": string; "source_event_id": string; "title": string; "kind": string; "status": string; "partial": boolean };
 export type WireResponseConsultationEvent = { "event_id": string; "type": string; "at": string };
 export type WireResponseAuditMetadata = { "request_id": string; "decision": string; "policy_decision_id"?: string; "reason_code"?: string; "reason"?: string; "transport"?: string; "route"?: string; "method"?: string; "duration_ms"?: number; "request_body"?: string; "response_status"?: number; "response_body"?: string };
-export type WireResponsePrivacyDeletion = { "state": string; "requester_type": string; "requester_id": string; "target_type": string; "target_ids": (Array<string> | null); "reason": string; "legal_hold_status": string; "legal_hold_policy_ref"?: string; "retention_policy_ref": string; "requested_at": string; "authorized_at"?: string; "completed_at"?: string; "error_summary"?: string; "idempotency_key": string; "correlation_id": string; "purge_report_ref"?: string; "request_hash": string; "impact": WireResponsePrivacyImpact; "runtime_receipt"?: WireResponsePrivacyRuntimeReceipt; "report": WireResponsePrivacyPurgeReport };
-export type WireResponsePrivacyImpact = { "source_event_ids": (Array<string> | null); "trace_ids": (Array<string> | null); "thread_ids": (Array<string> | null); "expected_run_ids": (Array<string> | null); "records": (Array<WireResponseRef> | null) };
-export type WireResponsePrivacyRuntimeReceipt = { "request_hash": string; "quarantined": boolean; "verified": boolean; "expected_run_ids": (Array<string> | null); "matched_run_ids": (Array<string> | null); "affected_run_ids": (Array<string> | null); "absent_run_ids": (Array<string> | null); "counts": WireResponsePrivacyRuntimeCounts; "held": boolean; "errors": (Array<string> | null) };
+export type WireResponsePrivacyDeletion = { "state": string; "requester_type": string; "requester_id": string; "target_type": string; "target_ids": ((Array<string> | null)); "reason": string; "legal_hold_status": string; "legal_hold_policy_ref"?: string; "retention_policy_ref": string; "requested_at": string; "authorized_at"?: string; "completed_at"?: string; "error_summary"?: string; "idempotency_key": string; "correlation_id": string; "purge_report_ref"?: string; "request_hash": string; "impact": WireResponsePrivacyImpact; "runtime_receipt"?: WireResponsePrivacyRuntimeReceipt; "report": WireResponsePrivacyPurgeReport; "purge_source_offset"?: number; "purge_record_offset"?: number };
+export type WireResponsePrivacyImpact = { "source_event_ids": ((Array<string> | null)); "trace_ids": ((Array<string> | null)); "thread_ids": ((Array<string> | null)); "expected_run_ids": ((Array<string> | null)); "records": ((Array<WireResponseRef> | null)) };
+export type WireResponsePrivacyRuntimeReceipt = { "request_hash": string; "quarantined": boolean; "verified": boolean; "expected_run_ids": ((Array<string> | null)); "matched_run_ids": ((Array<string> | null)); "affected_run_ids": ((Array<string> | null)); "absent_run_ids": ((Array<string> | null)); "counts": WireResponsePrivacyRuntimeCounts; "held": boolean; "errors": ((Array<string> | null)) };
 export type WireResponsePrivacyRuntimeCounts = { "runs": number; "checkpoints": number; "writes": number; "blobs": number; "journals": number };
 export type WireResponsePrivacyPurgeReport = { "live_access_removed": boolean; "runtime_purged": boolean; "derived_purged": boolean; "artifacts_purged": boolean; "backup_expiry_pending": boolean; "backup_oldest_retained_at"?: string };
-export type WireResponseMemorySignal = { "memory": WireResponseRef; "samples": number; "passed": number; "pass_rate": (number | null); "last_judged_at": (string | null); "personal_compliance": WireResponseMemorySignalCounts; "work_task": WireResponseMemorySignalCounts; "uses": number; "last_used_at": (string | null); "computed_at": string; "work"?: WireResponseMemoryWorkCounts };
+export type WireResponseMemorySignal = { "memory": WireResponseRef; "samples": number; "passed": number; "pass_rate": ((number | null)); "last_judged_at": ((string | null)); "personal_compliance": WireResponseMemorySignalCounts; "work_task": WireResponseMemorySignalCounts; "uses": number; "last_used_at": ((string | null)); "computed_at": string; "work"?: WireResponseMemoryWorkCounts };
 export type WireResponseMemorySignalCounts = { "samples": number; "passed": number };
 export type WireResponseRunDetails = { "origin_agent_id"?: string; "agent_id": string; "task_type": string; "outcome": string; "started_at": string; "finished_at"?: string };
 export type WireResponseToolCall = { "name": string; "outcome": string; "started_at": string; "finished_at": string };
-export type WireResponseContextUsage = { "run"?: WireResponseRef; "purpose"?: string; "items": (Array<WireResponseMemoryUse> | null); "project_key"?: string; "client"?: string; "session_id"?: string };
+export type WireResponseContextUsage = { "run"?: WireResponseRef; "purpose"?: string; "items": ((Array<WireResponseMemoryUse> | null)); "project_key"?: string; "client"?: string; "session_id"?: string };
 export type WireResponseMemoryUse = { "memory": WireResponseRef; "rank": number; "score"?: number; "lanes"?: Array<string> };
 export type WireResponseProviderCost = { "operation": string; "provider": string; "model": string; "pricing_revision"?: string; "requests": number; "input_tokens": number; "output_tokens": number; "total_tokens": number; "estimated_cost_pico_usd": number; "pricing_available": boolean };
 export type WireResponseConflictDetails = { "replacement"?: WireResponseRef; "missing"?: Array<WireResponseRef>; "hold": string; "resolution"?: string; "resolution_reason"?: string; "resolved_by"?: string };
@@ -292,24 +292,24 @@ export type WireResponseCandidateVerdict = { "action": string; "text"?: string; 
 export type WireResponseSemanticCheck = { "check": string; "ok": boolean; "note"?: string };
 export type WireResponseInspection = { "rules_version": string; "redacted": boolean; "personal_data": boolean };
 export type WireResponseReflection = { "task_type": string; "outcome": string; "failure_reason": string; "lesson": string; "verification_method": string; "evaluation_score": number; "verified": boolean; "run_id": string; "skill_id": string; "skill_version": string; "evaluation_id": string };
-export type WireResponseSkillAnalysis = { "skill_id": string; "version": string; "content_hash": string; "name": string; "description": string; "problem": string; "use_when": (Array<string> | null); "avoid_when": (Array<string> | null); "input_format": string; "output_format": string; "tools": (Array<string> | null); "apis": (Array<string> | null); "permissions": (Array<string> | null); "secret_names": (Array<string> | null); "reads": boolean; "writes": boolean; "external_transfer": boolean; "irreversible_actions": (Array<string> | null); "agents": (Array<string> | null); "environments": (Array<string> | null); "dependencies": (Array<string> | null); "conflicts": (Array<string> | null); "success_criteria": (Array<string> | null); "failure_types": (Array<string> | null); "verification": (Array<string> | null); "example_requests": (Array<string> | null); "evaluation_stats": ({ [key: string]: number } | null); "source_path": string; "source_file": string };
+export type WireResponseSkillAnalysis = { "skill_id": string; "version": string; "content_hash": string; "name": string; "description": string; "problem": string; "use_when": ((Array<string> | null)); "avoid_when": ((Array<string> | null)); "input_format": string; "output_format": string; "tools": ((Array<string> | null)); "apis": ((Array<string> | null)); "permissions": ((Array<string> | null)); "secret_names": ((Array<string> | null)); "reads": boolean; "writes": boolean; "external_transfer": boolean; "irreversible_actions": ((Array<string> | null)); "agents": ((Array<string> | null)); "environments": ((Array<string> | null)); "dependencies": ((Array<string> | null)); "conflicts": ((Array<string> | null)); "success_criteria": ((Array<string> | null)); "failure_types": ((Array<string> | null)); "verification": ((Array<string> | null)); "example_requests": ((Array<string> | null)); "evaluation_stats": (({ [key: string]: number } | null)); "source_path": string; "source_file": string };
 export type WireResponseSkillOrigin = { "source_type": string; "repository"?: string; "commit"?: string; "original_format"?: string; "original_runtime"?: string; "derived_from"?: string };
-export type WireResponseAgentTools = { "collected_at"?: string; "servers": (Array<WireResponseAgentToolEntry> | null); "plugins": (Array<WireResponseAgentToolEntry> | null); "requests": (Array<WireResponseAgentToolRequest> | null); "skill_checks"?: Array<WireResponseSkillCheck>; "skill_check_tools"?: string; "agents"?: Array<WireResponseAgentInfo>; "shared_dirs"?: Array<string>; "memory_use"?: WireResponseMemoryUseStats; "memory_use_30"?: WireResponseMemoryUseStats; "skill_updates"?: Array<WireResponseSkillUpdate>; "pc_links"?: Array<WireResponsePCLink>; "skill_repos"?: Array<WireResponseSkillRepo>; "analysis_run"?: WireResponseAnalysisRun; "extractor"?: WireResponseExtractor };
-export type WireResponseAgentToolEntry = { "name": string; "transport": string; "target"?: string; "agents": ({ [key: string]: string } | null); "note"?: string; "login"?: { [key: string]: string }; "tools"?: Array<WireResponseAgentTool>; "calls"?: WireResponseAgentToolCalls; "version"?: string; "desc"?: string; "contents"?: Array<WireResponsePluginItem> };
+export type WireResponseAgentTools = { "collected_at"?: string; "servers": ((Array<WireResponseAgentToolEntry> | null)); "plugins": ((Array<WireResponseAgentToolEntry> | null)); "requests": ((Array<WireResponseAgentToolRequest> | null)); "skill_checks"?: Array<WireResponseSkillCheck>; "skill_check_tools"?: string; "agents"?: Array<WireResponseAgentInfo>; "shared_dirs"?: Array<string>; "memory_use"?: WireResponseMemoryUseStats; "memory_use_30"?: WireResponseMemoryUseStats; "skill_updates"?: Array<WireResponseSkillUpdate>; "pc_links"?: Array<WireResponsePCLink>; "skill_repos"?: Array<WireResponseSkillRepo>; "analysis_run"?: WireResponseAnalysisRun; "extractor"?: WireResponseExtractor };
+export type WireResponseAgentToolEntry = { "name": string; "transport": string; "target"?: string; "agents": (({ [key: string]: string } | null)); "note"?: string; "login"?: { [key: string]: string }; "tools"?: Array<WireResponseAgentTool>; "calls"?: WireResponseAgentToolCalls; "version"?: string; "desc"?: string; "contents"?: Array<WireResponsePluginItem> };
 export type WireResponseAgentTool = { "name": string; "desc"?: string; "risky"?: boolean };
 export type WireResponseAgentToolCalls = { "today": number; "recent"?: Array<WireResponseAgentToolCall> };
 export type WireResponseAgentToolCall = { "tool": string; "ok": boolean; "at": string };
 export type WireResponsePluginItem = { "kind": string; "name": string; "desc"?: string };
 export type WireResponseAgentToolRequest = { "id": string; "agent": string; "kind": string; "skills_dir"?: string; "chats_dir"?: string; "command"?: Array<string>; "url"?: string; "targets"?: Array<string>; "update"?: boolean; "name": string; "enabled": boolean; "status": string; "error"?: string; "detail"?: string; "auth_url"?: string; "callback"?: string; "requested_by": string; "requested_at": string; "done_at"?: string; "zip"?: string };
 export type WireResponseSkillCheck = { "agent": string; "name": string; "path": string; "quality_score"?: number; "quality_grade"?: string; "risk_score"?: number; "verdict"?: string; "findings": number; "top_findings"?: Array<string>; "scanned_at": string; "error"?: string };
-export type WireResponseAgentInfo = { "id": string; "name": string; "skills_dirs": (Array<string> | null); "chats_dir"?: string; "found": boolean; "enabled": boolean; "custom"?: boolean; "skills": number; "version"?: string };
-export type WireResponseMemoryUseStats = { "days": number; "sessions": number; "injections": number; "used": number; "items": (Array<WireResponseMemoryUseStat> | null); "inject_sessions"?: number; "inject_chars"?: number; "estimated"?: number; "unused_after"?: number };
+export type WireResponseAgentInfo = { "id": string; "name": string; "skills_dirs": ((Array<string> | null)); "chats_dir"?: string; "found": boolean; "enabled": boolean; "custom"?: boolean; "skills": number; "version"?: string };
+export type WireResponseMemoryUseStats = { "days": number; "sessions": number; "injections": number; "used": number; "items": ((Array<WireResponseMemoryUseStat> | null)); "inject_sessions"?: number; "inject_chars"?: number; "estimated"?: number; "unused_after"?: number };
 export type WireResponseMemoryUseStat = { "id": string; "injected": number; "used": number; "estimated"?: number; "unreceipted"?: number; "unused"?: boolean };
 export type WireResponseSkillUpdate = { "name": string; "repo": string; "from"?: string; "to"?: string; "commits": number };
 export type WireResponsePCLink = { "agent": string; "last_seen"?: string; "failing"?: boolean; "pending"?: number };
 export type WireResponseSkillRepo = { "repo": string; "remote": string; "head"?: string; "behind": number; "checked_at": string };
-export type WireResponseProviders = { "collected_at"?: string; "providers": (Array<WireResponseProvider> | null); "requests": (Array<WireResponseProviderRequest> | null); "disabled": (Array<string> | null); "extra"?: Array<string>; "labels"?: { [key: string]: string }; "assist_model"?: string; "assist_provider"?: string; "roles"?: { [key: string]: WireResponseProviderRole }; "role_defaults"?: { [key: string]: string }; "role_options"?: { [key: string]: (Array<string> | null) }; "assist_via"?: string };
-export type WireResponseProvider = { "id": string; "name": string; "kind": string; "custom"?: boolean; "accounts": (Array<WireResponseProviderAccount> | null); "keys": (Array<WireResponseProviderKey> | null); "models": (Array<string> | null) };
+export type WireResponseProviders = { "collected_at"?: string; "providers": ((Array<WireResponseProvider> | null)); "requests": ((Array<WireResponseProviderRequest> | null)); "disabled": ((Array<string> | null)); "extra"?: Array<string>; "labels"?: { [key: string]: string }; "assist_model"?: string; "assist_provider"?: string; "roles"?: { [key: string]: WireResponseProviderRole }; "role_defaults"?: { [key: string]: string }; "role_options"?: { [key: string]: ((Array<string> | null)) }; "assist_via"?: string };
+export type WireResponseProvider = { "id": string; "name": string; "kind": string; "custom"?: boolean; "accounts": ((Array<WireResponseProviderAccount> | null)); "keys": ((Array<WireResponseProviderKey> | null)); "models": ((Array<string> | null)) };
 export type WireResponseProviderAccount = { "id": string; "label": string; "cli"?: string; "status": string; "default"?: boolean; "quota"?: WireResponseProviderQuota; "quotas"?: Array<WireResponseProviderQuota>; "plan"?: string; "usage_status"?: string; "usage_checked_at"?: string; "credits"?: WireResponseProviderCredits; "cli_info"?: WireResponseProviderCLIInfo };
 export type WireResponseProviderQuota = { "window": string; "model"?: string; "left_pct"?: number; "resets_at"?: string };
 export type WireResponseProviderCredits = { "balance"?: number; "unlimited"?: boolean };
@@ -318,7 +318,7 @@ export type WireResponseProviderKey = { "id": string; "name": string; "last4": s
 export type WireResponseProviderRequest = { "id": string; "kind": string; "provider": string; "cli"?: string; "expected_version"?: string; "expected_via"?: string; "key_id"?: string; "name"?: string; "last4"?: string; "base_url"?: string; "monthly_budget_usd"?: number; "status": string; "error"?: string; "models"?: Array<string>; "model"?: string; "note"?: string; "requested_by": string; "requested_at": string; "done_at"?: string; "header_names"?: Array<string> };
 export type WireResponseImagePrompt = { "title": string; "kind": string; "engine": string; "prompt": string; "negative"?: string; "size"?: string; "count"?: number; "seed"?: string; "script_name"?: string; "script"?: string; "tags"?: Array<string>; "experts"?: Array<string>; "images"?: Array<string> };
 export type WireResponseCrewResearch = { "quick_node": string; "deep_node": string; "deep_alias": string; "evidence_strategy": string; "helper_origin": string };
-export type WireResponseFlowDelivery = { "run_id": string; "result_revision": number; "origin": (WireResponseCrewRunOrigin | null); "status": string; "part": number; "message_ids": (Array<string> | null); "result_hash"?: string; "error_code"?: string; "lease_until"?: string; "recovery_history"?: Array<WireResponseFlowDeliveryRecoveryReceipt> };
+export type WireResponseFlowDelivery = { "run_id": string; "result_revision": number; "origin": ((WireResponseCrewRunOrigin | null)); "status": string; "part": number; "message_ids": ((Array<string> | null)); "result_hash"?: string; "error_code"?: string; "lease_until"?: string; "recovery_history"?: Array<WireResponseFlowDeliveryRecoveryReceipt> };
 export type FlowDeliveryView = { "id": string; "revision": number; "delivery": WireResponseFlowDelivery };
 export type FlowDeliveryPage = { "items": Array<FlowDeliveryView>; "next_cursor"?: string };
 export type FlowLeaseView = { "lease_until": string; "cancel_requested": boolean };
@@ -329,7 +329,7 @@ export type WireResponseCrewSkillRule = { "field": string; "value": string };
 export type WireResponseCrewScript = { "name": string; "desc"?: string; "lang": string; "code": string };
 export type WireResponseCrewTrigger = { "kind": string; "cron"?: string; "label"?: string };
 export type WireResponseCrewLimits = { "max_steps"?: number; "max_minutes"?: number };
-export type WireResponseCrewGraph = { "nodes": (Array<WireResponseCrewNode> | null); "edges": (Array<WireResponseCrewEdge> | null) };
+export type WireResponseCrewGraph = { "nodes": ((Array<WireResponseCrewNode> | null)); "edges": ((Array<WireResponseCrewEdge> | null)) };
 export type WireResponseCrewNode = { "id": string; "type": string; "title"?: string; "x": number; "y": number; "config"?: { [key: string]: string } };
 export type WireResponseCrewEdge = { "from": string; "port"?: string; "to": string; "max"?: number };
 export type WireResponseCrewCover = { "id": string; "url": string; "thumb": string; "author": string; "author_url": string };
@@ -343,141 +343,141 @@ export type WireResponseCrewEnding = { "max_rounds": number; "token_cap"?: numbe
 export type WireResponseCrewContextRef = { "collection": string; "id": string; "title"?: string; "share": string };
 export type WireResponseCrewMeetingTemplate = { "key": string; "name": string; "prompt"?: string; "overrides"?: WireResponseCrewTemplateOverrides };
 export type WireResponseCrewTemplateOverrides = { "mode"?: string; "ending"?: WireResponseCrewEnding };
-export type WireResponseCrewRun = { "crew_id": string; "crew_revision": number; "trigger": string; "status": string; "input"?: string; "nodes": ({ [key: string]: WireResponseCrewRunNode } | null); "waiting"?: WireResponseCrewRunWaiting; "decisions"?: { [key: string]: WireResponseCrewRunDecision }; "summary"?: string; "only"?: string; "loops"?: { [key: string]: number }; "deadline"?: string; "origin"?: WireResponseCrewRunOrigin; "invocation_mode"?: string; "definition"?: WireResponseCrew; "research_mode"?: string; "cancel_requested"?: boolean; "result_revision"?: number; "effects"?: { [key: string]: string }; "source_type"?: string; "root_id"?: string; "parent_id"?: string; "parent_node_id"?: string; "depth"?: number; "children"?: { [key: string]: WireResponseFlowChildRef }; "definitions"?: { [key: string]: WireResponseFlowDefinition }; "policy"?: WireResponseFlowPolicy };
+export type WireResponseCrewRun = { "crew_id": string; "crew_revision": number; "trigger": string; "status": string; "input"?: string; "nodes": (({ [key: string]: WireResponseCrewRunNode } | null)); "waiting"?: WireResponseCrewRunWaiting; "decisions"?: { [key: string]: WireResponseCrewRunDecision }; "summary"?: string; "only"?: string; "loops"?: { [key: string]: number }; "deadline"?: string; "origin"?: WireResponseCrewRunOrigin; "invocation_mode"?: string; "definition"?: WireResponseCrew; "research_mode"?: string; "cancel_requested"?: boolean; "result_revision"?: number; "effects"?: { [key: string]: string }; "source_type"?: string; "root_id"?: string; "parent_id"?: string; "parent_node_id"?: string; "depth"?: number; "children"?: { [key: string]: WireResponseFlowChildRef }; "definitions"?: { [key: string]: WireResponseFlowDefinition }; "policy"?: WireResponseFlowPolicy };
 export type WireResponseCrewRunNode = { "status": string; "port"?: string; "started_at"?: string; "finished_at"?: string; "output"?: string; "error"?: string; "runs"?: number; "tokens"?: number; "backend"?: WireResponseCrewAssistTrace };
 export type WireResponseCrewRunWaiting = { "node_id": string; "kind": string; "resume_at"?: string; "question"?: string; "callback_hash"?: string; "effect_id"?: string; "effect_hash"?: string; "child_run_id"?: string; "child_kind"?: string; "decision_kind"?: string; "child_revision"?: number };
 export type WireResponseCrewRunDecision = { "approve": boolean; "note"?: string; "decided_by": string; "decided_at": string };
 export type WireResponseCrewRunOrigin = { "bot_id"?: string; "thread_id"?: string; "connector"?: string; "guild_id"?: string; "channel_id"?: string; "user_id"?: string; "event_id"?: string };
 export type WireResponseCrewAssist = { "kind": string; "persona"?: string; "expert"?: string; "prompt": string; "lang"?: string; "status": string; "output"?: string; "model"?: string; "error"?: string; "trace"?: WireResponseCrewAssistTrace };
-export type WireResponseCrewMeeting = { "status": string; "team_id": string; "team_revision": number; "team_snapshot"?: WireResponseMeetingSnapshot; "title": string; "topic": string; "template_key"?: string; "trigger": string; "round": number; "max_rounds": number; "speaking"?: string; "turns": (Array<WireResponseMeetingTurn> | null); "notes_pending": (Array<WireResponseMeetingNote> | null); "tokens_used": number; "token_cap"?: number; "cost_usd": number; "cost_estimate_usd"?: number; "conclusion"?: WireResponseMeetingConclusion; "ended_reason"?: string; "waiting"?: WireResponseMeetingWaiting; "saved"?: WireResponseMeetingSaved; "discord"?: WireResponseMeetingDiscord; "budget_approved"?: WireResponseMeetingApproval; "lease_until"?: string; "root_id"?: string; "parent_id"?: string; "parent_node_id"?: string };
-export type WireResponseMeetingSnapshot = { "team": WireResponseCrew; "agents": ({ [key: string]: WireResponseCrew } | null) };
+export type WireResponseCrewMeeting = { "status": string; "team_id": string; "team_revision": number; "team_snapshot"?: WireResponseMeetingSnapshot; "title": string; "topic": string; "template_key"?: string; "trigger": string; "round": number; "max_rounds": number; "speaking"?: string; "turns": ((Array<WireResponseMeetingTurn> | null)); "notes_pending": ((Array<WireResponseMeetingNote> | null)); "tokens_used": number; "token_cap"?: number; "cost_usd": number; "cost_estimate_usd"?: number; "conclusion"?: WireResponseMeetingConclusion; "ended_reason"?: string; "waiting"?: WireResponseMeetingWaiting; "saved"?: WireResponseMeetingSaved; "discord"?: WireResponseMeetingDiscord; "budget_approved"?: WireResponseMeetingApproval; "lease_until"?: string; "root_id"?: string; "parent_id"?: string; "parent_node_id"?: string };
+export type WireResponseMeetingSnapshot = { "team": WireResponseCrew; "agents": (({ [key: string]: WireResponseCrew } | null)) };
 export type WireResponseMeetingTurn = { "seq": number; "round": number; "agent_id"?: string; "speaker": string; "model"?: string; "kind": string; "stance"?: string; "text": string; "input_tokens"?: number; "output_tokens"?: number; "cost_usd"?: number; "estimated"?: boolean; "started_at"?: string; "finished_at"?: string; "ok": boolean; "error"?: string };
 export type WireResponseMeetingNote = { "by": string; "text": string; "at": string };
-export type WireResponseMeetingConclusion = { "summary": string; "decisions": (Array<string> | null); "todos": (Array<string> | null); "open_questions": (Array<string> | null) };
+export type WireResponseMeetingConclusion = { "summary": string; "decisions": ((Array<string> | null)); "todos": ((Array<string> | null)); "open_questions": ((Array<string> | null)) };
 export type WireResponseMeetingWaiting = { "kind": string; "reason"?: string; "at": string };
 export type WireResponseMeetingSaved = { "capture_event_id"?: string; "candidate_ids"?: Array<string> };
 export type WireResponseMeetingDiscord = { "bot_id"?: string; "guild_id"?: string; "channel_id"?: string; "thread_id"?: string; "thread_url"?: string; "last_posted_seq"?: number };
 export type WireResponseMeetingApproval = { "by": string; "at": string };
-export type WireResponseDiscordBot = { "name": string; "application_id"?: string; "bot_user_id"?: string; "token_last4"?: string; "guild_id"?: string; "guild_name"?: string; "state": string; "missing": (Array<WireResponseDiscordMissing> | null); "channels": (Array<WireResponseDiscordChannel> | null); "target"?: WireResponseDiscordAction; "allowed": WireResponseDiscordAllowed; "guilds"?: Array<WireResponseDiscordGuild>; "known_channels"?: Array<WireResponseDiscordKnownChannel>; "check_requested_at"?: string; "last_seen_at"?: string };
-export type WireResponseDiscordMissing = { "channel_id": string; "perms": (Array<string> | null) };
+export type WireResponseDiscordBot = { "name": string; "application_id"?: string; "bot_user_id"?: string; "token_last4"?: string; "guild_id"?: string; "guild_name"?: string; "state": string; "missing": ((Array<WireResponseDiscordMissing> | null)); "channels": ((Array<WireResponseDiscordChannel> | null)); "target"?: WireResponseDiscordAction; "allowed": WireResponseDiscordAllowed; "guilds"?: Array<WireResponseDiscordGuild>; "known_channels"?: Array<WireResponseDiscordKnownChannel>; "check_requested_at"?: string; "last_seen_at"?: string };
+export type WireResponseDiscordMissing = { "channel_id": string; "perms": ((Array<string> | null)) };
 export type WireResponseDiscordChannel = { "channel_id": string; "name"?: string; "label"?: string; "action"?: WireResponseDiscordAction; "auto_start"?: boolean };
 export type WireResponseDiscordAction = { "kind": string; "id": string; "template_key"?: string };
-export type WireResponseDiscordAllowed = { "user_ids": (Array<string> | null); "role_ids": (Array<string> | null) };
+export type WireResponseDiscordAllowed = { "user_ids": ((Array<string> | null)); "role_ids": ((Array<string> | null)) };
 export type WireResponseDiscordGuild = { "id": string; "name"?: string };
 export type WireResponseDiscordKnownChannel = { "channel_id": string; "name": string; "parent"?: string };
 export type WireResponseDiscordSettings = { "guild_id"?: string; "guild_name"?: string; "reply_to": string; "daily_usd": number; "bot_mode": string };
 export type WireResponseRouting = { "groups"?: Array<WireResponseRoutingGroup>; "auto_discover_groups": boolean; "auto_routing": boolean; "auto_failover": boolean; "default_model"?: string; "failover": WireResponseRoutingFailover; "models"?: { [key: string]: WireResponseRoutingModel }; "events"?: Array<WireResponseRoutingEvent>; "rules"?: Array<WireResponseRoutingRule>; "monthly_budget_usd"?: number };
-export type WireResponseRoutingGroup = { "id": string; "name": string; "enabled": boolean; "strategy": string; "members": (Array<string> | null); "discovered"?: boolean };
-export type WireResponseRoutingFailover = { "error_rate_pct": number; "p95_ms": number; "order": (Array<string> | null) };
+export type WireResponseRoutingGroup = { "id": string; "name": string; "enabled": boolean; "strategy": string; "members": ((Array<string> | null)); "discovered"?: boolean };
+export type WireResponseRoutingFailover = { "error_rate_pct": number; "p95_ms": number; "order": ((Array<string> | null)) };
 export type WireResponseRoutingModel = { "enabled"?: boolean; "order"?: number; "rpm_limit"?: number; "concurrency"?: number; "when"?: string };
 export type WireResponseRoutingEvent = { "at": string; "kind": string; "title": string; "detail"?: string };
 export type WireResponseRoutingCall = { "model": string; "family": string; "decision": string; "replaced"?: string; "ok": boolean; "latency_ms": number; "classifier_ms"?: number; "input_tokens"?: number; "output_tokens"?: number; "cost_usd"?: number; "error"?: string; "estimated"?: boolean; "origin"?: WireResponseRoutingOrigin; "rule"?: string };
 export type WireResponseRoutingOrigin = { "kind": string; "workflow_id"?: string; "run_id"?: string; "node_id"?: string; "agent_id"?: string; "team_id"?: string; "meeting_id"?: string; "trigger"?: string; "side"?: string; "session_id"?: string; "turn_seq"?: number };
-export type WireResponseUsageSession = { "agent": string; "device": string; "session_id": string; "title"?: string; "project"?: string; "started_at": string; "ended_at": string; "messages": number; "active_seconds": number; "days": ({ [key: string]: ({ [key: string]: WireResponseUsageTokens } | null) } | null); "hours"?: Array<number>; "tools"?: { [key: string]: number }; "skills"?: { [key: string]: number }; "folder"?: string; "file"?: string; "calls"?: Array<WireResponseUsageCall> };
+export type WireResponseUsageSession = { "agent": string; "device": string; "session_id": string; "title"?: string; "project"?: string; "started_at": string; "ended_at": string; "messages": number; "active_seconds": number; "days": (({ [key: string]: (({ [key: string]: WireResponseUsageTokens } | null)) } | null)); "hours"?: Array<number>; "tools"?: { [key: string]: number }; "skills"?: { [key: string]: number }; "folder"?: string; "file"?: string; "calls"?: Array<WireResponseUsageCall> };
 export type WireResponseUsageTokens = { "input": number; "output": number; "cache_read": number; "cache_write": number; "requests": number; "cost_usd"?: number };
-export type WireResponseCodeReviews = { "collected_at"?: string; "repos": (Array<WireResponseReviewRepo> | null); "items": (Array<WireResponseReviewItem> | null); "settings": WireResponseReviewSettings; "reruns": (Array<WireResponseReviewRerun> | null) };
+export type WireResponseCodeReviews = { "collected_at"?: string; "repos": ((Array<WireResponseReviewRepo> | null)); "items": ((Array<WireResponseReviewItem> | null)); "settings": WireResponseReviewSettings; "reruns": ((Array<WireResponseReviewRerun> | null)) };
 export type WireResponseReviewRepo = { "name": string; "prs": number; "last_checked"?: string };
-export type WireResponseReviewItem = { "repo": string; "number": number; "title": string; "branch": string; "base": string; "head_sha": string; "commits": number; "url": string; "state": string; "pr_state"?: string; "started_at"?: string; "finished_at"?: string; "quality"?: string; "model"?: string; "findings": (Array<WireResponseReviewFinding> | null); "steps"?: Array<WireResponseReviewStep> };
+export type WireResponseReviewItem = { "repo": string; "number": number; "title": string; "branch": string; "base": string; "head_sha": string; "commits": number; "url": string; "state": string; "pr_state"?: string; "started_at"?: string; "finished_at"?: string; "quality"?: string; "model"?: string; "findings": ((Array<WireResponseReviewFinding> | null)); "steps"?: Array<WireResponseReviewStep> };
 export type WireResponseReviewFinding = { "severity": string; "path": string; "line": number; "text": string };
 export type WireResponseReviewStep = { "name": string; "status": string; "started_at"?: string; "finished_at"?: string; "note"?: string };
-export type WireResponseReviewSettings = { "provider": string; "on_blocking": string; "repos_off": (Array<string> | null) };
+export type WireResponseReviewSettings = { "provider": string; "on_blocking": string; "repos_off": ((Array<string> | null)) };
 export type WireResponseReviewRerun = { "id": string; "repo": string; "number": number; "status": string; "error"?: string; "requested_at": string; "done_at"?: string };
 export type WireResponseDesignSystem = { "title": string; "product"?: string; "purpose"?: string; "description"?: string; "source"?: string; "colors"?: Array<WireResponseDesignColor>; "fonts"?: Array<string>; "guide"?: string; "tags"?: Array<string> };
 export type WireResponseDesignColor = { "name": string; "value": string };
 export type WireResponseMaintenanceProposal = { "type": string; "keep": WireResponseRef; "retire": WireResponseRef; "memory"?: WireResponseRef; "evidence"?: WireResponseMaintenanceEvidence; "reason": string; "decision"?: string; "decided_by"?: string; "decided_at"?: string; "change"?: WireResponseChangeRequest };
 export type WireResponseMaintenanceEvidence = { "samples": number; "passed": number; "pass_rate": number };
 export type WireResponseMergeRecord = { "pool"?: WireResponseMergePool; "proposal"?: WireResponseMergeProposal };
-export type WireResponseMergePool = { "candidates": (Array<WireResponseRef> | null); "memories": (Array<WireResponseRef> | null); "expires_at": string };
+export type WireResponseMergePool = { "candidates": ((Array<WireResponseRef> | null)); "memories": ((Array<WireResponseRef> | null)); "expires_at": string };
 export type WireResponseMergeProposal = { "candidate": WireResponseRef; "action": string; "targets"?: Array<WireResponseRef>; "reason_code": string; "reason"?: string; "pool_id": string; "decision"?: string; "decided_by"?: string; "decided_at"?: string; "memory"?: WireResponseRef };
 export type WireResponseDigestData = { "title"?: string; "members"?: Array<WireResponseRef>; "replaces"?: Array<WireResponseRef>; "proposal"?: string; "judge"?: string; "judged"?: Array<WireResponseRef>; "minor"?: number; "pending"?: string; "regenerate"?: Array<string>; "watermark"?: string };
 export type WireResponseEvaluation = { "comparison_report"?: WireResponseSkillComparisonReport; "eval_type": string; "passed"?: boolean; "score"?: number; "score_max"?: number; "spec_ref"?: WireResponseRef; "trial_ref"?: WireResponseRef; "calibration_ref"?: WireResponseRef };
 export type WireResponseSkillComparisonReport = { "plan_sha256": string; "baseline_score": number; "candidate_score": number; "candidate_cost": number; "candidate_duration_ms": number; "baseline_cost"?: number; "baseline_duration_ms"?: number; "regression_passed": boolean; "safety_passed": boolean; "bundle_sha256"?: { [key: string]: string }; "companion_coverage"?: string };
 export type WireResponseEmbedding = { "provider": string; "model": string; "revision": string; "dimension": number; "space": string; "embedded_at": string; "content_hash": string };
 export type WireResponsenotifycfg_Dest = { "channel": string; "name": string; "last4": string; "chat_id"?: string };
-export type WireResponseTwinClaim = { "id": string; "revision": number; "type": string; "claim": string; "confidence": number; "evidence_refs": (Array<WireResponseRef> | null); "distinct_runs": number; "status": string; "last_confirmed": (string | null); "scope": WireResponseScope };
-export type WireResponseCodeGraphFiles = { "repo": string; "revision": number; "files": ({ [key: string]: string } | null) };
+export type WireResponseTwinClaim = { "id": string; "revision": number; "type": string; "claim": string; "confidence": number; "evidence_refs": ((Array<WireResponseRef> | null)); "distinct_runs": number; "status": string; "last_confirmed": ((string | null)); "scope": WireResponseScope };
+export type WireResponseCodeGraphFiles = { "repo": string; "revision": number; "files": (({ [key: string]: string } | null)) };
 export type WireResponseCodeGraphBatchResult = { "repo": WireResponseCodeRepo; "redacted": number };
-export type WireRequestCodeGraphBatch = { "scope"?: WireRequestScope; "repo"?: string; "expected_revision"?: number; "files"?: (Array<WireRequestCodeFile> | null); "symbols"?: (Array<WireRequestCodeSymbol> | null); "edges"?: (Array<WireRequestCodeEdge> | null); "remove"?: (Array<string> | null) };
+export type WireRequestCodeGraphBatch = { "scope"?: WireRequestScope; "repo"?: string; "expected_revision"?: number; "files"?: ((Array<WireRequestCodeFile> | null)); "symbols"?: ((Array<WireRequestCodeSymbol> | null)); "edges"?: ((Array<WireRequestCodeEdge> | null)); "remove"?: ((Array<string> | null)) };
 export type WireRequestScope = { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string };
 export type WireRequestCodeFile = { "path"?: string; "hash"?: string; "lang"?: string };
 export type WireRequestCodeSymbol = { "id"?: string; "path"?: string; "lang"?: string; "kind"?: string; "name"?: string; "qname"?: string; "signature"?: string; "start_line"?: number; "end_line"?: number; "exported"?: boolean; "doc"?: string };
 export type WireRequestCodeEdge = { "from"?: string; "to"?: string; "kind"?: string; "path"?: string; "line"?: number };
 export type WireRequestCodeGraphFinish = { "scope"?: WireRequestScope; "repo"?: string; "expected_revision"?: number; "commit"?: string; "stats"?: ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null) };
 export type WireRequestCodeGraphRepoInput = { "scope"?: WireRequestScope; "repo"?: string; "expected_revision"?: number };
-export type WireResponseCodeChangedAnswer = { "op": string; "repo": string; "commit": string; "depth": number; "items": (Array<WireResponseCodeChangedSymbol> | null); "truncated": boolean; "reason"?: string; "authority": string; "note"?: string };
-export type WireResponseCodeChangedSymbol = { "symbol": WireResponseCodeHit; "end_line": number; "impact": (Array<WireResponseCodeHit> | null); "impact_total": number; "truncated": boolean; "reason"?: string };
+export type WireResponseCodeChangedAnswer = { "op": string; "repo": string; "commit": string; "depth": number; "items": ((Array<WireResponseCodeChangedSymbol> | null)); "truncated": boolean; "reason"?: string; "authority": string; "note"?: string };
+export type WireResponseCodeChangedSymbol = { "symbol": WireResponseCodeHit; "end_line": number; "impact": ((Array<WireResponseCodeHit> | null)); "impact_total": number; "truncated": boolean; "reason"?: string };
 export type WireResponseCodeHit = { "id": string; "repo": string; "kind": string; "name": string; "qname": string; "loc": string; "signature"?: string; "exported"?: boolean; "via"?: string; "at"?: string; "depth"?: number };
-export type WireRequestCodeChangedQuery = { "scope"?: WireRequestScope; "repo"?: string; "ranges"?: (Array<WireRequestCodeLineRange> | null); "depth"?: number; "limit"?: number; "impact_limit"?: number };
+export type WireRequestCodeChangedQuery = { "scope"?: WireRequestScope; "repo"?: string; "ranges"?: ((Array<WireRequestCodeLineRange> | null)); "depth"?: number; "limit"?: number; "impact_limit"?: number };
 export type WireRequestCodeLineRange = { "path"?: string; "start_line"?: number; "end_line"?: number };
-export type WireResponseCodeGraphAnswer = { "op": string; "repo"?: string; "symbol"?: WireResponseCodeHit; "candidates"?: Array<WireResponseCodeHit>; "items": (Array<WireResponseCodeHit> | null); "truncated": boolean; "reason"?: string; "depth"?: number; "tokens_used": number; "authority": string; "note"?: string };
+export type WireResponseCodeGraphAnswer = { "op": string; "repo"?: string; "symbol"?: WireResponseCodeHit; "candidates"?: Array<WireResponseCodeHit>; "items": ((Array<WireResponseCodeHit> | null)); "truncated": boolean; "reason"?: string; "depth"?: number; "tokens_used": number; "authority": string; "note"?: string };
 export type WireRequestCodeGraphQuery = { "scope"?: WireRequestScope; "repo"?: string; "symbol"?: string; "query"?: string; "depth"?: number; "limit"?: number; "max_tokens"?: number };
-export type WireRequestCodeReviewsReport = { "scope"?: WireRequestScope; "repos"?: (Array<WireRequestReviewRepo> | null); "items"?: (Array<WireRequestReviewItem> | null); "results"?: (Array<WireRequestAgentToolResult> | null) };
-export type WireRequestReviewRepo = { "name"?: string; "prs"?: number; "last_checked"?: (string | null) };
-export type WireRequestReviewItem = { "repo"?: string; "number"?: number; "title"?: string; "branch"?: string; "base"?: string; "head_sha"?: string; "commits"?: number; "url"?: string; "state"?: string; "pr_state"?: string; "started_at"?: (string | null); "finished_at"?: (string | null); "quality"?: string; "model"?: string; "findings"?: (Array<WireRequestReviewFinding> | null); "steps"?: Array<WireRequestReviewStep> };
+export type WireRequestCodeReviewsReport = { "scope"?: WireRequestScope; "repos"?: ((Array<WireRequestReviewRepo> | null)); "items"?: ((Array<WireRequestReviewItem> | null)); "results"?: ((Array<WireRequestAgentToolResult> | null)) };
+export type WireRequestReviewRepo = { "name"?: string; "prs"?: number; "last_checked"?: ((string | null)) };
+export type WireRequestReviewItem = { "repo"?: string; "number"?: number; "title"?: string; "branch"?: string; "base"?: string; "head_sha"?: string; "commits"?: number; "url"?: string; "state"?: string; "pr_state"?: string; "started_at"?: ((string | null)); "finished_at"?: ((string | null)); "quality"?: string; "model"?: string; "findings"?: ((Array<WireRequestReviewFinding> | null)); "steps"?: Array<WireRequestReviewStep> };
 export type WireRequestReviewFinding = { "severity"?: string; "path"?: string; "line"?: number; "text"?: string };
-export type WireRequestReviewStep = { "name"?: string; "status"?: string; "started_at"?: (string | null); "finished_at"?: (string | null); "note"?: string };
+export type WireRequestReviewStep = { "name"?: string; "status"?: string; "started_at"?: ((string | null)); "finished_at"?: ((string | null)); "note"?: string };
 export type WireRequestAgentToolResult = { "id"?: string; "status"?: string; "error"?: string; "detail"?: string };
 export type WireRequestCodeReviewSettingsInput = { "scope"?: WireRequestScope; "settings"?: WireRequestReviewSettings };
-export type WireRequestReviewSettings = { "provider"?: string; "on_blocking"?: string; "repos_off"?: (Array<string> | null) };
+export type WireRequestReviewSettings = { "provider"?: string; "on_blocking"?: string; "repos_off"?: ((Array<string> | null)) };
 export type WireRequestCodeReviewRerunInput = { "scope"?: WireRequestScope; "repo"?: string; "number"?: number };
-export type WireResponseAgentCalls = { "items": (Array<WireResponseAgentCall> | null) };
+export type WireResponseAgentCalls = { "items": ((Array<WireResponseAgentCall> | null)) };
 export type WireResponseAgentCall = { "at": string; "model": string; "ok": boolean; "latency_ms"?: number; "input_tokens"?: number; "output_tokens"?: number; "cost_usd": number; "estimated"?: boolean; "error"?: string; "trigger"?: string };
-export type WireResponseCrewVersionPage = { "items": (Array<WireResponseCrewVersion> | null) };
+export type WireResponseCrewVersionPage = { "items": ((Array<WireResponseCrewVersion> | null)) };
 export type WireResponseCrewVersion = { "revision": number; "at": string; "crew": WireResponseCrew };
 export type WireRequestChangeInput = { "scoped_trial_evidence"?: Array<WireRequestScopedTrialEvidence>; "trial_id"?: string; "trial_evidence"?: Array<WireRequestRef>; "scope"?: WireRequestScope; "expected_revision"?: number; "status"?: string; "validation_id"?: string; "version_id"?: string; "reason_code"?: string; "reason"?: string };
 export type WireRequestScopedTrialEvidence = { "scope"?: WireRequestScope; "source"?: WireRequestRef; "evaluation"?: WireRequestRef };
 export type WireRequestRef = { "collection"?: string; "id"?: string; "revision"?: number };
-export type WireResponseDigestPage = { "items": (Array<WireResponseDigestView> | null); "cap"?: number; "active": number; "authority": string };
-export type WireResponseDigestView = { "id": string; "kind": string; "status": string; "revision": number; "title"?: string; "body": string; "members": (Array<WireResponseRef> | null); "replaces"?: Array<WireResponseRef>; "proposal"?: string; "judge"?: string; "tags"?: Array<string>; "heat": WireResponseDigestHeat; "fresh": boolean; "outdated"?: boolean; "diff"?: WireResponseDigestDiff; "generator"?: WireResponseGenerator; "review"?: WireResponseReviewDecision; "created_by"?: string; "created_at": string; "updated_at": string; "authority": string; "stale"?: boolean; "watermark"?: string; "stale_mark"?: WireResponseStaleMark };
+export type WireResponseDigestPage = { "items": ((Array<WireResponseDigestView> | null)); "cap"?: number; "active": number; "authority": string };
+export type WireResponseDigestView = { "id": string; "kind": string; "status": string; "revision": number; "title"?: string; "body": string; "members": ((Array<WireResponseRef> | null)); "replaces"?: Array<WireResponseRef>; "proposal"?: string; "judge"?: string; "tags"?: Array<string>; "heat": WireResponseDigestHeat; "fresh": boolean; "outdated"?: boolean; "diff"?: WireResponseDigestDiff; "generator"?: WireResponseGenerator; "review"?: WireResponseReviewDecision; "created_by"?: string; "created_at": string; "updated_at": string; "authority": string; "stale"?: boolean; "watermark"?: string; "stale_mark"?: WireResponseStaleMark };
 export type WireResponseDigestHeat = { "injected": number; "used": number; "score": number };
-export type WireResponseDigestDiff = { "base": (Array<WireResponseRef> | null); "title_before"?: string; "title_after"?: string; "lines": (Array<WireResponseDigestDiffLine> | null); "members_added": (Array<WireResponseRef> | null); "members_removed": (Array<WireResponseRef> | null) };
+export type WireResponseDigestDiff = { "base": ((Array<WireResponseRef> | null)); "title_before"?: string; "title_after"?: string; "lines": ((Array<WireResponseDigestDiffLine> | null)); "members_added": ((Array<WireResponseRef> | null)); "members_removed": ((Array<WireResponseRef> | null)) };
 export type WireResponseDigestDiffLine = { "op": string; "text": string };
 export type WireResponseUserDigestContext = { "id"?: string; "revision"?: number; "text": string; "authority": string };
 export type WireRequestDigestDecisionInput = { "scope"?: WireRequestScope; "kind"?: string; "expected_revision"?: number; "decision"?: string; "reason"?: string };
 export type WireResponseDigestJudgeResult = { "regenerate": boolean; "pending"?: string; "minor": number };
 export type WireRequestDigestRegenerateInput = { "scope"?: WireRequestScope; "kind"?: string; "id"?: string };
 export type WireResponseDigestPlan = { "kind": string; "cap"?: number; "active": number; "stale": number; "clusters"?: Array<WireResponseDigestCluster>; "merge"?: WireResponseDigestMergePlan; "current"?: WireResponseDigestView; "new"?: Array<WireResponseDigestMemory>; "members"?: Array<WireResponseDigestMemory>; "pending"?: string; "minor"?: number; "open": number; "authority": string };
-export type WireResponseDigestCluster = { "action": string; "members": (Array<WireResponseDigestMemory> | null); "base"?: WireResponseDigestView; "reason"?: string };
+export type WireResponseDigestCluster = { "action": string; "members": ((Array<WireResponseDigestMemory> | null)); "base"?: WireResponseDigestView; "reason"?: string };
 export type WireResponseDigestMemory = { "ref": WireResponseRef; "kind": string; "text": string; "created_at": string };
-export type WireResponseDigestMergePlan = { "digests": (Array<WireResponseDigestView> | null); "members": (Array<WireResponseDigestMemory> | null) };
+export type WireResponseDigestMergePlan = { "digests": ((Array<WireResponseDigestView> | null)); "members": ((Array<WireResponseDigestMemory> | null)) };
 export type WireRequestDigestPlanInput = { "scope"?: WireRequestScope; "kind"?: string };
-export type WireRequestDigestProposalInput = { "scope"?: WireRequestScope; "kind"?: string; "title"?: string; "body"?: string; "members"?: (Array<WireRequestRef> | null); "replaces"?: Array<WireRequestRef>; "generator"?: (WireRequestGenerator | null); "usage"?: (WireRequestModelCallUsage | null) };
+export type WireRequestDigestProposalInput = { "scope"?: WireRequestScope; "kind"?: string; "title"?: string; "body"?: string; "members"?: ((Array<WireRequestRef> | null)); "replaces"?: Array<WireRequestRef>; "generator"?: ((WireRequestGenerator | null)); "usage"?: ((WireRequestModelCallUsage | null)) };
 export type WireRequestGenerator = { "model"?: string; "prompt_version"?: string; "pipeline_version"?: string };
 export type WireRequestModelCallUsage = { "model"?: string; "requests"?: number; "input_tokens"?: number; "output_tokens"?: number };
-export type WireRequestDigestJudgeInput = { "scope"?: WireRequestScope; "judged"?: (Array<WireRequestRef> | null); "verdict"?: string; "usage"?: (WireRequestModelCallUsage | null) };
-export type WireResponseDigestRecallPage = { "items": (Array<WireResponseDigestView> | null); "notice": string; "authority": string };
+export type WireRequestDigestJudgeInput = { "scope"?: WireRequestScope; "judged"?: ((Array<WireRequestRef> | null)); "verdict"?: string; "usage"?: ((WireRequestModelCallUsage | null)) };
+export type WireResponseDigestRecallPage = { "items": ((Array<WireResponseDigestView> | null)); "notice": string; "authority": string };
 export type WireRequestDigestRecallInput = { "scope"?: WireRequestScope; "query"?: string; "limit"?: number };
-export type WireResponseKnowledgeSourceList = { "scope": WireResponseScope; "items": (Array<WireResponseKnowledgeSourceSummary> | null); "truncated": boolean; "next_cursor"?: string };
-export type WireResponseKnowledgeSourceSummary = { "id": string; "revision": number; "status": string; "lifecycle_status": string; "trust_level": string; "display_name": string; "source_type": string; "format": string; "synthetic": boolean; "source_version": string; "document_id": string; "document_count": number; "chunk_count": number; "approved_by"?: string; "created_at": string; "updated_at": string; "bindings": (Array<WireResponseKnowledgeBindingSummary> | null) };
+export type WireResponseKnowledgeSourceList = { "scope": WireResponseScope; "items": ((Array<WireResponseKnowledgeSourceSummary> | null)); "truncated": boolean; "next_cursor"?: string };
+export type WireResponseKnowledgeSourceSummary = { "id": string; "revision": number; "status": string; "lifecycle_status": string; "trust_level": string; "display_name": string; "source_type": string; "format": string; "synthetic": boolean; "source_version": string; "document_id": string; "document_count": number; "chunk_count": number; "approved_by"?: string; "created_at": string; "updated_at": string; "bindings": ((Array<WireResponseKnowledgeBindingSummary> | null)) };
 export type WireResponseKnowledgeBindingSummary = { "id": string; "revision": number; "status": string; "lifecycle_status": string; "specialist_profile_id": string; "specialist_profile_version_id": string; "skill_id"?: string; "access_mode": string; "valid_from"?: string; "valid_to"?: string };
-export type WireResponseKnowledgeDocumentList = { "scope": WireResponseScope; "source_id": string; "items": (Array<WireResponseKnowledgeDocumentSummary> | null) };
-export type WireResponseKnowledgeDocumentSummary = { "id": string; "revision": number; "status": string; "current": boolean; "filename": string; "mime_type": string; "content_hash": string; "source_version": string; "parser_version": string; "chunker_version": string; "extraction_status": string; "error_code"?: string; "chunk_count": number; "indexed_chunks": number; "sections": (Array<string> | null); "created_at": string };
-export type WireResponseKnowledgeSearchResult = { "authority": string; "binding_ids": (Array<string> | null); "bindings_truncated": boolean; "reason"?: string; "receipt"?: WireResponseKnowledgeReceipt };
-export type WireResponseKnowledgeReceipt = { "scope": WireResponseScope; "specialist_profile_id": string; "specialist_profile_version_id": string; "skill_id": string; "skill_version": string; "retrieval_log_id": string; "context_hash": string; "context": WireResponseKnowledgeContext; "pins": (Array<WireResponseKnowledgePin> | null); "source_dependencies": (Array<WireResponseKnowledgeDependency> | null); "retrieval_mode"?: string; "requested_retrieval_mode"?: string; "retrieval_mode_fallback"?: string; "retrieval_fallback"?: string; "fallback_used"?: boolean; "embedding_model"?: string; "embedding_revision"?: string; "embedding_space_id"?: string; "embedding_dimension"?: number; "candidate_count": number; "selected_count": number; "excluded_count": number; "exclusion_summary": ({ [key: string]: number } | null) };
-export type WireResponseKnowledgeContext = { "authority": string; "scope": WireResponseScope; "items": (Array<WireResponseKnowledgeEvidence> | null) };
+export type WireResponseKnowledgeDocumentList = { "scope": WireResponseScope; "source_id": string; "items": ((Array<WireResponseKnowledgeDocumentSummary> | null)) };
+export type WireResponseKnowledgeDocumentSummary = { "id": string; "revision": number; "status": string; "current": boolean; "filename": string; "mime_type": string; "content_hash": string; "source_version": string; "parser_version": string; "chunker_version": string; "extraction_status": string; "error_code"?: string; "chunk_count": number; "indexed_chunks": number; "sections": ((Array<string> | null)); "created_at": string };
+export type WireResponseKnowledgeSearchResult = { "authority": string; "binding_ids": ((Array<string> | null)); "bindings_truncated": boolean; "reason"?: string; "receipt"?: WireResponseKnowledgeReceipt };
+export type WireResponseKnowledgeReceipt = { "scope": WireResponseScope; "specialist_profile_id": string; "specialist_profile_version_id": string; "skill_id": string; "skill_version": string; "retrieval_log_id": string; "context_hash": string; "context": WireResponseKnowledgeContext; "pins": ((Array<WireResponseKnowledgePin> | null)); "source_dependencies": ((Array<WireResponseKnowledgeDependency> | null)); "retrieval_mode"?: string; "requested_retrieval_mode"?: string; "retrieval_mode_fallback"?: string; "retrieval_fallback"?: string; "fallback_used"?: boolean; "embedding_model"?: string; "embedding_revision"?: string; "embedding_space_id"?: string; "embedding_dimension"?: number; "candidate_count": number; "selected_count": number; "excluded_count": number; "exclusion_summary": (({ [key: string]: number } | null)) };
+export type WireResponseKnowledgeContext = { "authority": string; "scope": WireResponseScope; "items": ((Array<WireResponseKnowledgeEvidence> | null)) };
 export type WireResponseKnowledgeEvidence = { "binding_id": string; "source_id": string; "document_id": string; "chunk_id": string; "content": string; "content_hash": string; "source_version": string; "parser_version": string; "chunker_version": string; "trust_level": string; "section_path": string; "citation": string; "token_estimate": number; "authority": string; "rank"?: number; "vector_distance"?: number; "fusion_score"?: number };
 export type WireResponseKnowledgeDependency = { "kind": string; "id": string };
 export type WireRequestKnowledgeSearchInput = { "scope"?: WireRequestScope; "specialist_profile_id"?: string; "specialist_profile_version_id"?: string; "skill_id"?: string; "skill_version"?: string; "query"?: string; "max_tokens"?: number; "limit"?: number; "retrieval_mode"?: string; "retrieval_fallback"?: string };
 export type WireRequestMessengerSave = { "scope"?: WireRequestScope; "channel"?: string; "name"?: string; "bot_token"?: string; "chat_id"?: string; "webhook_url"?: string };
 export type WireRequestMessengerRef = { "scope"?: WireRequestScope; "channel"?: string; "name"?: string };
-export type WireResponseSkillUsagePage = { "days": number; "items": (Array<WireResponseSkillUse> | null) };
-export type WireResponseSkillUse = { "skill_id": string; "count": number; "last_used_at": string; "by_runtime": ({ [key: string]: number } | null); "failures": number };
+export type WireResponseSkillUsagePage = { "days": number; "items": ((Array<WireResponseSkillUse> | null)) };
+export type WireResponseSkillUse = { "skill_id": string; "count": number; "last_used_at": string; "by_runtime": (({ [key: string]: number } | null)); "failures": number };
 export type WireResponseTokenCount = { "tokens": number; "chars": number; "token_encoding": string };
 export type WireRequestTokenCountInput = { "scope"?: WireRequestScope; "text"?: string; "token_encoding"?: string };
-export type WireResponseSessionImportResult = { "dry_run": boolean; "sessions": (Array<WireResponseSessionImportOutcome> | null); "counts": ({ [key: string]: number } | null); "authority": string };
-export type WireResponseSessionImportOutcome = { "id": string; "status": string; "items": (Array<WireResponseCaptureItem> | null) };
+export type WireResponseSessionImportResult = { "dry_run": boolean; "sessions": ((Array<WireResponseSessionImportOutcome> | null)); "counts": (({ [key: string]: number } | null)); "authority": string };
+export type WireResponseSessionImportOutcome = { "id": string; "status": string; "items": ((Array<WireResponseCaptureItem> | null)) };
 export type WireResponseCaptureItem = { "status": string; "reason": string; "dedupe_key"?: string; "candidate_id"?: string; "memory_id"?: string };
-export type WireRequestSessionImportInput = { "scope"?: WireRequestScope; "dry_run"?: boolean; "generator"?: (WireRequestGenerator | null); "sessions"?: (Array<WireRequestImportedSession> | null) };
-export type WireRequestImportedSession = { "id"?: string; "origin"?: string; "started_at"?: (string | null); "ended_at"?: (string | null); "messages"?: number; "truncated"?: boolean; "candidates"?: (Array<WireRequestImportCandidate> | null) };
+export type WireRequestSessionImportInput = { "scope"?: WireRequestScope; "dry_run"?: boolean; "generator"?: ((WireRequestGenerator | null)); "sessions"?: ((Array<WireRequestImportedSession> | null)) };
+export type WireRequestImportedSession = { "id"?: string; "origin"?: string; "started_at"?: ((string | null)); "ended_at"?: ((string | null)); "messages"?: number; "truncated"?: boolean; "candidates"?: ((Array<WireRequestImportCandidate> | null)) };
 export type WireRequestImportCandidate = { "kind"?: string; "subject"?: string; "text"?: string; "message"?: number; "quote"?: string; "reason"?: string };
-export type WireRequestMemoryExpiryInput = { "scope"?: WireRequestScope; "expected_revision"?: number; "expires_at"?: (string | null) };
+export type WireRequestMemoryExpiryInput = { "scope"?: WireRequestScope; "expected_revision"?: number; "expires_at"?: ((string | null)) };
 export type WireRequestProviderLabel = { "scope"?: WireRequestScope; "provider"?: string; "kind"?: string; "id"?: string; "label"?: string };
 export type WireRequestProviderModelTest = { "scope"?: WireRequestScope; "provider"?: string; "model"?: string };
-export type WireResponseSessionDeleteOutput = { "deleted": (Array<string> | null); "missing": (Array<string> | null); "archives": number };
-export type WireRequestSessionDeleteInput = { "scope"?: WireRequestScope; "ids"?: (Array<string> | null) };
+export type WireResponseSessionDeleteOutput = { "deleted": ((Array<string> | null)); "missing": ((Array<string> | null)); "archives": number };
+export type WireRequestSessionDeleteInput = { "scope"?: WireRequestScope; "ids"?: ((Array<string> | null)) };
 export type WireResponseSessionExportOutput = { "filename": string; "content_type": string; "content": string; "sessions": number; "messages": number; "truncated": boolean; "authority": string };
-export type WireRequestSessionExportInput = { "scope"?: WireRequestScope; "ids"?: (Array<string> | null); "format"?: string; "transcript"?: boolean };
-export type WireResponseSessionTranscriptOutput = { "id": string; "state": string; "archives": (Array<WireResponseSessionTranscriptArchive> | null); "archive_id"?: string; "items": (Array<WireResponseSessionTranscriptMessage> | null); "next_cursor"?: string; "hidden": WireResponseSessionTranscriptHidden; "authority": string };
+export type WireRequestSessionExportInput = { "scope"?: WireRequestScope; "ids"?: ((Array<string> | null)); "format"?: string; "transcript"?: boolean };
+export type WireResponseSessionTranscriptOutput = { "id": string; "state": string; "archives": ((Array<WireResponseSessionTranscriptArchive> | null)); "archive_id"?: string; "items": ((Array<WireResponseSessionTranscriptMessage> | null)); "next_cursor"?: string; "hidden": WireResponseSessionTranscriptHidden; "authority": string };
 export type WireResponseSessionTranscriptArchive = { "id": string; "state": string; "format": string; "supported": boolean; "observed_at": string; "expires_at"?: string; "last_used_at"?: string };
 export type WireResponseSessionTranscriptMessage = { "role": string; "text": string; "truncated"?: boolean; "at"?: string };
 export type WireResponseSessionTranscriptHidden = { "secret_records": number; "invalid_records": number; "oversized_records": number; "unsupported_records": number };
@@ -485,32 +485,32 @@ export type WireRequestSessionTranscriptInput = { "scope"?: WireRequestScope; "i
 export type WireResponseWikiJobView = { "id": string; "revision": number; "status": string; "attempts": number; "job": WireResponseWikiJob; "created_at": string; "updated_at": string; "duplicate"?: boolean };
 export type WireRequestWikiJobInput = { "scope"?: WireRequestScope; "knowledge_source_id"?: string; "max_total_tokens"?: number };
 export type WireRequestWikiScopeInput = { "scope"?: WireRequestScope };
-export type WireResponseWikiPageView = { "id": string; "revision": number; "status": string; "slug": string; "type": string; "locked": boolean; "review_state": string; "knowledge_source_ids": (Array<string> | null); "reviewed"?: WireResponseWikiBody; "draft"?: WireResponseWikiBody; "last_merge"?: string; "last_job_id"?: string; "stale_sources"?: Array<string>; "updated_at": string; "authority": string; "folder"?: string; "memory_ids"?: Array<string> };
+export type WireResponseWikiPageView = { "id": string; "revision": number; "status": string; "slug": string; "type": string; "locked": boolean; "review_state": string; "knowledge_source_ids": ((Array<string> | null)); "reviewed"?: WireResponseWikiBody; "draft"?: WireResponseWikiBody; "last_merge"?: string; "last_job_id"?: string; "stale_sources"?: Array<string>; "updated_at": string; "authority": string; "folder"?: string; "memory_ids"?: Array<string> };
 export type WireRequestWikiReviewInput = { "scope"?: WireRequestScope; "expected_revision"?: number; "decision"?: string };
 export type WireRequestWikiLockInput = { "scope"?: WireRequestScope; "expected_revision"?: number; "locked"?: boolean };
 export type WireRequestWikiEditInput = { "scope"?: WireRequestScope; "expected_revision"?: number; "title"?: string; "text"?: string };
-export type WireResponseWikiSearchResult = { "items": (Array<WireResponseWikiHit> | null); "omitted"?: Array<string>; "tokens_used": number; "authority": string; "note": string };
-export type WireResponseWikiHit = { "id": string; "revision": number; "slug": string; "type": string; "title": string; "text": string; "links": (Array<string> | null); "knowledge_source_ids": (Array<string> | null); "score": number; "hop": number; "via"?: string; "reason": string };
-export type WireRequestWikiSearchInput = { "scope"?: WireRequestScope; "query"?: string; "page"?: string; "limit"?: number; "depth"?: (number | null); "max_tokens"?: number };
-export type WireResponseWikiCleanupResult = { "dry_run": boolean; "deleted": (Array<string> | null); "detached": (Array<string> | null); "unlinked": (Array<string> | null); "jobs_ended": (Array<string> | null) };
+export type WireResponseWikiSearchResult = { "items": ((Array<WireResponseWikiHit> | null)); "omitted"?: Array<string>; "tokens_used": number; "authority": string; "note": string };
+export type WireResponseWikiHit = { "id": string; "revision": number; "slug": string; "type": string; "title": string; "text": string; "links": ((Array<string> | null)); "knowledge_source_ids": ((Array<string> | null)); "score": number; "hop": number; "via"?: string; "reason": string };
+export type WireRequestWikiSearchInput = { "scope"?: WireRequestScope; "query"?: string; "page"?: string; "limit"?: number; "depth"?: ((number | null)); "max_tokens"?: number };
+export type WireResponseWikiCleanupResult = { "dry_run": boolean; "deleted": ((Array<string> | null)); "detached": ((Array<string> | null)); "unlinked": ((Array<string> | null)); "jobs_ended": ((Array<string> | null)) };
 export type WireRequestWikiSourceRemoveInput = { "scope"?: WireRequestScope; "dry_run"?: boolean };
-export type WireResponseWikiJobList = { "items": (Array<WireResponseWikiJobView> | null) };
-export type WireResponseWikiPageList = { "items": (Array<WireResponseWikiPageView> | null); "authority": string };
-export type CodeGraphReposEnvelope = { "repos": (Array<WireResponseCodeRepo> | null); "authority": "data_only_untrusted" };
+export type WireResponseWikiJobList = { "items": ((Array<WireResponseWikiJobView> | null)) };
+export type WireResponseWikiPageList = { "items": ((Array<WireResponseWikiPageView> | null)); "authority": string };
+export type CodeGraphReposEnvelope = { "repos": ((Array<WireResponseCodeRepo> | null)); "authority": "data_only_untrusted" };
 export type ArchivedGalleryEnvelope = { "items": Array<WireResponseRecord> };
-export type WikiGraphEnvelope = { "links": (Array<WireResponseWikiLink> | null); "authority": "data_only_untrusted" };
-export type MessengerDestinationsEnvelope = { "destinations": (Array<WireResponsenotifycfg_Dest> | null) };
+export type WikiGraphEnvelope = { "links": ((Array<WireResponseWikiLink> | null)); "authority": "data_only_untrusted" };
+export type MessengerDestinationsEnvelope = { "destinations": ((Array<WireResponsenotifycfg_Dest> | null)) };
 export type MessengerResult = { "ok": boolean; "error"?: string };
 export type DeletedEnvelope = { "deleted": boolean };
-export type TwinClaimsPage = { "items": (Array<WireResponseTwinClaim> | null); "authority": "data_only_untrusted" };
-export type WireResponseMemoryCatalogPage = { "items": (Array<WireResponseRecord> | null); "total": number; "next_cursor": string; "authority": string; "facets": WireResponseCatalogFacets };
-export type WireResponseCatalogFacets = { "kinds": ({ [key: string]: number } | null); "repositories": ({ [key: string]: number } | null); "categories": ({ [key: string]: number } | null); "states": ({ [key: string]: number } | null); "unclassified": number };
-export type WireRequestCatalogQueryInput = { "scope"?: WireRequestScope; "q"?: string; "state"?: string; "kind"?: string; "repository"?: string; "model"?: string; "category"?: string; "sort"?: string; "direction"?: number; "limit"?: number; "cursor"?: string; "categories"?: Array<WireRequestCatalogCategory>; "agents"?: Array<string>; "kept_ids"?: Array<string>; "collect_unused"?: (boolean | null); "format"?: string; "ids"?: Array<string> };
-export type WireRequestCatalogCategory = { "id"?: string; "rules"?: (Array<(Array<string> | null)> | null) };
-export type WireResponseSkillCatalogPage = { "items": (Array<WireResponseSkillListItem> | null); "total": number; "next_cursor": string; "authority": string; "facets": WireResponseCatalogFacets };
+export type TwinClaimsPage = { "items": ((Array<WireResponseTwinClaim> | null)); "authority": "data_only_untrusted" };
+export type WireResponseMemoryCatalogPage = { "items": ((Array<WireResponseRecord> | null)); "total": number; "next_cursor": string; "authority": string; "facets": WireResponseCatalogFacets };
+export type WireResponseCatalogFacets = { "kinds": (({ [key: string]: number } | null)); "repositories": (({ [key: string]: number } | null)); "categories": (({ [key: string]: number } | null)); "states": (({ [key: string]: number } | null)); "unclassified": number };
+export type WireRequestCatalogQueryInput = { "scope"?: WireRequestScope; "q"?: string; "state"?: string; "kind"?: string; "repository"?: string; "model"?: string; "category"?: string; "sort"?: string; "direction"?: number; "limit"?: number; "cursor"?: string; "categories"?: Array<WireRequestCatalogCategory>; "agents"?: Array<string>; "kept_ids"?: Array<string>; "collect_unused"?: ((boolean | null)); "format"?: string; "ids"?: Array<string> };
+export type WireRequestCatalogCategory = { "id"?: string; "rules"?: ((Array<((Array<string> | null))> | null)) };
+export type WireResponseSkillCatalogPage = { "items": ((Array<WireResponseSkillListItem> | null)); "total": number; "next_cursor": string; "authority": string; "facets": WireResponseCatalogFacets };
 export type WireResponseSkillListItem = { "id": string; "version_id": string; "version": string; "name": string; "description": string; "source_id": string; "source_path": string; "updated_at": string; "skill_compatibility"?: { [key: string]: string } };
-export type WireResponseKnowledgeCatalogPage = { "items": (Array<WireResponseKnowledgeSourceSummary> | null); "total": number; "next_cursor": string; "authority": string; "facets": WireResponseCatalogFacets };
-export type WireResponseUsageSessionCatalogPage = { "items": (Array<({ [key: string]: ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null) } | null)> | null); "total": number; "next_cursor": string; "authority": string; "facets"?: { [key: string]: ({ [key: string]: number } | null) }; "sums"?: WireResponseUsageSessionSums };
+export type WireResponseKnowledgeCatalogPage = { "items": ((Array<WireResponseKnowledgeSourceSummary> | null)); "total": number; "next_cursor": string; "authority": string; "facets": WireResponseCatalogFacets };
+export type WireResponseUsageSessionCatalogPage = { "items": ((Array<(({ [key: string]: ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null) } | null))> | null)); "total": number; "next_cursor": string; "authority": string; "facets"?: { [key: string]: (({ [key: string]: number } | null)) }; "sums"?: WireResponseUsageSessionSums };
 export type WireRequestProviderModelsRefresh = { "scope"?: WireRequestScope };
 export type WireResponseStaleMark = { "memory": WireResponseRef; "replaced_by": WireResponseRef; "at": string };
 export type WireResponseCrewAssistTrace = { "backend": string; "task_id"?: string; "state"?: string; "requested_model"?: string; "model"?: string; "not_applied"?: Array<string>; "context"?: Array<string>; "usage"?: string; "fallback": boolean };
@@ -518,39 +518,39 @@ export type WireResponseSkillRoute = { "selected"?: string; "selected_name"?: st
 export type WireResponseFlowPolicy = { "max_depth": number; "max_children": number; "max_concurrent": number; "max_tokens"?: number; "max_cost_usd"?: number };
 export type WireResponseFlowChildRef = { "kind": string; "id": string; "crew_id": string; "node_id": string; "attempt": number; "required": boolean };
 export type WireResponseFlowDefinition = { "id": string; "revision": number; "crew": WireResponseCrew };
-export type WireResponseFlowDeliveryRecoveryReceipt = { "action": string; "by": string; "at": string; "status": string; "origin": (WireResponseCrewRunOrigin | null); "part": number; "message_ids": (Array<string> | null); "confirmed_message_id"?: string };
+export type WireResponseFlowDeliveryRecoveryReceipt = { "action": string; "by": string; "at": string; "status": string; "origin": ((WireResponseCrewRunOrigin | null)); "part": number; "message_ids": ((Array<string> | null)); "confirmed_message_id"?: string };
 export type WireResponseFlowEffect = { "root_id": string; "run_id": string; "node_id": string; "attempt": number; "adapter": string; "target_hash": string; "args_hash": string; "preview_hash": string; "status": string; "approved_by"?: string; "receipt"?: WireResponseFlowEffectReceipt };
 export type WireResponseFlowEffectReceipt = { "status": string; "http_status": number; "response_hash"?: string };
 export type WireResponseFlowAttempt = { "root_id": string; "run_id": string; "node_id": string; "attempt": number; "call_key": string; "model": string; "status": string; "max_input_tokens": number; "max_output_tokens": number; "reserved_tokens": number; "reserved_cost_usd": number; "cost_known": boolean; "pricing_revision"?: string; "settlement"?: WireResponseFlowAttemptUsage };
 export type WireResponseFlowAttemptUsage = { "status": string; "input_tokens": number; "output_tokens": number; "usage_known": boolean; "estimated": boolean; "cost_usd"?: number };
 export type WireResponseFlowBudget = { "attempts": number; "reserved_tokens": number; "committed_tokens": number; "estimated_tokens": number; "reserved_cost_usd": number; "committed_cost_usd": number; "estimated_cost_usd": number; "unknown_usage": number; "unknown_cost": number; "pending"?: { [key: string]: WireResponseFlowAttemptPending } };
 export type WireResponseFlowAttemptPending = { "run_id": string; "node_id": string; "attempt": number; "unknown": boolean };
-export type WireResponseFlowImprovement = { "source_run": WireResponseRef; "generation": WireResponseGenerateSkillInput; "runtime": string; "trial_ends_at": string; "stage": string; "candidate": WireResponseRef; "comparison": WireResponseRef; "trial": WireResponseRef; "trial_comparison": WireResponseRef; "observation_state"?: string; "observations"?: Array<WireResponseSkillTrialObservation>; "pending"?: WireResponseFlowImprovementAttempt; "receipts": (Array<WireResponseFlowImprovementReceipt> | null) };
-export type WireResponseGenerateSkillInput = { "scope": WireResponseScope; "event_id": string; "skill_id": string; "path": string; "lessons": (Array<WireResponseRef> | null); "comparison_plan": (WireResponseSkillComparisonPlan | null) };
+export type WireResponseFlowImprovement = { "source_run": WireResponseRef; "generation": WireResponseGenerateSkillInput; "runtime": string; "trial_ends_at": string; "stage": string; "candidate": WireResponseRef; "comparison": WireResponseRef; "trial": WireResponseRef; "trial_comparison": WireResponseRef; "observation_state"?: string; "observations"?: Array<WireResponseSkillTrialObservation>; "pending"?: WireResponseFlowImprovementAttempt; "receipts": ((Array<WireResponseFlowImprovementReceipt> | null)) };
+export type WireResponseGenerateSkillInput = { "scope": WireResponseScope; "event_id": string; "skill_id": string; "path": string; "lessons": ((Array<WireResponseRef> | null)); "comparison_plan": ((WireResponseSkillComparisonPlan | null)) };
 export type WireResponseSkillTrialObservation = { "scope": WireResponseScope; "source": WireResponseRef; "evaluation"?: WireResponseRef; "outcome": string; "independently_verified": boolean };
 export type WireResponseFlowImprovementAttempt = { "action_id": string; "action": string; "request_hash": string; "principal_id": string; "role": string; "skill_revision": number; "started_at": string; "state": string };
 export type WireResponseFlowImprovementReceipt = { "action_id": string; "action": string; "request_hash": string; "principal_id": string; "role": string; "skill_revision": number; "started_at": string; "state": string; "error_code"?: string };
-export type WireResponseFlowCapabilities = { "supported": boolean; "unsupported": (Array<string> | null); "modes": (Array<string> | null) };
+export type WireResponseFlowCapabilities = { "supported": boolean; "unsupported": ((Array<string> | null)); "modes": ((Array<string> | null)) };
 export type WireResponseFlowResultView = { "budget"?: WireResponseFlowBudget; "run_id": string; "revision": number; "crew_id": string; "status": string; "invocation_mode": string; "source_type": string; "cancel_requested": boolean; "result": string; "waiting"?: WireResponseCrewRunWaiting; "children"?: { [key: string]: WireResponseFlowChildView }; "delivery"?: WireResponseFlowDeliveryView };
 export type WireResponseFlowDeliveryView = { "id": string; "revision": number; "delivery": WireResponseFlowDelivery };
 export type WireResponseFlowChildCreated = { "parent": WireResponseRecord; "child": WireResponseFlowChildRef };
 export type WireRequestFlowChildInput = { "scope"?: WireRequestScope; "lease_token"?: string; "node_id"?: string; "attempt"?: number; "kind"?: string; "crew_id"?: string; "input"?: string };
-export type WireResponseFlowChildrenCancelled = { "children": (Array<WireResponseFlowChildRef> | null) };
+export type WireResponseFlowChildrenCancelled = { "children": ((Array<WireResponseFlowChildRef> | null)) };
 export type WireRequestFlowChildrenCancel = { "scope"?: WireRequestScope; "lease_token"?: string };
 export type WireResponseFlowAttemptReservation = { "id": string; "status": string; "dispatch_allowed": boolean; "reserved_tokens": number; "reserved_cost_usd": number; "cost_known": boolean };
 export type WireRequestFlowAttemptInput = { "scope"?: WireRequestScope; "lease_token"?: string; "node_id"?: string; "attempt"?: number; "call_key"?: string; "model"?: string; "max_input_tokens"?: number; "max_output_tokens"?: number };
-export type WireRequestFlowAttemptSettleInput = { "scope"?: WireRequestScope; "lease_token"?: string; "status"?: string; "input_tokens"?: number; "output_tokens"?: number; "usage_known"?: boolean; "estimated"?: boolean; "cost_usd"?: (number | null) };
-export type WireRequestFlowAttemptUsage = { "status"?: string; "input_tokens"?: number; "output_tokens"?: number; "usage_known"?: boolean; "estimated"?: boolean; "cost_usd"?: (number | null) };
+export type WireRequestFlowAttemptSettleInput = { "scope"?: WireRequestScope; "lease_token"?: string; "status"?: string; "input_tokens"?: number; "output_tokens"?: number; "usage_known"?: boolean; "estimated"?: boolean; "cost_usd"?: ((number | null)) };
+export type WireRequestFlowAttemptUsage = { "status"?: string; "input_tokens"?: number; "output_tokens"?: number; "usage_known"?: boolean; "estimated"?: boolean; "cost_usd"?: ((number | null)) };
 export type WireResponseFlowImprovementView = { "id": string; "revision": number; "improvement": WireResponseFlowImprovement; "authority": string };
 export type WireRequestFlowImprovementStart = { "scope"?: WireRequestScope; "request_id"?: string; "source_run"?: WireRequestRef; "generation"?: WireRequestGenerateSkillInput; "runtime"?: string; "trial_ends_at"?: string };
-export type WireRequestGenerateSkillInput = { "scope"?: WireRequestScope; "event_id"?: string; "skill_id"?: string; "path"?: string; "lessons"?: (Array<WireRequestRef> | null); "comparison_plan"?: (WireRequestSkillComparisonPlan | null) };
+export type WireRequestGenerateSkillInput = { "scope"?: WireRequestScope; "event_id"?: string; "skill_id"?: string; "path"?: string; "lessons"?: ((Array<WireRequestRef> | null)); "comparison_plan"?: ((WireRequestSkillComparisonPlan | null)) };
 export type WireRequestSkillComparisonPlan = { "baseline_version"?: string; "dataset_sha256"?: string; "environment_sha256"?: string; "min_score_gain"?: number; "max_cost"?: number; "max_duration_ms"?: number };
-export type WireResponseFlowImprovementPage = { "items": (Array<WireResponseRecord> | null); "next_cursor"?: string };
-export type WireRequestFlowImprovementAdvance = { "scope"?: WireRequestScope; "expected_revision"?: number; "action_id"?: string; "action"?: string; "recover"?: boolean; "comparison"?: (WireRequestSkillComparisonResult | null); "application"?: (WireRequestChangeInput | null) };
-export type WireRequestSkillComparisonResult = { "format_version"?: number; "candidate"?: WireRequestRef; "baseline_id"?: string; "baseline_revision"?: number; "content_sha256"?: ({ [key: string]: string } | null); "dataset_sha256"?: string; "environment_sha256"?: string; "comparison_report"?: (WireRequestSkillComparisonReport | null); "passed"?: boolean; "cases"?: (Array<WireRequestSkillComparisonCase> | null) };
+export type WireResponseFlowImprovementPage = { "items": ((Array<WireResponseRecord> | null)); "next_cursor"?: string };
+export type WireRequestFlowImprovementAdvance = { "scope"?: WireRequestScope; "expected_revision"?: number; "action_id"?: string; "action"?: string; "recover"?: boolean; "comparison"?: ((WireRequestSkillComparisonResult | null)); "application"?: ((WireRequestChangeInput | null)) };
+export type WireRequestSkillComparisonResult = { "format_version"?: number; "candidate"?: WireRequestRef; "baseline_id"?: string; "baseline_revision"?: number; "content_sha256"?: (({ [key: string]: string } | null)); "dataset_sha256"?: string; "environment_sha256"?: string; "comparison_report"?: ((WireRequestSkillComparisonReport | null)); "passed"?: boolean; "cases"?: ((Array<WireRequestSkillComparisonCase> | null)) };
 export type WireRequestSkillComparisonReport = { "plan_sha256"?: string; "baseline_score"?: number; "candidate_score"?: number; "candidate_cost"?: number; "candidate_duration_ms"?: number; "baseline_cost"?: number; "baseline_duration_ms"?: number; "regression_passed"?: boolean; "safety_passed"?: boolean; "bundle_sha256"?: { [key: string]: string }; "companion_coverage"?: string };
 export type WireRequestSkillComparisonCase = { "case_sha256"?: string; "category"?: string; "variant"?: string; "passed"?: boolean; "output_sha256"?: string; "cost"?: number; "duration_ms"?: number; "started_at"?: string; "finished_at"?: string };
-export type WireRequestFlowDeliveryRecovery = { "scope"?: WireRequestScope; "expected_revision"?: number; "action"?: string; "confirmed"?: boolean; "message_id"?: string; "destination"?: (WireRequestFlowDeliveryDestination | null) };
+export type WireRequestFlowDeliveryRecovery = { "scope"?: WireRequestScope; "expected_revision"?: number; "action"?: string; "confirmed"?: boolean; "message_id"?: string; "destination"?: ((WireRequestFlowDeliveryDestination | null)) };
 export type WireRequestFlowDeliveryDestination = { "bot_id"?: string; "guild_id"?: string; "channel_id"?: string; "thread_id"?: string };
 export type WireResponseFlowEffectView = { "id": string; "effect_hash": string; "status": string; "dispatch_allowed": boolean };
 export type WireRequestFlowEffectInput = { "scope"?: WireRequestScope; "lease_token"?: string; "node_id"?: string; "attempt"?: number; "adapter"?: string; "target_hash"?: string; "args_hash"?: string; "preview"?: string };
@@ -560,21 +560,21 @@ export type WireRequestFlowEffectReceipt = { "status"?: string; "http_status"?: 
 export type WireResponseUsageSessionHandoffOutput = { "id": string; "agent": string; "session_id": string; "device": string; "folder": string; "work"?: WireResponseUsageSessionHandoffWork; "archive_id"?: string; "authority": string };
 export type WireResponseUsageSessionHandoffWork = { "id": string; "revision": number; "title": string; "status": string; "updated_at": string };
 export type WireRequestUsageSessionHandoffInput = { "scope"?: WireRequestScope; "id"?: string };
-export type WireResponseUsageSessionSearchOutput = { "items": (Array<WireResponseUsageSessionSearchGroup> | null); "next_cursor"?: string; "hidden": number; "secret_records": number; "scanned_bytes": number; "authority": string };
-export type WireResponseUsageSessionSearchGroup = { "session": ({ [key: string]: ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null) } | null); "hits": (Array<WireResponseUsageSessionSearchHit> | null) };
+export type WireResponseUsageSessionSearchOutput = { "items": ((Array<WireResponseUsageSessionSearchGroup> | null)); "next_cursor"?: string; "hidden": number; "secret_records": number; "scanned_bytes": number; "authority": string };
+export type WireResponseUsageSessionSearchGroup = { "session": (({ [key: string]: ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null) } | null)); "hits": ((Array<WireResponseUsageSessionSearchHit> | null)) };
 export type WireResponseUsageSessionSearchHit = { "role": string; "snippet": string; "match": number };
 export type WireRequestUsageSessionSearchInput = { "scope"?: WireRequestScope; "q"?: string; "source"?: string; "project"?: string; "after"?: string; "limit"?: number };
 export type WireResponseProviderRole = { "model"?: string; "provider"?: string; "off"?: Array<string>; "via"?: string };
 export type WireRequestProviderRoleModel = { "scope"?: WireRequestScope; "role"?: string; "model"?: string; "provider"?: string; "off"?: Array<string>; "via"?: string };
-export type WireResponseSessionArchiveStatusOutput = { "items": (Array<WireResponseSessionArchiveStatus> | null); "missing": (Array<string> | null); "authority": string };
-export type WireResponseSessionArchiveStatus = { "id": string; "state": string; "archives": (Array<WireResponseSessionTranscriptArchive> | null) };
-export type WireRequestSessionArchiveStatusInput = { "scope"?: WireRequestScope; "ids"?: (Array<string> | null) };
+export type WireResponseSessionArchiveStatusOutput = { "items": ((Array<WireResponseSessionArchiveStatus> | null)); "missing": ((Array<string> | null)); "authority": string };
+export type WireResponseSessionArchiveStatus = { "id": string; "state": string; "archives": ((Array<WireResponseSessionTranscriptArchive> | null)) };
+export type WireRequestSessionArchiveStatusInput = { "scope"?: WireRequestScope; "ids"?: ((Array<string> | null)) };
 export type WireResponseMemoryWorkCounts = { "sessions": number; "diff": number; "tests_passed": number; "tests_failed": number; "ci_passed": number; "ci_failed": number };
 export type WireResponseRemoval = { "code": string; "note"?: string; "by": string; "at": string };
-export type WireResponseAnalysisRun = { "at": string; "jobs": number; "done": number; "candidates": number; "waiting": number; "dropped": number; "parked": number; "failed": number; "reason": string; "error": string; "last_done_at": (string | null); "last_done_candidates": (number | null) };
+export type WireResponseAnalysisRun = { "at": string; "jobs": number; "done": number; "candidates": number; "waiting": number; "dropped": number; "parked": number; "failed": number; "reason": string; "error": string; "last_done_at": ((string | null)); "last_done_candidates": ((number | null)) };
 export type ContextInvocationViewV1 = { "protocol": "context-view-exclusion-v1"; "context_scope": Scope; "exclude": Array<{ "collection": "memories"; "id": string; "revision": number }> };
 export type ContextViewObservationV1 = { "protocol": "context-view-exclusion-v1"; "view_sha256": string; "prior_path_removed": false; "excluded_cleaned_search_scoped_ref_sha256": Array<string>; "excluded_pinned_scoped_ref_sha256": Array<string>; "emitted_current_scoped_ref_sha256": Array<string>; "emitted_history_scoped_ref_sha256": Array<string>; "reader_acknowledgement": "unknown"; "actual_use": "unknown"; "task_success": "unknown"; "causal_attribution": "unknown" };
-export type WireResponseRoutingAttribution = { "decision_id": string; "decided_at": string; "decision": string; "group"?: string; "view_hash"?: string; "chosen": string; "fallbacks": (Array<string> | null); "attempts": (Array<WireResponseRoutingAttributionAttempt> | null); "stopped"?: string; "arm"?: string; "origin"?: WireResponseRoutingOrigin };
+export type WireResponseRoutingAttribution = { "decision_id": string; "decided_at": string; "decision": string; "group"?: string; "view_hash"?: string; "chosen": string; "fallbacks": ((Array<string> | null)); "attempts": ((Array<WireResponseRoutingAttributionAttempt> | null)); "stopped"?: string; "arm"?: string; "origin"?: WireResponseRoutingOrigin };
 export type WireResponseRoutingAttributionAttempt = { "index": number; "model": string; "ok": boolean; "error"?: string; "latency_ms": number };
 export type WireResponseUsageCall = { "tool": string; "at": string; "ms": number; "err"?: string };
 export type WireResponseExtractor = { "model": string; "cli": string; "state": string; "clis"?: { [key: string]: string } };
@@ -597,22 +597,22 @@ export type LLMRequestPage = { "items": Array<LLMRequestView>; "next_before"?: s
 export type LLMRequestStats = { "runs": Array<{ "run": string; "calls": number; "total_tokens": number }>; "since": string; "truncated"?: boolean; "items": Array<{ "day": string; "operation": string; "calls": number; "errors": number; "input_tokens": number; "output_tokens": number; "cached_input_tokens"?: number; "total_tokens": number }> };
 export type WireRequestWikiFolderInput = { "scope"?: WireRequestScope; "path"?: string };
 export type WireRequestWikiMemoryBuildInput = { "scope"?: WireRequestScope; "query"?: string; "topic"?: string; "entity_name"?: string; "dry_run"?: boolean; "max_total_tokens"?: number };
-export type WireRequestWikiPagePatchInput = { "scope"?: WireRequestScope; "expected_revision"?: number; "folder"?: (string | null); "title"?: string };
-export type WireResponseWikiDraftPreview = { "slug": string; "type": string; "title": string; "text": string; "mode": string; "citations": (Array<string> | null) };
+export type WireRequestWikiPagePatchInput = { "scope"?: WireRequestScope; "expected_revision"?: number; "folder"?: ((string | null)); "title"?: string };
+export type WireResponseWikiDraftPreview = { "slug": string; "type": string; "title": string; "text": string; "mode": string; "citations": ((Array<string> | null)) };
 export type WireResponseWikiFolder = { "path": string };
 export type WireResponseWikiMemoryBuildResult = { "dry_run": boolean; "job"?: WireResponseWikiJobView; "drafts"?: Array<WireResponseWikiDraftPreview>; "result"?: WireResponseWikiJobResult; "memory_ids"?: Array<string> };
 export type WireResponseWikiMemoryRequest = { "query"?: string; "topic"?: string; "entity_name"?: string; "memory_ids"?: Array<string> };
-export type WireResponseWikiTree = { "folders": (Array<WireResponseWikiTreeFolder> | null); "pages": (Array<WireResponseWikiTreePage> | null); "authority": string; "truncated": boolean };
+export type WireResponseWikiTree = { "folders": ((Array<WireResponseWikiTreeFolder> | null)); "pages": ((Array<WireResponseWikiTreePage> | null)); "authority": string; "truncated": boolean };
 export type WireResponseWikiTreeFolder = { "path": string; "pages": number };
 export type WireResponseWikiTreePage = { "id": string; "revision": number; "slug": string; "type": string; "title": string; "folder": string; "review_state": string; "locked": boolean; "stale"?: boolean };
-export type WireResponseObservationData = { "source_memories": (Array<WireResponseRef> | null); "durability": string; "durability_reason"?: string; "history"?: Array<WireResponseDerivedRevision> };
-export type WireResponseDerivedRevision = { "version": number; "status": string; "action": string; "text": string; "citations": (Array<WireResponseRef> | null); "durability"?: string; "durability_reason"?: string; "confidence"?: number; "generator"?: WireResponseGenerator; "by": string; "at": string; "withheld"?: boolean };
+export type WireResponseObservationData = { "source_memories": ((Array<WireResponseRef> | null)); "durability": string; "durability_reason"?: string; "history"?: Array<WireResponseDerivedRevision> };
+export type WireResponseDerivedRevision = { "version": number; "status": string; "action": string; "text": string; "citations": ((Array<WireResponseRef> | null)); "durability"?: string; "durability_reason"?: string; "confidence"?: number; "generator"?: WireResponseGenerator; "by": string; "at": string; "withheld"?: boolean };
 export type WireResponseMentalModelData = { "title": string; "query": string; "refresh": WireResponseMentalModelRefresh; "active"?: WireResponseDerivedRevision; "draft"?: WireResponseDerivedRevision; "history"?: Array<WireResponseDerivedRevision>; "last_refresh_at"?: string; "last_full_refresh_at"?: string; "last_outcome"?: WireResponseMentalModelOutcome; "folder"?: string };
 export type WireResponseDirective = { "title": string; "priority": number; "applies_to": string; "source_scope"?: WireResponseScope; "source_rule"?: string; "independent"?: boolean };
-export type WireResponseFileExtractJob = { "label": string; "sources": (Array<string> | null); "total": number; "next": number; "candidates_created": number; "skipped": (Array<WireResponseExtractSkip> | null); "calls": number; "tokens": number; "error"?: string; "requested_by": string; "delta": WireResponseFileExtractDelta; "document"?: string; "previous"?: string; "settings": WireResponseExtractStrategy; "options": WireResponseExtractOptions; "zone"?: string; "batch"?: WireResponseExtractBatch; "tags"?: Array<string>; "language"?: string };
+export type WireResponseFileExtractJob = { "label": string; "sources": ((Array<string> | null)); "total": number; "next": number; "candidates_created": number; "skipped": ((Array<WireResponseExtractSkip> | null)); "calls": number; "tokens": number; "error"?: string; "requested_by": string; "delta": WireResponseFileExtractDelta; "document"?: string; "previous"?: string; "settings": WireResponseExtractStrategy; "options": WireResponseExtractOptions; "zone"?: string; "batch"?: WireResponseExtractBatch; "tags"?: Array<string>; "language"?: string };
 export type WireResponseExtractSkip = { "locator"?: string; "reason": string };
-export type WireResponseFileExtractDelta = { "chunks_total": number; "chunks_unchanged": number; "chunks_changed": number; "chunks_removed": number; "removed_sources": (Array<WireResponseFileExtractRemoved> | null) };
-export type WireResponseFileExtractRemoved = { "locator": string; "source": WireResponseRef; "candidate_ids": (Array<string> | null) };
+export type WireResponseFileExtractDelta = { "chunks_total": number; "chunks_unchanged": number; "chunks_changed": number; "chunks_removed": number; "removed_sources": ((Array<WireResponseFileExtractRemoved> | null)) };
+export type WireResponseFileExtractRemoved = { "locator": string; "source": WireResponseRef; "candidate_ids": ((Array<string> | null)) };
 export type CausalLink = { "id": string; "scope": Scope; "status": "candidate" | "active" | "rejected"; "revision": number; "cause": Ref; "effect": Ref; "reason"?: string; "origin": "human" | "model"; "confidence"?: number; "generator"?: Generator; "created_by": string; "approved_by"?: string; "created_at": string; "updated_at": string; "authority": string };
 export type CausalLinkInput = { "scope": Scope; "cause_id": string; "effect_id": string; "reason"?: string };
 export type CausalReviewInput = { "scope": Scope; "expected_revision": number; "action": "approve" | "reject" };
@@ -620,15 +620,15 @@ export type CausalProposeInput = { "scope": Scope; "dry_run"?: boolean; "max_gro
 export type CausalLinkPage = { "items": Array<CausalLink>; "next_cursor"?: string; "truncated": boolean; "authority": string };
 export type CausalProposeResult = { "dry_run": boolean; "groups": number; "proposed": Array<CausalLink>; "rejected": Array<{ "group"?: number; "code"?: "invalid_model_output" | "citation_outside_group" | "self_link" | "invalid_reason" | "invalid_confidence" | "conflict"; "target"?: string }>; "calls": number; "tokens": number; "authority": string };
 export type WireResponseRecallTimeWindow = { "phrase": string; "from": string; "to": string };
-export type WireResponseMentalModelRefresh = { "mode": string; "cron"?: string; "after_consolidation"?: boolean; "min_interval"?: string; "kinds"?: Array<string>; "tags"?: Array<string>; "max_tokens"?: number; "strategy"?: string; "full_refresh_cron"?: string; "budget"?: string; "fact_types"?: Array<string>; "tags_match"?: string; "tag_groups"?: Array<(Array<WireResponseTagTest> | null)>; "include_chunks"?: boolean; "recall_max_tokens"?: number; "response_schema"?: ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null) };
-export type WireResponseDocumentChunkPage = { "document_id": string; "job_id": string; "items": (Array<WireResponseDocumentChunk> | null); "total": number; "next_cursor": string };
-export type WireResponseDocumentChunk = { "locator": string; "hash": string; "status": string; "source": WireResponseRef; "candidates": (Array<WireResponseDocumentCandidate> | null) };
+export type WireResponseMentalModelRefresh = { "mode": string; "cron"?: string; "after_consolidation"?: boolean; "min_interval"?: string; "kinds"?: Array<string>; "tags"?: Array<string>; "max_tokens"?: number; "strategy"?: string; "full_refresh_cron"?: string; "budget"?: string; "fact_types"?: Array<string>; "tags_match"?: string; "tag_groups"?: Array<((Array<WireResponseTagTest> | null))>; "include_chunks"?: boolean; "recall_max_tokens"?: number; "response_schema"?: ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null) };
+export type WireResponseDocumentChunkPage = { "document_id": string; "job_id": string; "items": ((Array<WireResponseDocumentChunk> | null)); "total": number; "next_cursor": string };
+export type WireResponseDocumentChunk = { "locator": string; "hash": string; "status": string; "source": WireResponseRef; "candidates": ((Array<WireResponseDocumentCandidate> | null)) };
 export type WireResponseDocumentCandidate = { "id": string; "status": string; "memory_id"?: string };
-export type WireResponseDocumentHistoryPage = { "document_id": string; "items": (Array<WireResponseDocumentUpload> | null); "next_cursor": string };
+export type WireResponseDocumentHistoryPage = { "document_id": string; "items": ((Array<WireResponseDocumentUpload> | null)); "next_cursor": string };
 export type WireResponseDocumentUpload = { "job_id": string; "status": string; "label": string; "delta": WireResponseFileExtractDelta; "candidates_created": number; "requested_by": string; "created_at": string; "updated_at": string };
-export type WireResponseKnowledgeChunkPage = { "source_id": string; "document_id": string; "items": (Array<WireResponseKnowledgeChunkView> | null); "total": number; "extract_document_id"?: string; "next_cursor": string };
+export type WireResponseKnowledgeChunkPage = { "source_id": string; "document_id": string; "items": ((Array<WireResponseKnowledgeChunkView> | null)); "total": number; "extract_document_id"?: string; "next_cursor": string };
 export type WireResponseKnowledgeChunkView = { "id": string; "chunk_index": number; "section_path"?: string; "hash": string; "token_estimate": number; "status": string; "text"?: string; "text_withheld"?: boolean };
-export type WireResponseKnowledgeHistoryPage = { "source_id": string; "items": (Array<WireResponseKnowledgeDocumentSummary> | null); "total": number; "next_cursor": string };
+export type WireResponseKnowledgeHistoryPage = { "source_id": string; "items": ((Array<WireResponseKnowledgeDocumentSummary> | null)); "total": number; "next_cursor": string };
 export type WireResponseEntityInput = { "name": string; "type"?: string };
 export type WireResponseExtractStrategy = { "extraction_mode"?: string; "extraction_instructions"?: string; "extraction_mission"?: string; "extraction_chunk_size"?: number; "extract_causal"?: boolean; "extraction_batch_size"?: number; "extraction_images_per_chunk"?: number };
 export type WireResponseExtractOptions = { "context"?: string; "timestamp"?: string; "tags"?: Array<string>; "metadata"?: { [key: string]: string }; "entities"?: Array<string>; "strategy"?: string };
@@ -636,16 +636,16 @@ export type WireResponseExtractBatch = { "id": string; "submitted_at": string };
 export type WireResponseTagTest = { "tags"?: Array<string>; "match"?: string; "resolve"?: string; "not"?: boolean; "and"?: Array<WireResponseTagTest>; "or"?: Array<WireResponseTagTest> };
 export type WireResponseMentalModelOutcome = { "code": string; "trigger": string; "at": string };
 export type WireResponseChangeRequest = { "action": string; "target"?: string; "revision"?: number; "params"?: ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null) };
-export type WireResponseExtDataPage = { "items": (Array<WireResponseExtDataItem> | null); "next_cursor"?: string; "authority": string };
+export type WireResponseExtDataPage = { "items": ((Array<WireResponseExtDataItem> | null)); "next_cursor"?: string; "authority": string };
 export type WireResponseExtDataItem = { "key": string; "value": ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null); "revision": number; "updated_at": string; "updated_by": string };
-export type WireRequestExtDataChange = { "scope"?: WireRequestScope; "changes"?: (Array<WireRequestExtDataOp> | null) };
+export type WireRequestExtDataChange = { "scope"?: WireRequestScope; "changes"?: ((Array<WireRequestExtDataOp> | null)) };
 export type WireRequestExtDataOp = { "op"?: string; "key"?: string; "value"?: ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null); "expected_revision"?: number };
-export type WireResponseWikiFolderMoveResult = { "path": string; "moved": (Array<string> | null) };
+export type WireResponseWikiFolderMoveResult = { "path": string; "moved": ((Array<string> | null)) };
 export type WireRequestWikiFolderMoveInput = { "scope"?: WireRequestScope; "from"?: string; "to"?: string };
 export type WireResponseValidToProposal = { "at": string; "by": WireResponseRef };
 export type WireResponseEntityRelationInput = { "source": string; "relation": string; "target": string };
 export type WireResponseSpaceView = { "workspace_id": string; "project_id": string; "revision": number; "config": WireResponseSpaceConfig; "counts"?: { [key: string]: number }; "created"?: string; "last_activity"?: string };
-export type WireResponseSpaceConfig = { "display_name": string; "aliases": (Array<string> | null); "default_reach": string; "extraction_enabled": boolean; "rerank_enabled"?: boolean; "consolidation_schedule": string; "notes": string; "extraction_mode"?: string; "extraction_instructions"?: string; "lanes"?: WireResponseSpaceLanes; "rerank"?: boolean; "rerank_model"?: boolean; "defense_rules"?: Array<WireResponseSpaceDefenseRule>; "mcp_tools"?: Array<string>; "recall_budget_tokens"?: number; "reflect_max_tokens"?: number; "auto_derive"?: WireResponseSpaceAutoDerive; "recall_lane_weights"?: { [key: string]: number }; "reflect_mission": string; "reflect_disposition"?: WireResponseReflectDisposition; "audit"?: WireResponseSpaceAudit; "entity_resolution"?: string; "entities_allow_free_form"?: boolean; "entity_free_types"?: boolean; "entity_labels"?: Array<WireResponseEntityLabelGroup>; "extraction_mission"?: string; "extraction_chunk_size"?: number; "extract_causal"?: boolean; "extraction_strategies"?: { [key: string]: WireResponseExtractStrategy }; "extraction_default_strategy"?: string; "default_timezone"?: string; "memory_language"?: string; "work_state_candidates"?: boolean; "recall_session_archives"?: boolean; "reflect_default_options"?: WireResponseSpaceReflectDefaults; "mental_model_defaults"?: WireResponseSpaceMentalModelDefaults; "consolidation"?: WireResponseSpaceConsolidation; "recall_quality"?: WireResponseSpaceRecallQuality; "capture_mode"?: string; "capture_density"?: string; "decision_models"?: { [key: string]: string }; "extraction_batch_size"?: number; "extraction_images_per_chunk"?: number; "recall_budget"?: WireResponseSpaceRecallBudget; "store_document_text"?: boolean };
+export type WireResponseSpaceConfig = { "display_name": string; "aliases": ((Array<string> | null)); "default_reach": string; "extraction_enabled": boolean; "rerank_enabled"?: boolean; "consolidation_schedule": string; "notes": string; "extraction_mode"?: string; "extraction_instructions"?: string; "lanes"?: WireResponseSpaceLanes; "rerank"?: boolean; "rerank_model"?: boolean; "defense_rules"?: Array<WireResponseSpaceDefenseRule>; "mcp_tools"?: Array<string>; "recall_budget_tokens"?: number; "reflect_max_tokens"?: number; "auto_derive"?: WireResponseSpaceAutoDerive; "recall_lane_weights"?: { [key: string]: number }; "reflect_mission": string; "reflect_disposition"?: WireResponseReflectDisposition; "audit"?: WireResponseSpaceAudit; "entity_resolution"?: string; "entities_allow_free_form"?: boolean; "entity_free_types"?: boolean; "entity_labels"?: Array<WireResponseEntityLabelGroup>; "extraction_mission"?: string; "extraction_chunk_size"?: number; "extract_causal"?: boolean; "extraction_strategies"?: { [key: string]: WireResponseExtractStrategy }; "extraction_default_strategy"?: string; "default_timezone"?: string; "memory_language"?: string; "work_state_candidates"?: boolean; "recall_session_archives"?: boolean; "reflect_default_options"?: WireResponseSpaceReflectDefaults; "mental_model_defaults"?: WireResponseSpaceMentalModelDefaults; "consolidation"?: WireResponseSpaceConsolidation; "recall_quality"?: WireResponseSpaceRecallQuality; "capture_mode"?: string; "capture_density"?: string; "decision_models"?: { [key: string]: string }; "extraction_batch_size"?: number; "extraction_images_per_chunk"?: number; "recall_budget"?: WireResponseSpaceRecallBudget; "store_document_text"?: boolean };
 export type WireResponseSpaceLanes = { "fts"?: boolean; "vector"?: boolean; "temporal"?: boolean; "graph"?: boolean; "semantic"?: boolean };
 export type WireResponseSpaceDefenseRule = { "name"?: string; "pattern"?: string; "action": string };
 export type WireResponseSpaceAutoDerive = { "enabled"?: boolean; "threshold"?: number; "interval"?: string };
@@ -656,38 +656,42 @@ export type WireResponseEntityLabelValue = { "value": string; "description"?: st
 export type WireResponseSpaceReflectDefaults = { "budget"?: string; "fact_types"?: Array<string>; "exclude_mental_models"?: boolean; "tag_scoped_directives"?: boolean; "tools": WireResponseReflectToolBudget };
 export type WireResponseReflectToolBudget = { "recall_max_tokens"?: number; "recall_max_chunk_tokens"?: number; "observations_max_tokens"?: number; "mental_models_max_tokens"?: number; "read_mental_models_max_tokens"?: number; "expand_max_tokens"?: number };
 export type WireResponseSpaceMentalModelDefaults = { "trigger"?: WireResponseMentalModelRefresh; "min_interval"?: string };
-export type WireResponseSpaceConsolidation = { "observations_mission"?: string; "default_scope_mode"?: string; "default_scopes"?: Array<(Array<string> | null)>; "strategies"?: Array<WireResponseConsolidationStrategy>; "scope_limits"?: Array<WireResponseObservationScopeLimit>; "max_observations_per_scope"?: number; "batch_size"?: number; "parallel"?: number; "max_memories_per_round"?: number };
-export type WireResponseConsolidationStrategy = { "name": string; "scopes": (Array<WireResponseObservationTagRule> | null); "observations_mission"?: string; "max_observations_per_scope"?: number; "source_max_tokens"?: number; "source_max_tokens_per_observation"?: number };
-export type WireResponseObservationTagRule = { "tags": (Array<string> | null); "tags_match"?: string };
-export type WireResponseObservationScopeLimit = { "scope": (Array<string> | null); "limit": number };
+export type WireResponseSpaceConsolidation = { "observations_mission"?: string; "default_scope_mode"?: string; "default_scopes"?: Array<((Array<string> | null))>; "strategies"?: Array<WireResponseConsolidationStrategy>; "scope_limits"?: Array<WireResponseObservationScopeLimit>; "max_observations_per_scope"?: number; "batch_size"?: number; "parallel"?: number; "max_memories_per_round"?: number };
+export type WireResponseConsolidationStrategy = { "name": string; "scopes": ((Array<WireResponseObservationTagRule> | null)); "observations_mission"?: string; "max_observations_per_scope"?: number; "source_max_tokens"?: number; "source_max_tokens_per_observation"?: number };
+export type WireResponseObservationTagRule = { "tags": ((Array<string> | null)); "tags_match"?: string };
+export type WireResponseObservationScopeLimit = { "scope": ((Array<string> | null)); "limit": number };
 export type WireResponseSpaceRecallQuality = { "relevance_gate"?: boolean; "conflict_pending"?: string; "provisional"?: boolean; "auto_close_on_correction"?: boolean; "provisional_vectors"?: boolean; "rerank_options"?: WireResponseRerankOptions; "prefer_observations"?: boolean; "include_chunks"?: boolean; "chunks_max_tokens"?: number; "diversity"?: boolean; "expand"?: boolean; "signal_policy"?: WireResponseSignalPolicy };
-export type WireRequestSpaceConfigInput = { "expected_revision"?: number; "display_name"?: (string | null); "default_reach"?: (string | null); "extraction_enabled"?: (boolean | null); "consolidation_schedule"?: (string | null); "notes"?: (string | null); "reflect_mission"?: (string | null); "reflect_disposition"?: (WireRequestReflectDisposition | null); "extraction_mode"?: (string | null); "extraction_instructions"?: (string | null); "lanes"?: (WireRequestSpaceLanes | null); "rerank"?: (boolean | null); "rerank_model"?: (boolean | null); "defense_rules"?: ((Array<WireRequestSpaceDefenseRule> | null) | null); "mcp_tools"?: ((Array<string> | null) | null); "recall_budget_tokens"?: (number | null); "reflect_max_tokens"?: (number | null); "auto_derive"?: (WireRequestSpaceAutoDerive | null); "audit"?: (WireRequestSpaceAudit | null); "entity_resolution"?: (string | null); "entities_allow_free_form"?: (boolean | null); "entity_free_types"?: (boolean | null); "entity_labels"?: ((Array<WireRequestEntityLabelGroup> | null) | null); "recall_lane_weights"?: (({ [key: string]: number } | null) | null); "extraction_mission"?: (string | null); "extraction_chunk_size"?: (number | null); "extract_causal"?: (boolean | null); "extraction_strategies"?: (({ [key: string]: WireRequestExtractStrategy } | null) | null); "extraction_default_strategy"?: (string | null); "default_timezone"?: (string | null); "memory_language"?: (string | null); "work_state_candidates"?: (boolean | null); "recall_session_archives"?: (boolean | null); "reflect_default_options"?: (WireRequestSpaceReflectDefaults | null); "mental_model_defaults"?: (WireRequestSpaceMentalModelDefaults | null); "consolidation"?: (WireRequestSpaceConsolidation | null); "recall_quality"?: (WireRequestSpaceRecallQuality | null); "capture_mode"?: (string | null); "capture_density"?: (string | null); "decision_models"?: (({ [key: string]: string } | null) | null); "extraction_batch_size"?: (number | null); "extraction_images_per_chunk"?: (number | null); "recall_budget"?: (WireRequestSpaceRecallBudget | null); "store_document_text"?: (boolean | null) };
+export type WireRequestSpaceConfigInput = { "expected_revision"?: number; "display_name"?: ((string | null)); "default_reach"?: ((string | null)); "extraction_enabled"?: ((boolean | null)); "consolidation_schedule"?: ((string | null)); "notes"?: ((string | null)); "reflect_mission"?: ((string | null)); "reflect_disposition"?: ((WireRequestReflectDisposition | null)); "extraction_mode"?: ((string | null)); "extraction_instructions"?: ((string | null)); "lanes"?: ((WireRequestSpaceLanes | null)); "rerank"?: ((boolean | null)); "rerank_model"?: ((boolean | null)); "defense_rules"?: ((((Array<WireRequestSpaceDefenseRule> | null)) | null)); "mcp_tools"?: ((((Array<string> | null)) | null)); "recall_budget_tokens"?: ((number | null)); "reflect_max_tokens"?: ((number | null)); "auto_derive"?: ((WireRequestSpaceAutoDerive | null)); "audit"?: ((WireRequestSpaceAudit | null)); "entity_resolution"?: ((string | null)); "entities_allow_free_form"?: ((boolean | null)); "entity_free_types"?: ((boolean | null)); "entity_labels"?: ((((Array<WireRequestEntityLabelGroup> | null)) | null)); "recall_lane_weights"?: (((({ [key: string]: number } | null)) | null)); "extraction_mission"?: ((string | null)); "extraction_chunk_size"?: ((number | null)); "extract_causal"?: ((boolean | null)); "extraction_strategies"?: (((({ [key: string]: WireRequestExtractStrategy } | null)) | null)); "extraction_default_strategy"?: ((string | null)); "default_timezone"?: ((string | null)); "memory_language"?: ((string | null)); "work_state_candidates"?: ((boolean | null)); "recall_session_archives"?: ((boolean | null)); "reflect_default_options"?: ((WireRequestSpaceReflectDefaults | null)); "mental_model_defaults"?: ((WireRequestSpaceMentalModelDefaults | null)); "consolidation"?: ((WireRequestSpaceConsolidation | null)); "recall_quality"?: ((WireRequestSpaceRecallQuality | null)); "capture_mode"?: ((string | null)); "capture_density"?: ((string | null)); "decision_models"?: (((({ [key: string]: string } | null)) | null)); "extraction_batch_size"?: ((number | null)); "extraction_images_per_chunk"?: ((number | null)); "recall_budget"?: ((WireRequestSpaceRecallBudget | null)); "store_document_text"?: ((boolean | null)) };
 export type WireRequestReflectDisposition = { "skepticism"?: number; "literalism"?: number; "empathy"?: number };
-export type WireRequestSpaceLanes = { "fts"?: (boolean | null); "vector"?: (boolean | null); "temporal"?: (boolean | null); "graph"?: (boolean | null); "semantic"?: (boolean | null) };
+export type WireRequestSpaceLanes = { "fts"?: ((boolean | null)); "vector"?: ((boolean | null)); "temporal"?: ((boolean | null)); "graph"?: ((boolean | null)); "semantic"?: ((boolean | null)) };
 export type WireRequestSpaceDefenseRule = { "name"?: string; "pattern"?: string; "action"?: string };
-export type WireRequestSpaceAutoDerive = { "enabled"?: (boolean | null); "threshold"?: number; "interval"?: string };
-export type WireRequestSpaceAudit = { "enabled"?: (boolean | null); "actions"?: Array<string> };
+export type WireRequestSpaceAutoDerive = { "enabled"?: ((boolean | null)); "threshold"?: number; "interval"?: string };
+export type WireRequestSpaceAudit = { "enabled"?: ((boolean | null)); "actions"?: Array<string> };
 export type WireRequestEntityLabelGroup = { "key"?: string; "description"?: string; "type"?: string; "tag"?: boolean; "values"?: Array<WireRequestEntityLabelValue> };
 export type WireRequestEntityLabelValue = { "value"?: string; "description"?: string };
-export type WireRequestExtractStrategy = { "extraction_mode"?: string; "extraction_instructions"?: string; "extraction_mission"?: string; "extraction_chunk_size"?: number; "extract_causal"?: (boolean | null); "extraction_batch_size"?: number; "extraction_images_per_chunk"?: number };
+export type WireRequestExtractStrategy = { "extraction_mode"?: string; "extraction_instructions"?: string; "extraction_mission"?: string; "extraction_chunk_size"?: number; "extract_causal"?: ((boolean | null)); "extraction_batch_size"?: number; "extraction_images_per_chunk"?: number };
 export type WireRequestSpaceReflectDefaults = { "budget"?: string; "fact_types"?: Array<string>; "exclude_mental_models"?: boolean; "tag_scoped_directives"?: boolean; "tools"?: WireRequestReflectToolBudget };
 export type WireRequestReflectToolBudget = { "recall_max_tokens"?: number; "recall_max_chunk_tokens"?: number; "observations_max_tokens"?: number; "mental_models_max_tokens"?: number; "read_mental_models_max_tokens"?: number; "expand_max_tokens"?: number };
-export type WireRequestSpaceMentalModelDefaults = { "trigger"?: (WireRequestMentalModelRefresh | null); "min_interval"?: string };
-export type WireRequestMentalModelRefresh = { "mode"?: string; "cron"?: string; "after_consolidation"?: boolean; "min_interval"?: string; "kinds"?: Array<string>; "tags"?: Array<string>; "max_tokens"?: number; "strategy"?: string; "full_refresh_cron"?: string; "budget"?: string; "fact_types"?: Array<string>; "tags_match"?: string; "tag_groups"?: Array<(Array<WireRequestTagTest> | null)>; "include_chunks"?: boolean; "recall_max_tokens"?: number; "response_schema"?: ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null) };
+export type WireRequestSpaceMentalModelDefaults = { "trigger"?: ((WireRequestMentalModelRefresh | null)); "min_interval"?: string };
+export type WireRequestMentalModelRefresh = { "mode"?: string; "cron"?: string; "after_consolidation"?: boolean; "min_interval"?: string; "kinds"?: Array<string>; "tags"?: Array<string>; "max_tokens"?: number; "strategy"?: string; "full_refresh_cron"?: string; "budget"?: string; "fact_types"?: Array<string>; "tags_match"?: string; "tag_groups"?: Array<((Array<WireRequestTagTest> | null))>; "include_chunks"?: boolean; "recall_max_tokens"?: number; "response_schema"?: ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null) };
 export type WireRequestTagTest = { "tags"?: Array<string>; "match"?: string; "resolve"?: string; "not"?: boolean; "and"?: Array<WireRequestTagTest>; "or"?: Array<WireRequestTagTest> };
-export type WireRequestSpaceConsolidation = { "observations_mission"?: string; "default_scope_mode"?: string; "default_scopes"?: Array<(Array<string> | null)>; "strategies"?: Array<WireRequestConsolidationStrategy>; "scope_limits"?: Array<WireRequestObservationScopeLimit>; "max_observations_per_scope"?: (number | null); "batch_size"?: number; "parallel"?: number; "max_memories_per_round"?: number };
-export type WireRequestConsolidationStrategy = { "name"?: string; "scopes"?: (Array<WireRequestObservationTagRule> | null); "observations_mission"?: string; "max_observations_per_scope"?: (number | null); "source_max_tokens"?: number; "source_max_tokens_per_observation"?: number };
-export type WireRequestObservationTagRule = { "tags"?: (Array<string> | null); "tags_match"?: string };
-export type WireRequestObservationScopeLimit = { "scope"?: (Array<string> | null); "limit"?: number };
-export type WireRequestSpaceRecallQuality = { "relevance_gate"?: (boolean | null); "conflict_pending"?: string; "provisional"?: (boolean | null); "auto_close_on_correction"?: boolean; "provisional_vectors"?: boolean; "rerank_options"?: (WireRequestRerankOptions | null); "prefer_observations"?: boolean; "include_chunks"?: boolean; "chunks_max_tokens"?: number; "diversity"?: (boolean | null); "expand"?: boolean; "signal_policy"?: (WireRequestSignalPolicy | null) };
+export type WireRequestSpaceConsolidation = { "observations_mission"?: string; "default_scope_mode"?: string; "default_scopes"?: Array<((Array<string> | null))>; "strategies"?: Array<WireRequestConsolidationStrategy>; "scope_limits"?: Array<WireRequestObservationScopeLimit>; "max_observations_per_scope"?: ((number | null)); "batch_size"?: number; "parallel"?: number; "max_memories_per_round"?: number };
+export type WireRequestConsolidationStrategy = { "name"?: string; "scopes"?: ((Array<WireRequestObservationTagRule> | null)); "observations_mission"?: string; "max_observations_per_scope"?: ((number | null)); "source_max_tokens"?: number; "source_max_tokens_per_observation"?: number };
+export type WireRequestObservationTagRule = { "tags"?: ((Array<string> | null)); "tags_match"?: string };
+export type WireRequestObservationScopeLimit = { "scope"?: ((Array<string> | null)); "limit"?: number };
+export type WireRequestSpaceRecallQuality = { "relevance_gate"?: ((boolean | null)); "conflict_pending"?: string; "provisional"?: ((boolean | null)); "auto_close_on_correction"?: boolean; "provisional_vectors"?: boolean; "rerank_options"?: ((WireRequestRerankOptions | null)); "prefer_observations"?: boolean; "include_chunks"?: boolean; "chunks_max_tokens"?: number; "diversity"?: ((boolean | null)); "expand"?: boolean; "signal_policy"?: ((WireRequestSignalPolicy | null)) };
 export type SpaceConfigResponse = WireResponseSpaceView;
 export type SpaceConfigPatch = WireRequestSpaceConfigInput;
 export type WireResponseRerankOptions = { "prune"?: boolean; "dedup"?: boolean };
 export type WireRequestRerankOptions = { "prune"?: boolean; "dedup"?: boolean };
 export type WireResponseSpaceRecallBudget = { "function"?: string; "fixed_low"?: number; "fixed_mid"?: number; "fixed_high"?: number; "adaptive_low"?: number; "adaptive_mid"?: number; "adaptive_high"?: number; "min"?: number; "max"?: number };
 export type WireRequestSpaceRecallBudget = { "function"?: string; "fixed_low"?: number; "fixed_mid"?: number; "fixed_high"?: number; "adaptive_low"?: number; "adaptive_mid"?: number; "adaptive_high"?: number; "min"?: number; "max"?: number };
-export type WireResponseSignalPolicy = { "dimension": string; "window_days": number; "min_samples": number };
-export type WireRequestSignalPolicy = { "dimension"?: string; "window_days"?: number; "min_samples"?: number };
+export type WireResponseSignalPolicy = { "dimension": string; "window_days": number; "min_samples": number; "disabled"?: boolean };
+export type WireRequestSignalPolicy = { "dimension"?: string; "window_days"?: number; "min_samples"?: number; "disabled"?: boolean };
+export type ComponentHealth = { "database": "ready" | "unavailable" | "paused" | "unsupported" | "disabled"; "schema": "ready" | "unavailable" | "paused" | "unsupported" | "disabled"; "search": "ready" | "unavailable" | "paused" | "unsupported" | "disabled"; "write_gate": "ready" | "unavailable" | "paused" | "unsupported" | "disabled"; "blobs": "ready" | "unavailable" | "paused" | "unsupported" | "disabled" };
+export type ConversationOrder = { "epoch": string; "index": number; "total": number };
+export type WireResponseConversationOrder = { "epoch": string; "index": number; "total": number };
+export type WireResponseMemorySignalExplanation = { "memory": WireResponseRef; "authority": string; "mode": string; "as_of": string; "policy"?: WireResponseSignalPolicy; "historical_total": number; "window_events": number; "eligible_total": number; "eligible_passed": number; "excluded_window_events": number; "minimum_met": boolean; "evaluation_factor": number; "work_factor": number; "effective_factor": number; "applicable": boolean; "signal_computed_at"?: string };
 
 export interface ClientOptions {
   /** Server base URL, e.g. http://127.0.0.1:8080 */
@@ -1057,7 +1061,7 @@ export class ArkismClient {
     return this.request("GET", `/v1/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`, query, undefined);
   }
   /** DELETE /v1/{collection}/{id} — Delete a record, or preview direct references with dry_run=true */
-  deleteV1ByCollectionById(collection: string, id: string, body: ChangeInput, query?: { "dry_run"?: boolean }): Promise<({ "deleted": true } | DeletionPreview)> {
+  deleteV1ByCollectionById(collection: string, id: string, body: ChangeInput, query?: { "dry_run"?: boolean }): Promise<(({ "deleted": true } | DeletionPreview))> {
     return this.request("DELETE", `/v1/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`, query, body);
   }
   /** POST /v1/{collection}/{id}/transition — Human-only state transition with revision comparison */
@@ -1681,7 +1685,7 @@ export class ArkismClient {
     return this.request("POST", `/v1/memory_candidates/${encodeURIComponent(id)}/deletion/retry`, undefined, body);
   }
   /** POST /v1/deletions/export — Export retained deletion targets */
-  postV1DeletionsExport(body: { "scope": Scope; "version"?: 1 | 2 }): Promise<(DeletionLedger | RecoveryDeletionLedger)> {
+  postV1DeletionsExport(body: { "scope": Scope; "version"?: 1 | 2 }): Promise<((DeletionLedger | RecoveryDeletionLedger))> {
     return this.request("POST", `/v1/deletions/export`, undefined, body);
   }
   /** POST /v1/sources/ingest — ingest a bounded text file and source atomically in Mongo */
@@ -1825,7 +1829,7 @@ export class ArkismClient {
     return this.request("GET", `/v1/memories/${encodeURIComponent(id)}/outcome-comparison`, query, undefined);
   }
   /** GET /v1/memory-graph — Relation graph around one memory, or the whole map */
-  getV1MemoryGraph(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "mode"?: "all"; "memory_id"?: string; "depth"?: number; "reach"?: string; "project_key"?: string; "limit"?: number }): Promise<(MemoryGraph | MemoryGraphMap)> {
+  getV1MemoryGraph(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "mode"?: "all"; "memory_id"?: string; "depth"?: number; "reach"?: string; "project_key"?: string; "limit"?: number }): Promise<((MemoryGraph | MemoryGraphMap))> {
     return this.request("GET", `/v1/memory-graph`, query, undefined);
   }
   /** POST /v1/memory-outcomes/summary — Verification summaries for up to 100 memories */
@@ -1929,35 +1933,35 @@ export class ArkismClient {
     return this.request("GET", `/v1/code_graph/files`, query, undefined);
   }
   /** POST /v1/code_graph/batch — Code graph: batch */
-  post_v1_code_graph_batch(body: (WireRequestCodeGraphBatch & unknown)): Promise<WireResponseCodeGraphBatchResult> {
+  post_v1_code_graph_batch(body: (WireRequestCodeGraphBatch)): Promise<WireResponseCodeGraphBatchResult> {
     return this.request("POST", `/v1/code_graph/batch`, undefined, body);
   }
   /** POST /v1/code_graph/finish — Code graph: finish */
-  post_v1_code_graph_finish(body: (WireRequestCodeGraphFinish & unknown)): Promise<WireResponseCodeRepo> {
+  post_v1_code_graph_finish(body: (WireRequestCodeGraphFinish)): Promise<WireResponseCodeRepo> {
     return this.request("POST", `/v1/code_graph/finish`, undefined, body);
   }
   /** POST /v1/code_graph/repos/delete — Code graph: repos/delete */
-  post_v1_code_graph_repos_delete(body: (WireRequestCodeGraphRepoInput & unknown)): Promise<DeletedEnvelope> {
+  post_v1_code_graph_repos_delete(body: (WireRequestCodeGraphRepoInput)): Promise<DeletedEnvelope> {
     return this.request("POST", `/v1/code_graph/repos/delete`, undefined, body);
   }
   /** POST /v1/code_graph/changed — Code graph: changed */
-  post_v1_code_graph_changed(body: (WireRequestCodeChangedQuery & unknown)): Promise<WireResponseCodeChangedAnswer> {
+  post_v1_code_graph_changed(body: (WireRequestCodeChangedQuery)): Promise<WireResponseCodeChangedAnswer> {
     return this.request("POST", `/v1/code_graph/changed`, undefined, body);
   }
   /** POST /v1/code_graph/search — Code graph: search */
-  post_v1_code_graph_search(body: (WireRequestCodeGraphQuery & unknown)): Promise<WireResponseCodeGraphAnswer> {
+  post_v1_code_graph_search(body: (WireRequestCodeGraphQuery)): Promise<WireResponseCodeGraphAnswer> {
     return this.request("POST", `/v1/code_graph/search`, undefined, body);
   }
   /** POST /v1/code_graph/callers — Code graph: callers */
-  post_v1_code_graph_callers(body: (WireRequestCodeGraphQuery & unknown)): Promise<WireResponseCodeGraphAnswer> {
+  post_v1_code_graph_callers(body: (WireRequestCodeGraphQuery)): Promise<WireResponseCodeGraphAnswer> {
     return this.request("POST", `/v1/code_graph/callers`, undefined, body);
   }
   /** POST /v1/code_graph/callees — Code graph: callees */
-  post_v1_code_graph_callees(body: (WireRequestCodeGraphQuery & unknown)): Promise<WireResponseCodeGraphAnswer> {
+  post_v1_code_graph_callees(body: (WireRequestCodeGraphQuery)): Promise<WireResponseCodeGraphAnswer> {
     return this.request("POST", `/v1/code_graph/callees`, undefined, body);
   }
   /** POST /v1/code_graph/impact — Code graph: impact */
-  post_v1_code_graph_impact(body: (WireRequestCodeGraphQuery & unknown)): Promise<WireResponseCodeGraphAnswer> {
+  post_v1_code_graph_impact(body: (WireRequestCodeGraphQuery)): Promise<WireResponseCodeGraphAnswer> {
     return this.request("POST", `/v1/code_graph/impact`, undefined, body);
   }
   /** GET /v1/code_reviews — Code reviews: get */
@@ -1965,15 +1969,15 @@ export class ArkismClient {
     return this.request("GET", `/v1/code_reviews`, query, undefined);
   }
   /** POST /v1/code_reviews — Code reviews: post */
-  post_v1_code_reviews(body: (WireRequestCodeReviewsReport & unknown)): Promise<WireResponseRecord> {
+  post_v1_code_reviews(body: (WireRequestCodeReviewsReport)): Promise<WireResponseRecord> {
     return this.request("POST", `/v1/code_reviews`, undefined, body);
   }
   /** POST /v1/code_reviews/settings — Code reviews: /settings */
-  post_v1_code_reviews_settings(body: (WireRequestCodeReviewSettingsInput & unknown)): Promise<WireResponseRecord> {
+  post_v1_code_reviews_settings(body: (WireRequestCodeReviewSettingsInput)): Promise<WireResponseRecord> {
     return this.request("POST", `/v1/code_reviews/settings`, undefined, body);
   }
   /** POST /v1/code_reviews/rerun — Code reviews: /rerun */
-  post_v1_code_reviews_rerun(body: (WireRequestCodeReviewRerunInput & unknown)): Promise<WireResponseRecord> {
+  post_v1_code_reviews_rerun(body: (WireRequestCodeReviewRerunInput)): Promise<WireResponseRecord> {
     return this.request("POST", `/v1/code_reviews/rerun`, undefined, body);
   }
   /** GET /v1/crew/agents/{id}/calls — List direct calls for an agent */
@@ -1989,7 +1993,7 @@ export class ArkismClient {
     return this.request("GET", `/v1/design_systems/archived`, query, undefined);
   }
   /** POST /v1/design_systems/{id}/restore — Restore archived design_systems */
-  post_v1_design_systems_id_restore(id: string, body: (WireRequestChangeInput & unknown)): Promise<WireResponseRecord> {
+  post_v1_design_systems_id_restore(id: string, body: (WireRequestChangeInput)): Promise<WireResponseRecord> {
     return this.request("POST", `/v1/design_systems/${encodeURIComponent(id)}/restore`, undefined, body);
   }
   /** GET /v1/prompts/archived — List archived prompts */
@@ -1997,7 +2001,7 @@ export class ArkismClient {
     return this.request("GET", `/v1/prompts/archived`, query, undefined);
   }
   /** POST /v1/prompts/{id}/restore — Restore archived prompts */
-  post_v1_prompts_id_restore(id: string, body: (WireRequestChangeInput & unknown)): Promise<WireResponseRecord> {
+  post_v1_prompts_id_restore(id: string, body: (WireRequestChangeInput)): Promise<WireResponseRecord> {
     return this.request("POST", `/v1/prompts/${encodeURIComponent(id)}/restore`, undefined, body);
   }
   /** GET /v1/digests — Digests: list */
@@ -2013,27 +2017,27 @@ export class ArkismClient {
     return this.request("GET", `/v1/digests/${encodeURIComponent(id)}`, query, undefined);
   }
   /** POST /v1/digests/{id}/decide — Digests: /{id}/decide */
-  post_v1_digests_id_decide(id: string, body: (WireRequestDigestDecisionInput & unknown)): Promise<WireResponseDigestView> {
+  post_v1_digests_id_decide(id: string, body: (WireRequestDigestDecisionInput)): Promise<WireResponseDigestView> {
     return this.request("POST", `/v1/digests/${encodeURIComponent(id)}/decide`, undefined, body);
   }
   /** POST /v1/digests/regenerate — Digests: /regenerate */
-  post_v1_digests_regenerate(body: (WireRequestDigestRegenerateInput & unknown)): Promise<WireResponseDigestJudgeResult> {
+  post_v1_digests_regenerate(body: (WireRequestDigestRegenerateInput)): Promise<WireResponseDigestJudgeResult> {
     return this.request("POST", `/v1/digests/regenerate`, undefined, body);
   }
   /** POST /v1/digests/plan — Digests: /plan */
-  post_v1_digests_plan(body: (WireRequestDigestPlanInput & unknown)): Promise<WireResponseDigestPlan> {
+  post_v1_digests_plan(body: (WireRequestDigestPlanInput)): Promise<WireResponseDigestPlan> {
     return this.request("POST", `/v1/digests/plan`, undefined, body);
   }
   /** POST /v1/digests/proposals — Digests: /proposals */
-  post_v1_digests_proposals(body: (WireRequestDigestProposalInput & unknown)): Promise<WireResponseDigestView> {
+  post_v1_digests_proposals(body: (WireRequestDigestProposalInput)): Promise<WireResponseDigestView> {
     return this.request("POST", `/v1/digests/proposals`, undefined, body);
   }
   /** POST /v1/digests/user/judge — Digests: /user/judge */
-  post_v1_digests_user_judge(body: (WireRequestDigestJudgeInput & unknown)): Promise<WireResponseDigestJudgeResult> {
+  post_v1_digests_user_judge(body: (WireRequestDigestJudgeInput)): Promise<WireResponseDigestJudgeResult> {
     return this.request("POST", `/v1/digests/user/judge`, undefined, body);
   }
   /** POST /v1/digests/recall — Digests: /recall */
-  post_v1_digests_recall(body: (WireRequestDigestRecallInput & unknown)): Promise<WireResponseDigestRecallPage> {
+  post_v1_digests_recall(body: (WireRequestDigestRecallInput)): Promise<WireResponseDigestRecallPage> {
     return this.request("POST", `/v1/digests/recall`, undefined, body);
   }
   /** GET /v1/knowledge/sources — List knowledge source metadata */
@@ -2045,7 +2049,7 @@ export class ArkismClient {
     return this.request("GET", `/v1/knowledge/documents`, query, undefined);
   }
   /** POST /v1/knowledge/search — Search active knowledge bindings */
-  post_v1_knowledge_search(body: (WireRequestKnowledgeSearchInput & unknown)): Promise<WireResponseKnowledgeSearchResult> {
+  post_v1_knowledge_search(body: (WireRequestKnowledgeSearchInput)): Promise<WireResponseKnowledgeSearchResult> {
     return this.request("POST", `/v1/knowledge/search`, undefined, body);
   }
   /** GET /v1/messengers — List masked notification destinations */
@@ -2053,15 +2057,15 @@ export class ArkismClient {
     return this.request("GET", `/v1/messengers`, query, undefined);
   }
   /** POST /v1/messengers — Notifications: save */
-  post_v1_messengers(body: (WireRequestMessengerSave & unknown)): Promise<MessengerResult> {
+  post_v1_messengers(body: (WireRequestMessengerSave)): Promise<MessengerResult> {
     return this.request("POST", `/v1/messengers`, undefined, body);
   }
   /** POST /v1/messengers/remove — Notifications: /remove */
-  post_v1_messengers_remove(body: (WireRequestMessengerRef & unknown)): Promise<MessengerResult> {
+  post_v1_messengers_remove(body: (WireRequestMessengerRef)): Promise<MessengerResult> {
     return this.request("POST", `/v1/messengers/remove`, undefined, body);
   }
   /** POST /v1/messengers/test — Notifications: /test */
-  post_v1_messengers_test(body: (WireRequestMessengerRef & unknown)): Promise<MessengerResult> {
+  post_v1_messengers_test(body: (WireRequestMessengerRef)): Promise<MessengerResult> {
     return this.request("POST", `/v1/messengers/test`, undefined, body);
   }
   /** GET /v1/skills/usage — List recent skill usage */
@@ -2073,35 +2077,35 @@ export class ArkismClient {
     return this.request("GET", `/v1/twin/claims`, query, undefined);
   }
   /** POST /v1/context/tokens — Count injection preview tokens */
-  post_v1_context_tokens(body: (WireRequestTokenCountInput & unknown)): Promise<WireResponseTokenCount> {
+  post_v1_context_tokens(body: (WireRequestTokenCountInput)): Promise<WireResponseTokenCount> {
     return this.request("POST", `/v1/context/tokens`, undefined, body);
   }
   /** POST /v1/import/sessions — Import or preview session memory candidates */
-  post_v1_import_sessions(body: (WireRequestSessionImportInput & unknown)): Promise<WireResponseSessionImportResult> {
+  post_v1_import_sessions(body: (WireRequestSessionImportInput)): Promise<WireResponseSessionImportResult> {
     return this.request("POST", `/v1/import/sessions`, undefined, body);
   }
   /** POST /v1/memories/{id}/expiry — Set or clear a memory expiration */
-  post_v1_memories_id_expiry(id: string, body: (WireRequestMemoryExpiryInput & unknown)): Promise<WireResponseRecord> {
+  post_v1_memories_id_expiry(id: string, body: (WireRequestMemoryExpiryInput)): Promise<WireResponseRecord> {
     return this.request("POST", `/v1/memories/${encodeURIComponent(id)}/expiry`, undefined, body);
   }
   /** POST /v1/providers/labels — Providers: labels */
-  post_v1_providers_labels(body: (WireRequestProviderLabel & unknown)): Promise<WireResponseRecord> {
+  post_v1_providers_labels(body: (WireRequestProviderLabel)): Promise<WireResponseRecord> {
     return this.request("POST", `/v1/providers/labels`, undefined, body);
   }
   /** POST /v1/providers/test — Providers: test */
-  post_v1_providers_test(body: (WireRequestProviderModelTest & unknown)): Promise<WireResponseRecord> {
+  post_v1_providers_test(body: (WireRequestProviderModelTest)): Promise<WireResponseRecord> {
     return this.request("POST", `/v1/providers/test`, undefined, body);
   }
   /** POST /v1/usage/sessions/delete — Sessions: delete */
-  post_v1_usage_sessions_delete(body: (WireRequestSessionDeleteInput & unknown)): Promise<WireResponseSessionDeleteOutput> {
+  post_v1_usage_sessions_delete(body: (WireRequestSessionDeleteInput)): Promise<WireResponseSessionDeleteOutput> {
     return this.request("POST", `/v1/usage/sessions/delete`, undefined, body);
   }
   /** POST /v1/usage/sessions/export — Sessions: export */
-  post_v1_usage_sessions_export(body: (WireRequestSessionExportInput & unknown)): Promise<WireResponseSessionExportOutput> {
+  post_v1_usage_sessions_export(body: (WireRequestSessionExportInput)): Promise<WireResponseSessionExportOutput> {
     return this.request("POST", `/v1/usage/sessions/export`, undefined, body);
   }
   /** POST /v1/usage/sessions/transcript — Sessions: transcript */
-  post_v1_usage_sessions_transcript(body: (WireRequestSessionTranscriptInput & unknown)): Promise<WireResponseSessionTranscriptOutput> {
+  post_v1_usage_sessions_transcript(body: (WireRequestSessionTranscriptInput)): Promise<WireResponseSessionTranscriptOutput> {
     return this.request("POST", `/v1/usage/sessions/transcript`, undefined, body);
   }
   /** GET /v1/wiki/jobs — Wiki: jobs */
@@ -2109,39 +2113,39 @@ export class ArkismClient {
     return this.request("GET", `/v1/wiki/jobs`, query, undefined);
   }
   /** POST /v1/wiki/jobs — Wiki: jobs */
-  post_v1_wiki_jobs(body: (WireRequestWikiJobInput & unknown)): Promise<WireResponseWikiJobView> {
+  post_v1_wiki_jobs(body: (WireRequestWikiJobInput)): Promise<WireResponseWikiJobView> {
     return this.request("POST", `/v1/wiki/jobs`, undefined, body);
   }
   /** POST /v1/wiki/jobs/{id}/run — Wiki: jobs/{id}/run */
-  post_v1_wiki_jobs_id_run(id: string, body: (WireRequestWikiScopeInput & unknown)): Promise<WireResponseWikiJobView> {
+  post_v1_wiki_jobs_id_run(id: string, body: (WireRequestWikiScopeInput)): Promise<WireResponseWikiJobView> {
     return this.request("POST", `/v1/wiki/jobs/${encodeURIComponent(id)}/run`, undefined, body);
   }
   /** POST /v1/wiki/work — Wiki: work */
-  post_v1_wiki_work(body: (WireRequestWikiScopeInput & unknown)): Promise<WireResponseWikiJobView> {
+  post_v1_wiki_work(body: (WireRequestWikiScopeInput)): Promise<WireResponseWikiJobView> {
     return this.request("POST", `/v1/wiki/work`, undefined, body);
   }
   /** POST /v1/wiki/pages/{id}/review — Wiki: pages/{id}/review */
-  post_v1_wiki_pages_id_review(id: string, body: (WireRequestWikiReviewInput & unknown)): Promise<WireResponseWikiPageView> {
+  post_v1_wiki_pages_id_review(id: string, body: (WireRequestWikiReviewInput)): Promise<WireResponseWikiPageView> {
     return this.request("POST", `/v1/wiki/pages/${encodeURIComponent(id)}/review`, undefined, body);
   }
   /** POST /v1/wiki/pages/{id}/lock — Wiki: pages/{id}/lock */
-  post_v1_wiki_pages_id_lock(id: string, body: (WireRequestWikiLockInput & unknown)): Promise<WireResponseWikiPageView> {
+  post_v1_wiki_pages_id_lock(id: string, body: (WireRequestWikiLockInput)): Promise<WireResponseWikiPageView> {
     return this.request("POST", `/v1/wiki/pages/${encodeURIComponent(id)}/lock`, undefined, body);
   }
   /** POST /v1/wiki/pages/{id}/edit — Wiki: pages/{id}/edit */
-  post_v1_wiki_pages_id_edit(id: string, body: (WireRequestWikiEditInput & unknown)): Promise<WireResponseWikiPageView> {
+  post_v1_wiki_pages_id_edit(id: string, body: (WireRequestWikiEditInput)): Promise<WireResponseWikiPageView> {
     return this.request("POST", `/v1/wiki/pages/${encodeURIComponent(id)}/edit`, undefined, body);
   }
   /** POST /v1/wiki/search — Wiki: search */
-  post_v1_wiki_search(body: (WireRequestWikiSearchInput & unknown)): Promise<WireResponseWikiSearchResult> {
+  post_v1_wiki_search(body: (WireRequestWikiSearchInput)): Promise<WireResponseWikiSearchResult> {
     return this.request("POST", `/v1/wiki/search`, undefined, body);
   }
   /** POST /v1/wiki/read — Wiki: read */
-  post_v1_wiki_read(body: (WireRequestWikiSearchInput & unknown)): Promise<WireResponseWikiSearchResult> {
+  post_v1_wiki_read(body: (WireRequestWikiSearchInput)): Promise<WireResponseWikiSearchResult> {
     return this.request("POST", `/v1/wiki/read`, undefined, body);
   }
   /** POST /v1/wiki/sources/{id}/remove — Wiki: sources/{id}/remove */
-  post_v1_wiki_sources_id_remove(id: string, body: (WireRequestWikiSourceRemoveInput & unknown), query?: { "dry_run"?: "1" | "true" }): Promise<WireResponseWikiCleanupResult> {
+  post_v1_wiki_sources_id_remove(id: string, body: (WireRequestWikiSourceRemoveInput), query?: { "dry_run"?: "1" | "true" }): Promise<WireResponseWikiCleanupResult> {
     return this.request("POST", `/v1/wiki/sources/${encodeURIComponent(id)}/remove`, query, body);
   }
   /** GET /v1/wiki/jobs/{id} — Wiki: jobs/{id} */
@@ -2157,7 +2161,7 @@ export class ArkismClient {
     return this.request("GET", `/v1/wiki/pages/${encodeURIComponent(id)}`, query, undefined);
   }
   /** PATCH /v1/wiki/pages/{id} — Wiki: move or rename a page */
-  patch_v1_wiki_pages_id(id: string, body: (WireRequestWikiPagePatchInput & unknown)): Promise<WireResponseWikiPageView> {
+  patch_v1_wiki_pages_id(id: string, body: (WireRequestWikiPagePatchInput)): Promise<WireResponseWikiPageView> {
     return this.request("PATCH", `/v1/wiki/pages/${encodeURIComponent(id)}`, undefined, body);
   }
   /** DELETE /v1/wiki/pages/{id} — Wiki: delete a page */
@@ -2169,23 +2173,23 @@ export class ArkismClient {
     return this.request("GET", `/v1/wiki/graph`, query, undefined);
   }
   /** POST /v1/memories/query — Query all authorized memories */
-  post_v1_memories_query(body: ((WireRequestCatalogQueryInput & unknown) & { "limit"?: number; "q"?: string; "cursor"?: string; "direction"?: number; "sort"?: "" | "recent" | "old" | "used"; "state"?: "" | "active" | "idle" | "provenance"; "categories"?: Array<unknown>; "agents"?: Array<unknown>; "kept_ids"?: Array<unknown> })): Promise<WireResponseMemoryCatalogPage> {
+  post_v1_memories_query(body: ((WireRequestCatalogQueryInput) & { "limit"?: number; "q"?: string; "cursor"?: string; "direction"?: number; "sort"?: "" | "recent" | "old" | "used"; "state"?: "" | "active" | "idle" | "provenance"; "categories"?: Array<unknown>; "agents"?: Array<unknown>; "kept_ids"?: Array<unknown> })): Promise<WireResponseMemoryCatalogPage> {
     return this.request("POST", `/v1/memories/query`, undefined, body);
   }
   /** POST /v1/memory_candidates/query — Query all authorized memory_candidates */
-  post_v1_memory_candidates_query(body: ((WireRequestCatalogQueryInput & unknown) & { "limit"?: number; "q"?: string; "cursor"?: string; "direction"?: number; "sort"?: "" | "risk" | "recent" | "old"; "state"?: "" | "candidate" | "conflicted" | "all"; "categories"?: Array<unknown>; "agents"?: Array<unknown>; "kept_ids"?: Array<unknown> })): Promise<WireResponseMemoryCatalogPage> {
+  post_v1_memory_candidates_query(body: ((WireRequestCatalogQueryInput) & { "limit"?: number; "q"?: string; "cursor"?: string; "direction"?: number; "sort"?: "" | "risk" | "recent" | "old"; "state"?: "" | "candidate" | "conflicted" | "all"; "categories"?: Array<unknown>; "agents"?: Array<unknown>; "kept_ids"?: Array<unknown> })): Promise<WireResponseMemoryCatalogPage> {
     return this.request("POST", `/v1/memory_candidates/query`, undefined, body);
   }
   /** POST /v1/skills/query — Query all authorized skills */
-  post_v1_skills_query(body: ((WireRequestCatalogQueryInput & unknown) & { "limit"?: number; "q"?: string; "cursor"?: string; "direction"?: number; "sort"?: "" | "used" | "recent" | "name" | "updated" | "quality" | "security" | "agents"; "state"?: "" | "all" | "trash" | "unused" | "plugin" | "update" | "missing" | "caution"; "categories"?: Array<unknown>; "agents"?: Array<unknown>; "kept_ids"?: Array<unknown> })): Promise<WireResponseSkillCatalogPage> {
+  post_v1_skills_query(body: ((WireRequestCatalogQueryInput) & { "limit"?: number; "q"?: string; "cursor"?: string; "direction"?: number; "sort"?: "" | "used" | "recent" | "name" | "updated" | "quality" | "security" | "agents"; "state"?: "" | "all" | "trash" | "unused" | "plugin" | "update" | "missing" | "caution"; "categories"?: Array<unknown>; "agents"?: Array<unknown>; "kept_ids"?: Array<unknown> })): Promise<WireResponseSkillCatalogPage> {
     return this.request("POST", `/v1/skills/query`, undefined, body);
   }
   /** POST /v1/knowledge/sources/query — Query all authorized knowledge/sources */
-  post_v1_knowledge_sources_query(body: ((WireRequestCatalogQueryInput & unknown) & { "limit"?: number; "q"?: string; "cursor"?: string; "direction"?: number; "sort"?: "" | "recent" | "name" | "chunks"; "state"?: "" | "all" | "검토 대기" | "사용 중" | "실패"; "categories"?: Array<unknown>; "agents"?: Array<unknown>; "kept_ids"?: Array<unknown> })): Promise<WireResponseKnowledgeCatalogPage> {
+  post_v1_knowledge_sources_query(body: ((WireRequestCatalogQueryInput) & { "limit"?: number; "q"?: string; "cursor"?: string; "direction"?: number; "sort"?: "" | "recent" | "name" | "chunks"; "state"?: "" | "all" | "검토 대기" | "사용 중" | "실패"; "categories"?: Array<unknown>; "agents"?: Array<unknown>; "kept_ids"?: Array<unknown> })): Promise<WireResponseKnowledgeCatalogPage> {
     return this.request("POST", `/v1/knowledge/sources/query`, undefined, body);
   }
   /** POST /v1/providers/models_refresh — Providers: models refresh */
-  post_v1_providers_models_refresh(body: (WireRequestProviderModelsRefresh & unknown)): Promise<WireResponseRecord> {
+  post_v1_providers_models_refresh(body: (WireRequestProviderModelsRefresh)): Promise<WireResponseRecord> {
     return this.request("POST", `/v1/providers/models_refresh`, undefined, body);
   }
   /** GET /v1/flow/capabilities/{id} — FLOW: definition execution capabilities */
@@ -2197,19 +2201,19 @@ export class ArkismClient {
     return this.request("GET", `/v1/crew/runs/${encodeURIComponent(id)}/result`, query, undefined);
   }
   /** POST /v1/crew/runs/{id}/children — FLOW: create or reuse one durable child */
-  post_v1_crew_runs_id_children(id: string, body: ((WireRequestFlowChildInput & unknown) & { "attempt"?: number; "kind"?: "workflow" | "meeting" })): Promise<WireResponseFlowChildCreated> {
+  post_v1_crew_runs_id_children(id: string, body: ((WireRequestFlowChildInput) & { "attempt"?: number; "kind"?: "workflow" | "meeting" })): Promise<WireResponseFlowChildCreated> {
     return this.request("POST", `/v1/crew/runs/${encodeURIComponent(id)}/children`, undefined, body);
   }
   /** POST /v1/crew/runs/{id}/children/cancel — FLOW: request descendant cancellation */
-  post_v1_crew_runs_id_children_cancel(id: string, body: (WireRequestFlowChildrenCancel & unknown)): Promise<WireResponseFlowChildrenCancelled> {
+  post_v1_crew_runs_id_children_cancel(id: string, body: (WireRequestFlowChildrenCancel)): Promise<WireResponseFlowChildrenCancelled> {
     return this.request("POST", `/v1/crew/runs/${encodeURIComponent(id)}/children/cancel`, undefined, body);
   }
   /** POST /v1/crew/runs/{id}/attempts — FLOW: reserve one model attempt */
-  post_v1_crew_runs_id_attempts(id: string, body: ((WireRequestFlowAttemptInput & unknown) & { "attempt"?: number; "max_input_tokens"?: number; "max_output_tokens"?: number })): Promise<WireResponseFlowAttemptReservation> {
+  post_v1_crew_runs_id_attempts(id: string, body: ((WireRequestFlowAttemptInput) & { "attempt"?: number; "max_input_tokens"?: number; "max_output_tokens"?: number })): Promise<WireResponseFlowAttemptReservation> {
     return this.request("POST", `/v1/crew/runs/${encodeURIComponent(id)}/attempts`, undefined, body);
   }
   /** POST /v1/crew/runs/{id}/attempts/{attempt_id}/settle — FLOW: settle an attempt receipt */
-  post_v1_crew_runs_id_attempts_attempt_id_settle(id: string, attemptId: string, body: ((WireRequestFlowAttemptSettleInput & unknown) & { "status"?: "succeeded" | "failed" | "unknown"; "input_tokens"?: number; "output_tokens"?: number })): Promise<WireResponseFlowAttemptReservation> {
+  post_v1_crew_runs_id_attempts_attempt_id_settle(id: string, attemptId: string, body: ((WireRequestFlowAttemptSettleInput) & { "status"?: "succeeded" | "failed" | "unknown"; "input_tokens"?: number; "output_tokens"?: number })): Promise<WireResponseFlowAttemptReservation> {
     return this.request("POST", `/v1/crew/runs/${encodeURIComponent(id)}/attempts/${encodeURIComponent(attemptId)}/settle`, undefined, body);
   }
   /** GET /v1/flow/improvements — FLOW: list improvement references and states */
@@ -2217,7 +2221,7 @@ export class ArkismClient {
     return this.request("GET", `/v1/flow/improvements`, query, undefined);
   }
   /** POST /v1/flow/improvements — FLOW: start a durable skill improvement */
-  post_v1_flow_improvements(body: (WireRequestFlowImprovementStart & unknown)): Promise<WireResponseFlowImprovementView> {
+  post_v1_flow_improvements(body: (WireRequestFlowImprovementStart)): Promise<WireResponseFlowImprovementView> {
     return this.request("POST", `/v1/flow/improvements`, undefined, body);
   }
   /** GET /v1/flow/improvements/{id} — FLOW: read improvement state */
@@ -2225,39 +2229,39 @@ export class ArkismClient {
     return this.request("GET", `/v1/flow/improvements/${encodeURIComponent(id)}`, query, undefined);
   }
   /** POST /v1/flow/improvements/{id}/advance — FLOW: advance one explicit improvement action */
-  post_v1_flow_improvements_id_advance(id: string, body: ((WireRequestFlowImprovementAdvance & unknown) & { "expected_revision"?: number; "action"?: "generate" | "compare" | "approve" | "trial" | "observe" | "apply" | "monitor" | "rollback" })): Promise<WireResponseFlowImprovementView> {
+  post_v1_flow_improvements_id_advance(id: string, body: ((WireRequestFlowImprovementAdvance) & { "expected_revision"?: number; "action"?: "generate" | "compare" | "approve" | "trial" | "observe" | "apply" | "monitor" | "rollback" })): Promise<WireResponseFlowImprovementView> {
     return this.request("POST", `/v1/flow/improvements/${encodeURIComponent(id)}/advance`, undefined, body);
   }
   /** POST /v1/crew/deliveries/{id}/recover — FLOW: explicitly recover uncertain delivery */
-  post_v1_crew_deliveries_id_recover(id: string, body: ((WireRequestFlowDeliveryRecovery & unknown) & { "expected_revision"?: number; "action"?: "retry" | "ack_part" | "redirect"; "confirmed"?: true })): Promise<WireResponseFlowDeliveryView> {
+  post_v1_crew_deliveries_id_recover(id: string, body: ((WireRequestFlowDeliveryRecovery) & { "expected_revision"?: number; "action"?: "retry" | "ack_part" | "redirect"; "confirmed"?: true })): Promise<WireResponseFlowDeliveryView> {
     return this.request("POST", `/v1/crew/deliveries/${encodeURIComponent(id)}/recover`, undefined, body);
   }
   /** POST /v1/crew/runs/{id}/effects — FLOW: prepare an outbound notification for approval */
-  post_v1_crew_runs_id_effects(id: string, body: ((WireRequestFlowEffectInput & unknown) & { "attempt"?: number; "adapter"?: "notify.telegram.v1" | "notify.slack.v1"; "target_hash"?: string; "args_hash"?: string; "preview"?: string })): Promise<WireResponseFlowEffectView> {
+  post_v1_crew_runs_id_effects(id: string, body: ((WireRequestFlowEffectInput) & { "attempt"?: number; "adapter"?: "notify.telegram.v1" | "notify.slack.v1"; "target_hash"?: string; "args_hash"?: string; "preview"?: string })): Promise<WireResponseFlowEffectView> {
     return this.request("POST", `/v1/crew/runs/${encodeURIComponent(id)}/effects`, undefined, body);
   }
   /** POST /v1/crew/runs/{id}/effects/{effect_id}/claim — FLOW: claim one approved outbound dispatch */
-  post_v1_crew_runs_id_effects_effect_id_claim(id: string, effectId: string, body: ((WireRequestFlowEffectClaimInput & unknown) & { "effect_hash"?: string; "preview"?: string })): Promise<WireResponseFlowEffectView> {
+  post_v1_crew_runs_id_effects_effect_id_claim(id: string, effectId: string, body: ((WireRequestFlowEffectClaimInput) & { "effect_hash"?: string; "preview"?: string })): Promise<WireResponseFlowEffectView> {
     return this.request("POST", `/v1/crew/runs/${encodeURIComponent(id)}/effects/${encodeURIComponent(effectId)}/claim`, undefined, body);
   }
   /** POST /v1/crew/runs/{id}/effects/{effect_id}/settle — FLOW: save an outbound dispatch receipt */
-  post_v1_crew_runs_id_effects_effect_id_settle(id: string, effectId: string, body: ((WireRequestFlowEffectSettleInput & unknown) & { "effect_hash"?: string; "preview"?: ""; "status"?: "succeeded" | "unknown"; "http_status"?: number; "response_hash"?: string })): Promise<WireResponseFlowEffectView> {
+  post_v1_crew_runs_id_effects_effect_id_settle(id: string, effectId: string, body: ((WireRequestFlowEffectSettleInput) & { "effect_hash"?: string; "preview"?: ""; "status"?: "succeeded" | "unknown"; "http_status"?: number; "response_hash"?: string })): Promise<WireResponseFlowEffectView> {
     return this.request("POST", `/v1/crew/runs/${encodeURIComponent(id)}/effects/${encodeURIComponent(effectId)}/settle`, undefined, body);
   }
   /** POST /v1/usage/sessions/handoff — Sessions: what another agent can resume from */
-  post_v1_usage_sessions_handoff(body: (WireRequestUsageSessionHandoffInput & unknown)): Promise<WireResponseUsageSessionHandoffOutput> {
+  post_v1_usage_sessions_handoff(body: (WireRequestUsageSessionHandoffInput)): Promise<WireResponseUsageSessionHandoffOutput> {
     return this.request("POST", `/v1/usage/sessions/handoff`, undefined, body);
   }
   /** POST /v1/usage/sessions/search — Sessions: search dialogue */
-  post_v1_usage_sessions_search(body: (WireRequestUsageSessionSearchInput & unknown)): Promise<WireResponseUsageSessionSearchOutput> {
+  post_v1_usage_sessions_search(body: (WireRequestUsageSessionSearchInput)): Promise<WireResponseUsageSessionSearchOutput> {
     return this.request("POST", `/v1/usage/sessions/search`, undefined, body);
   }
   /** POST /v1/providers/role_model — Providers: role model */
-  post_v1_providers_role_model(body: (WireRequestProviderRoleModel & unknown)): Promise<WireResponseRecord> {
+  post_v1_providers_role_model(body: (WireRequestProviderRoleModel)): Promise<WireResponseRecord> {
     return this.request("POST", `/v1/providers/role_model`, undefined, body);
   }
   /** POST /v1/usage/sessions/archives — Sessions: archive status */
-  post_v1_usage_sessions_archives(body: (WireRequestSessionArchiveStatusInput & unknown)): Promise<WireResponseSessionArchiveStatusOutput> {
+  post_v1_usage_sessions_archives(body: (WireRequestSessionArchiveStatusInput)): Promise<WireResponseSessionArchiveStatusOutput> {
     return this.request("POST", `/v1/usage/sessions/archives`, undefined, body);
   }
   /** POST /v1/session-messages/send — send */
@@ -2277,7 +2281,7 @@ export class ArkismClient {
     return this.request("POST", `/v1/skills/${encodeURIComponent(id)}/watch/check`, undefined, body);
   }
   /** POST /v1/crew/{id}/hook — Show a workflow's webhook address and token */
-  post_v1_crew_id_hook(id: string, body: (WireRequestCrewHookInput & unknown)): Promise<WireResponseCrewHook> {
+  post_v1_crew_id_hook(id: string, body: (WireRequestCrewHookInput)): Promise<WireResponseCrewHook> {
     return this.request("POST", `/v1/crew/${encodeURIComponent(id)}/hook`, undefined, body);
   }
   /** GET /v1/session-archives/settings — Session archives: retention */
@@ -2285,7 +2289,7 @@ export class ArkismClient {
     return this.request("GET", `/v1/session-archives/settings`, query, undefined);
   }
   /** POST /v1/session-archives/settings — Session archives: set retention */
-  post_v1_session_archives_settings(body: (WireRequestSessionArchiveSettingsInput & unknown)): Promise<WireResponseSessionArchiveSettings> {
+  post_v1_session_archives_settings(body: (WireRequestSessionArchiveSettingsInput)): Promise<WireResponseSessionArchiveSettings> {
     return this.request("POST", `/v1/session-archives/settings`, undefined, body);
   }
   /** POST /v1/extract/preview — Preview claims from text (dry run) */
@@ -2293,7 +2297,7 @@ export class ArkismClient {
     return this.request("POST", `/v1/extract/preview`, undefined, body);
   }
   /** POST /v1/memories/ingest — Extract memory candidates from text items */
-  ingest_memories(body: { "scope": Scope; "items": Array<(unknown | unknown)>; "async"?: boolean }): Promise<{ [key: string]: unknown }> {
+  ingest_memories(body: { "scope": Scope; "items": Array<({ "content"?: string; "blocks"?: Array<{ "type": "text" | "image"; "text"?: string; "content_base64"?: string; "mime"?: "image/png" | "image/jpeg" | "image/webp" }>; "context"?: string; "timestamp"?: string; "metadata"?: { [key: string]: string }; "tags"?: Array<string>; "entities"?: Array<string>; "document_id"?: string; "update_mode"?: "" | "replace" | "append"; "strategy"?: string } & (unknown | unknown))>; "async"?: boolean }): Promise<{ [key: string]: unknown }> {
     return this.request("POST", `/v1/memories/ingest`, undefined, body);
   }
   /** POST /v1/files/memories/batch — Turn several files into memory candidates in one multipart request */
@@ -2369,7 +2373,7 @@ export class ArkismClient {
     return this.request("GET", `/v1/webhooks`, query, undefined);
   }
   /** POST /v1/webhooks — Webhooks: create */
-  post_v1_webhooks(body: (WebhookInput & unknown)): Promise<Webhook> {
+  post_v1_webhooks(body: (WebhookInput)): Promise<Webhook> {
     return this.request("POST", `/v1/webhooks`, undefined, body);
   }
   /** GET /v1/webhooks/{id} — Webhooks: read */
@@ -2377,7 +2381,7 @@ export class ArkismClient {
     return this.request("GET", `/v1/webhooks/${encodeURIComponent(id)}`, query, undefined);
   }
   /** PATCH /v1/webhooks/{id} — Webhooks: update */
-  patch_v1_webhooks_id(id: string, body: (WebhookUpdate & unknown)): Promise<Webhook> {
+  patch_v1_webhooks_id(id: string, body: (WebhookUpdate)): Promise<Webhook> {
     return this.request("PATCH", `/v1/webhooks/${encodeURIComponent(id)}`, undefined, body);
   }
   /** DELETE /v1/webhooks/{id} — Webhooks: delete */
@@ -2389,7 +2393,7 @@ export class ArkismClient {
     return this.request("GET", `/v1/webhooks/${encodeURIComponent(id)}/deliveries`, query, undefined);
   }
   /** POST /v1/webhooks/{id}/test — Webhooks: send test event */
-  post_v1_webhooks_id_test(id: string, body: (ScopeOnly & unknown)): Promise<WebhookDelivery> {
+  post_v1_webhooks_id_test(id: string, body: (ScopeOnly)): Promise<WebhookDelivery> {
     return this.request("POST", `/v1/webhooks/${encodeURIComponent(id)}/test`, undefined, body);
   }
   /** GET /v1/llm-requests — Model call traces: list */
@@ -2409,11 +2413,11 @@ export class ArkismClient {
     return this.request("GET", `/v1/wiki/tree`, query, undefined);
   }
   /** POST /v1/wiki/folders — Wiki: folders */
-  post_v1_wiki_folders(body: (WireRequestWikiFolderInput & unknown)): Promise<WireResponseWikiTreeFolder> {
+  post_v1_wiki_folders(body: (WireRequestWikiFolderInput)): Promise<WireResponseWikiTreeFolder> {
     return this.request("POST", `/v1/wiki/folders`, undefined, body);
   }
   /** PATCH /v1/wiki/folders — Wiki: rename or move a folder */
-  patch_v1_wiki_folders(body: (WireRequestWikiFolderMoveInput & unknown)): Promise<WireResponseWikiFolderMoveResult> {
+  patch_v1_wiki_folders(body: (WireRequestWikiFolderMoveInput)): Promise<WireResponseWikiFolderMoveResult> {
     return this.request("PATCH", `/v1/wiki/folders`, undefined, body);
   }
   /** DELETE /v1/wiki/folders — Wiki: delete a folder */
@@ -2421,7 +2425,7 @@ export class ArkismClient {
     return this.request("DELETE", `/v1/wiki/folders`, query, undefined);
   }
   /** POST /v1/wiki/build_from_memories — Wiki: build_from_memories */
-  post_v1_wiki_build_from_memories(body: (WireRequestWikiMemoryBuildInput & unknown)): Promise<WireResponseWikiMemoryBuildResult> {
+  post_v1_wiki_build_from_memories(body: (WireRequestWikiMemoryBuildInput)): Promise<WireResponseWikiMemoryBuildResult> {
     return this.request("POST", `/v1/wiki/build_from_memories`, undefined, body);
   }
   /** GET /v1/wiki/export — Wiki: export reviewed pages as markdown files */
@@ -2581,11 +2585,19 @@ export class ArkismClient {
     return this.request("GET", `/v1/extensions/${encodeURIComponent(extension)}/data`, query, undefined);
   }
   /** POST /v1/extensions/{extension}/data — Change an extension's stored data */
-  post_v1_extensions_extension_data(extension: string, body: (WireRequestExtDataChange & unknown)): Promise<WireResponseExtDataPage> {
+  post_v1_extensions_extension_data(extension: string, body: (WireRequestExtDataChange)): Promise<WireResponseExtDataPage> {
     return this.request("POST", `/v1/extensions/${encodeURIComponent(extension)}/data`, undefined, body);
   }
   /** GET /v1/extensions/{extension}/data/{key} — Read one extension data entry */
   get_v1_extensions_extension_data_key(extension: string, key: string, query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }): Promise<WireResponseExtDataItem> {
     return this.request("GET", `/v1/extensions/${encodeURIComponent(extension)}/data/${encodeURIComponent(key)}`, query, undefined);
+  }
+  /** GET /metrics/health — Inspect component status as an authorized operator */
+  getComponentHealth(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }): Promise<ComponentHealth> {
+    return this.request("GET", `/metrics/health`, query, undefined);
+  }
+  /** GET /v1/memories/{id}/signal-policy — Explain current memory signal policy and eligible evidence */
+  get_v1_memories_id_signal_policy(id: string, query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }): Promise<WireResponseMemorySignalExplanation> {
+    return this.request("GET", `/v1/memories/${encodeURIComponent(id)}/signal-policy`, query, undefined);
   }
 }

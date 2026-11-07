@@ -1786,6 +1786,15 @@
         "changes"
       ],
       "description": "write:ext_data (human or service). Applies 1..32 changes all or none: put (key, JSON value up to 4 KiB) or delete (key); expected_revision, when set, must match (409). At most 200 keys per extension and space; secrets (422) and private spans (400) are refused. Deleting a key erases it. The answer lists the written entries."
+    },
+    {
+      "method": "get",
+      "path": "/v1/memories/{id}/signal-policy",
+      "request": null,
+      "response": "MemorySignalExplanation",
+      "summary": "Explain current memory signal policy and eligible evidence",
+      "query": {},
+      "description": "Requires outcome visibility and read:usage. Returns current content/window/dimension sample counts and baseline factors; observations are not causal proof."
     }
   ]
 }

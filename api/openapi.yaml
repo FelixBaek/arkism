@@ -48695,6 +48695,202 @@
         },
         "operationId": "getComponentHealth"
       }
+    },
+    "/v1/memories/{id}/signal-policy": {
+      "get": {
+        "operationId": "get_v1_memories_id_signal_policy",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Explain current memory signal policy and eligible evidence",
+        "description": "Requires outcome visibility and read:usage. Returns current content/window/dimension sample counts and baseline factors; observations are not causal proof.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseMemorySignalExplanation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true
+      }
     }
   },
   "components": {
@@ -52604,6 +52800,9 @@
               }
             },
             "description": "Entities the caller states for this memory, applied literally (no similar-name matching) when the candidate is approved. type defaults to concept; a type the space does not allow is skipped. A label (type label, name key:value) must be in the space's entity_labels; labels of groups with tag true also become the candidate's tags."
+          },
+          "conversation_order": {
+            "$ref": "#/components/schemas/ConversationOrder"
           }
         },
         "required": [
@@ -53034,6 +53233,50 @@
             "type": "boolean",
             "default": false,
             "description": "Opt in to partial success only for unavailable optional temporal/graph/causal storage reads. Degraded identifies failed lanes. Authorization, cancellation, final source checks, usage writes and errors in cleaning still fail the request. Explicitly selected base modes retain their existing contracts."
+          },
+          "temporal_window": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "from",
+              "to"
+            ],
+            "properties": {
+              "from": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "to": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "description": "[from, to) for the temporal lane instead of time words read from the query: memories that happened inside rank higher; it never filters. from before to, years 1970-9999."
+          },
+          "temporal_windows": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 4,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "from",
+                "to"
+              ],
+              "properties": {
+                "from": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "to": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "description": "[from, to) for the temporal lane instead of time words read from the query: memories that happened inside rank higher; it never filters. from before to, years 1970-9999."
+            },
+            "description": "Explicit disjoint or overlapping ranking windows. Union deduplicates evidence; not a filter. Mutually exclusive with temporal_window."
           }
         },
         "required": [
@@ -53125,6 +53368,47 @@
                 "best_effort_lanes": {
                   "const": false
                 }
+              },
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "temporal_window"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "temporal_windows"
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "not": {
+              "required": [
+                "temporal_window",
+                "temporal_windows"
+              ]
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "temporal_windows"
+              ]
+            },
+            "then": {
+              "not": {
+                "required": [
+                  "related_to"
+                ]
+              },
+              "properties": {
+                "include_inactive": {
+                  "const": false
+                }
               }
             }
           }
@@ -53148,7 +53432,26 @@
               "lane_weights": {"type": "object", "additionalProperties": {"type": "number"}, "description": "lane weights other than 1 that fusion used (request over space over server)."},
               "lane_ms": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}, "description": "Wall time per lane in whole milliseconds (summed over collections), plus rerank when it ran. Coarse, for debugging only."},
               "rerank_chain": {"type": "array", "maxItems": 3, "description": "Each configured reranker tried, in order: ok (its scores were used), failed (the next one was tried) or not_allowed (the request may not send text to it). Omitted when reranking did not run.", "items": {"type": "object", "properties": {"provider": {"type": "string"}, "model": {"type": "string"}, "outcome": {"type": "string", "enum": ["ok", "failed", "not_allowed"]}}}},              "lane_hits": {"type": "object", "additionalProperties": {"type": "array", "maxItems": 20, "items": {"type": "object", "required": ["collection", "id", "revision"], "properties": {"collection": {"type": "string"}, "id": {"type": "string"}, "revision": {"type": "integer"}}}}, "description": "Each lane's own list before fusion, in lane order (at most 20 per lane), including hits fusion or a floor left out. Ids only: open each with its own read."},
-              "time_window": {"type": "object", "properties": {"phrase": {"type": "string"}, "from": {"type": "string", "format": "date-time"}, "to": {"type": "string", "format": "date-time"}}}
+              "time_window": {"type": "object", "properties": {"phrase": {"type": "string"}, "from": {"type": "string", "format": "date-time"}, "to": {"type": "string", "format": "date-time"}}},
+              "time_windows": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "phrase": {
+                      "type": "string"
+                    },
+                    "from": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "to": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
             }
           },
           "authority": {
@@ -53510,6 +53813,31 @@
             "type": "boolean",
             "default": false,
             "description": "Opt in to partial success only for unavailable optional temporal/graph/causal storage reads. Degraded identifies failed lanes. Authorization, cancellation, final source checks, usage writes and errors in cleaning still fail the request. Explicitly selected base modes retain their existing contracts."
+          },
+          "temporal_windows": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 4,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "from",
+                "to"
+              ],
+              "properties": {
+                "from": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "to": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "description": "[from, to) for the temporal lane instead of time words read from the query: memories that happened inside rank higher; it never filters. from before to, years 1970-9999."
+            },
+            "description": "Explicit disjoint or overlapping ranking windows. Union deduplicates evidence; not a filter. Mutually exclusive with temporal_window."
           }
         },
         "required": [
@@ -53671,6 +53999,33 @@
               "properties": {
                 "budget_tokens": {
                   "minimum": 1
+                }
+              }
+            }
+          },
+          {
+            "not": {
+              "required": [
+                "temporal_window",
+                "temporal_windows"
+              ]
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "temporal_windows"
+              ]
+            },
+            "then": {
+              "not": {
+                "required": [
+                  "related_to"
+                ]
+              },
+              "properties": {
+                "include_inactive": {
+                  "const": false
                 }
               }
             }
@@ -54117,6 +54472,9 @@
             "type": "string",
             "format": "date-time",
             "description": "Human review reminder, independent of expiry and approval."
+          },
+          "conversation_order": {
+            "$ref": "#/components/schemas/ConversationOrder"
           }
         },
         "required": [
@@ -54151,7 +54509,26 @@
               "lane_weights": {"type": "object", "additionalProperties": {"type": "number"}, "description": "lane weights other than 1 that fusion used (request over space over server)."},
               "lane_ms": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}, "description": "Wall time per lane in whole milliseconds (summed over collections), plus rerank when it ran. Coarse, for debugging only."},
               "rerank_chain": {"type": "array", "maxItems": 3, "description": "Each configured reranker tried, in order: ok (its scores were used), failed (the next one was tried) or not_allowed (the request may not send text to it). Omitted when reranking did not run.", "items": {"type": "object", "properties": {"provider": {"type": "string"}, "model": {"type": "string"}, "outcome": {"type": "string", "enum": ["ok", "failed", "not_allowed"]}}}},              "lane_hits": {"type": "object", "additionalProperties": {"type": "array", "maxItems": 20, "items": {"type": "object", "required": ["collection", "id", "revision"], "properties": {"collection": {"type": "string"}, "id": {"type": "string"}, "revision": {"type": "integer"}}}}, "description": "Each lane's own list before fusion, in lane order (at most 20 per lane), including hits fusion or a floor left out. Ids only: open each with its own read."},
-              "time_window": {"type": "object", "properties": {"phrase": {"type": "string"}, "from": {"type": "string", "format": "date-time"}, "to": {"type": "string", "format": "date-time"}}}
+              "time_window": {"type": "object", "properties": {"phrase": {"type": "string"}, "from": {"type": "string", "format": "date-time"}, "to": {"type": "string", "format": "date-time"}}},
+              "time_windows": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "phrase": {
+                      "type": "string"
+                    },
+                    "from": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "to": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
             }
           },
           "authority": {
@@ -61359,6 +61736,9 @@
           },
           "memory_outcome_content_hash": {
             "type": "string"
+          },
+          "conversation_order": {
+            "$ref": "#/components/schemas/WireResponseConversationOrder"
           }
         },
         "additionalProperties": false,
@@ -63203,6 +63583,12 @@
           },
           "report": {
             "$ref": "#/components/schemas/WireResponsePrivacyPurgeReport"
+          },
+          "purge_source_offset": {
+            "type": "integer"
+          },
+          "purge_record_offset": {
+            "type": "integer"
           }
         },
         "additionalProperties": false,
@@ -79564,6 +79950,9 @@
           },
           "min_samples": {
             "type": "integer"
+          },
+          "disabled": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false,
@@ -79587,6 +79976,9 @@
           },
           "min_samples": {
             "type": "integer"
+          },
+          "disabled": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false,
@@ -79656,6 +80048,132 @@
             ]
           }
         }
+      },
+      "ConversationOrder": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "epoch",
+          "index",
+          "total"
+        ],
+        "properties": {
+          "epoch": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[a-zA-Z0-9_.-]{1,128}$"
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000
+          }
+        },
+        "description": "Explicit source conversation batch order. index must not exceed total; only adjacent indices in the same epoch may be neighbors. Legacy missing order is not inferred."
+      },
+      "WireResponseConversationOrder": {
+        "type": "object",
+        "properties": {
+          "epoch": {
+            "type": "string"
+          },
+          "index": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "epoch",
+          "index",
+          "total"
+        ],
+        "x-go-type": "memory.ConversationOrder",
+        "x-go-source": "internal/memory/conversation_order.go",
+        "description": "ConversationOrder is the producer's explicit order within one immutable\ncapture epoch. It is never inferred from timestamps or assigned to old rows."
+      },
+      "WireResponseMemorySignalExplanation": {
+        "type": "object",
+        "properties": {
+          "memory": {
+            "$ref": "#/components/schemas/WireResponseRef"
+          },
+          "authority": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "as_of": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/WireResponseSignalPolicy"
+          },
+          "historical_total": {
+            "type": "integer"
+          },
+          "window_events": {
+            "type": "integer"
+          },
+          "eligible_total": {
+            "type": "integer"
+          },
+          "eligible_passed": {
+            "type": "integer"
+          },
+          "excluded_window_events": {
+            "type": "integer"
+          },
+          "minimum_met": {
+            "type": "boolean"
+          },
+          "evaluation_factor": {
+            "type": "number"
+          },
+          "work_factor": {
+            "type": "number"
+          },
+          "effective_factor": {
+            "type": "number"
+          },
+          "applicable": {
+            "type": "boolean"
+          },
+          "signal_computed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "memory",
+          "authority",
+          "mode",
+          "as_of",
+          "historical_total",
+          "window_events",
+          "eligible_total",
+          "eligible_passed",
+          "excluded_window_events",
+          "minimum_met",
+          "evaluation_factor",
+          "work_factor",
+          "effective_factor",
+          "applicable"
+        ],
+        "x-go-type": "memory.MemorySignalExplanation",
+        "x-go-source": "internal/memory/memory_signal_explanation.go",
+        "description": "MemorySignalExplanation describes the baseline factor at server time. It is\nobservation data, not proof that a memory caused success or a model used it."
       }
     },
     "headers": {

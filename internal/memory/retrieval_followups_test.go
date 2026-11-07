@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"net/http/httptest"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -192,6 +193,16 @@ func TestRetrievalExplicitWindowsReachHTTPAndDeduplicate(t *testing.T) {
 	var out ContextPack
 	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &out) != nil || !slices.Contains(ids(out.Items), a.ID) || !slices.Contains(ids(out.Items), b.ID) || len(out.Explain.TimeWindows) != 2 || !strings.Contains(out.ContextData, "first delivery") || !strings.Contains(out.ContextData, "second delivery") {
 		t.Fatal(w.Code, w.Body.String())
+	}
+	if dest := os.Getenv("ARKISM_TEMPORAL_DELIVERY_CASES"); dest != "" {
+		cases := []apiContractCase{{Operation: "POST /v1/context/build", Status: w.Code, Body: append(json.RawMessage(nil), w.Body.Bytes()...), Request: json.RawMessage(structuredText(body))}}
+		data, e := json.Marshal(cases)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if e = os.WriteFile(dest, data, 0600); e != nil {
+			t.Fatal(e)
+		}
 	}
 	clock := time.Now().UTC().Truncate(time.Second)
 	q := SearchInput{Scope: scopeA, Query: "unmatched tokens", Modes: []string{"fts"}, TemporalWindows: windows, Explain: true, QueryTime: &clock}

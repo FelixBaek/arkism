@@ -114,6 +114,7 @@ func TestOpenAPIHTTPResponses(t *testing.T) {
 	call("", "", 401)
 	cases = append(cases, managementHTTPResponses(t)...)
 	cases = append(cases, flowHTTPContractResponses(t)...)
+	cases = append(cases, signalPolicyHTTPResponses(t)...)
 	if dest := os.Getenv("ARKISM_OPENAPI_CASES"); dest != "" {
 		b, e := json.MarshalIndent(cases, "", "  ")
 		if e != nil {

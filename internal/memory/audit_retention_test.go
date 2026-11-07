@@ -83,3 +83,49 @@ func TestExpireAuditEventsNeedsTheSchemaOwnerAndAWorkingConnection(t *testing.T)
 		t.Fatal(err)
 	}
 }
+
+// A schema owner is not necessarily exempt from FORCE RLS. Never report its
+// filtered zero rows as a globally completed cleanup.
+func TestRetentionRejectsOwnerWithoutGlobalRLSVisibility(t *testing.T) {
+	p := isolatedPostgres(t)
+	role := "arkism_retention_" + ID()
+	quoted := pgx.Identifier{role}.Sanitize()
+	owner := pgx.Identifier{p.pool.Config().ConnConfig.User}.Sanitize()
+	schemaExec(t, p, "CREATE ROLE "+quoted+" LOGIN NOSUPERUSER NOBYPASSRLS")
+	schemaExec(t, p, "GRANT SELECT,DELETE ON arkism.memory_records TO "+quoted)
+	schemaExec(t, p, "GRANT EXECUTE ON FUNCTION arkism.permitted_scopes(text),arkism.has_any_permission(text) TO "+quoted)
+	schemaExec(t, p, "ALTER SCHEMA arkism OWNER TO "+quoted)
+	t.Cleanup(func() {
+		schemaExec(t, p, "ALTER SCHEMA arkism OWNER TO "+owner)
+		schemaExec(t, p, "DROP OWNED BY "+quoted)
+		schemaExec(t, p, "DROP ROLE "+quoted)
+	})
+	old := time.Now().UTC().Add(-48 * time.Hour)
+	if err := p.Insert(testCtx, "audit_events", Record{ID: "old-audit", Scope: scopeA, Kind: "allow:read", Status: statusActive, CreatedAt: old, UpdatedAt: old}); err != nil {
+		t.Fatal(err)
+	}
+	cfg := p.pool.Config().Copy()
+	cfg.ConnConfig.User = role
+	cfg.ConnConfig.Password = ""
+	pool, err := pgxpool.NewWithConfig(testCtx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	restricted := &Postgres{pool: pool}
+	if yes, e := schemaOwner(testCtx, restricted.q()); e != nil || !yes {
+		t.Fatal("fixture is not schema owner", yes, e)
+	}
+	cutoff := time.Now().UTC().Add(-36 * time.Hour)
+	for _, execute := range []bool{false, true} {
+		if _, e := restricted.ExpireAuditEvents(testCtx, cutoff, execute); !errors.Is(e, ErrDenied) {
+			t.Fatal("RLS-filtered owner appeared globally complete", execute, e)
+		}
+	}
+	if _, e := restricted.ExpireAuditEventsBatch(testCtx, cutoff, 10); !errors.Is(e, ErrDenied) {
+		t.Fatal(e)
+	}
+	if n, e := p.ExpireAuditEvents(testCtx, cutoff, false); e != nil || n != 1 {
+		t.Fatal("audit changed", n, e)
+	}
+}

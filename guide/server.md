@@ -891,6 +891,13 @@ memories it read and created.
 
 ## Metrics
 
+`GET /metrics/health` uses the same scope query and requires a human or service
+with `ops:metrics`. It reports fixed codes for `database`, `schema`, `search`,
+`write_gate` and `blobs`, including unavailable/paused/unsupported/disabled.
+It does not return raw errors, identifiers, connection strings or provider secrets.
+A 200 response means the diagnostic request succeeded; inspect each component's
+status. Public `/readyz` continues to return only generic readiness.
+
 `GET /metrics` (`ops:metrics`) stays the scoped JSON view. Two opt-in exports
 add process-wide counters (requests and requests in flight, model calls with
 input, output, cached input and reasoning (thinking) token histograms per

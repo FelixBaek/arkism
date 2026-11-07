@@ -7,7 +7,7 @@ import (
 
 // ExpireAuditEvents counts the audit events written before cutoff (they are never
 // updated, so updated_at is their creation time) and, with
-// execute, deletes them. Only the schema owner may run it: under row-level
+// execute, deletes them. Only a globally visible maintenance role may run it: under row-level
 // security any other role would delete just the scopes its token reaches and
 // report that as the whole table. cutoff must be at least a day in the past.
 func (p *Postgres) ExpireAuditEvents(ctx context.Context, cutoff time.Time, execute bool) (int64, error) {
@@ -26,7 +26,7 @@ func (p *Postgres) expireCollection(ctx context.Context, collection string, cuto
 	if _, bound := p.effectiveTokenHash(ctx); bound {
 		return 0, ErrDenied
 	}
-	owner, err := schemaOwner(ctx, p.q())
+	owner, err := retentionOwner(ctx, p.q())
 	if err != nil {
 		return 0, ErrUnavailable
 	}
@@ -72,7 +72,7 @@ func (p *Postgres) retentionBatch(ctx context.Context, collection string, cutoff
 	if _, bound := p.effectiveTokenHash(ctx); bound {
 		return 0, ErrDenied
 	}
-	owner, err := schemaOwner(ctx, p.q())
+	owner, err := retentionOwner(ctx, p.q())
 	if err != nil {
 		return 0, ErrUnavailable
 	}
@@ -98,8 +98,15 @@ func (p *Postgres) expireCollectionBatch(ctx context.Context, collection string,
 	return tag.RowsAffected(), nil
 }
 
-// schemaOwner reports whether the connected role may change the schema and every
-// row in it: a superuser, an RLS-bypassing role, arkism_init, or the owner of the
+// Retention needs global row visibility. Schema/database ownership alone does
+// not bypass FORCE RLS and can falsely report a filtered zero as completion.
+func retentionOwner(ctx context.Context, q pgQuery) (bool, error) {
+	var allowed bool
+	err := q.QueryRow(ctx, `SELECT rolsuper OR rolbypassrls OR rolname='arkism_init' FROM pg_roles WHERE rolname=current_user`).Scan(&allowed)
+	return allowed, err
+}
+
+// schemaOwner reports whether the connected role may change the schema: a superuser, an RLS-bypassing role, arkism_init, or the owner of the
 // arkism schema or of the database.
 func schemaOwner(ctx context.Context, q pgQuery) (bool, error) {
 	var allowed bool

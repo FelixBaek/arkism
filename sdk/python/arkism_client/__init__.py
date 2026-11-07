@@ -1897,3 +1897,11 @@ class ArkismClient(BaseClient):
     def get_v1_extensions_extension_data_key(self, extension, key, query=None):
         """GET /v1/extensions/{extension}/data/{key} — Read one extension data entry"""
         return self.request("GET", f"/v1/extensions/{urllib.parse.quote(extension, safe='')}/data/{urllib.parse.quote(key, safe='')}", query, None)
+
+    def get_component_health(self, query=None):
+        """GET /metrics/health — Inspect component status as an authorized operator"""
+        return self.request("GET", f"/metrics/health", query, None)
+
+    def get_v1_memories_id_signal_policy(self, id, query=None):
+        """GET /v1/memories/{id}/signal-policy — Explain current memory signal policy and eligible evidence"""
+        return self.request("GET", f"/v1/memories/{urllib.parse.quote(id, safe='')}/signal-policy", query, None)
