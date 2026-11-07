@@ -40,6 +40,8 @@ const (
 // outbox. Record.Status remains the queue/lease state; State is the privacy
 // lifecycle and the two must never be conflated.
 type PrivacyDeletion struct {
+	PurgeSourceOffset  int                    `json:"purge_source_offset,omitempty" bson:"purge_source_offset,omitempty"`
+	PurgeRecordOffset  int                    `json:"purge_record_offset,omitempty" bson:"purge_record_offset,omitempty"`
 	State              string                 `json:"state" bson:"state"`
 	RequesterType      string                 `json:"requester_type" bson:"requester_type"`
 	RequesterID        string                 `json:"requester_id" bson:"requester_id"`
@@ -279,7 +281,15 @@ func (s *Service) RequestPrivacyDeletion(ctx context.Context, token string, in P
 		if !ok {
 			return ErrUnavailable
 		}
-		impact, discoverErr := privacyTx.DiscoverPrivacyImpact(ctx, in.Scope, in.TargetType, in.TargetIDs, privacyImpactLimit)
+		var impact PrivacyImpact
+		var discoverErr error
+		if complete, ok := tx.(interface {
+			DiscoverPrivacyImpactComplete(context.Context, Scope, string, []string) (PrivacyImpact, error)
+		}); ok {
+			impact, discoverErr = complete.DiscoverPrivacyImpactComplete(ctx, in.Scope, in.TargetType, in.TargetIDs)
+		} else {
+			impact, discoverErr = privacyTx.DiscoverPrivacyImpact(ctx, in.Scope, in.TargetType, in.TargetIDs, privacyImpactLimit)
+		}
 		if discoverErr != nil {
 			return discoverErr
 		}
@@ -593,6 +603,7 @@ func applyPrivacyRuntimeReceipt(r *Record, in *PrivacyRuntimeReceiptInput) error
 		r.PrivacyDeletion.RuntimeReceipt = &in.Receipt
 		r.PrivacyDeletion.ErrorSummary = ""
 		r.PrivacyDeletion.Report.RuntimePurged = true
+		r.PrivacyDeletion.PurgeSourceOffset, r.PrivacyDeletion.PurgeRecordOffset = 0, 0
 		r.PrivacyDeletion.State, r.Status = privacyPurgingDerived, JobStatusPending
 	}
 	return nil
@@ -622,10 +633,14 @@ func (s *Service) AdvancePrivacyDeletion(ctx context.Context, token, id string, 
 		previous := r.Revision
 		switch pd.State {
 		case privacyPurgingDerived:
-			if err := purgePrivacyDerived(ctx, tx, in.Scope, r, who); err != nil {
+			done, err := purgePrivacyDerived(ctx, tx, in.Scope, r, who)
+			if err != nil {
 				return err
 			}
-			pd.State, r.Status, r.RunAt = privacyVerifying, JobStatusPending, nil
+			r.Status, r.RunAt = JobStatusPending, nil
+			if done {
+				pd.State = privacyVerifying
+			}
 		case privacyVerifying:
 			if err := verifyPrivacyDeletion(ctx, tx, in.Scope, &r); err != nil {
 				return err
@@ -661,17 +676,33 @@ func (s *Service) AdvancePrivacyDeletion(ctx context.Context, token, id string, 
 }
 
 // purgePrivacyDerived deletes the quarantined sources and queues their derived erasure.
-func purgePrivacyDerived(ctx context.Context, tx Tx, scope Scope, r Record, who Decision) error {
+// Each source/record chunk and its cursor commit together with the parent job.
+// A restart resumes only committed progress; verification still checks ALL impact.
+func purgePrivacyDerived(ctx context.Context, tx Tx, scope Scope, r Record, who Decision) (bool, error) {
 	pd := r.PrivacyDeletion
 	if pd.RuntimeReceipt == nil || !validRuntimeReceipt(pd, *pd.RuntimeReceipt) {
-		return ErrConflict
+		return false, ErrConflict
 	}
-	for _, sourceID := range pd.Impact.SourceEventIDs {
+	if pd.PurgeSourceOffset < 0 || pd.PurgeSourceOffset > len(pd.Impact.SourceEventIDs) || pd.PurgeRecordOffset < 0 || pd.PurgeRecordOffset > len(pd.Impact.Records) {
+		return false, ErrConflict
+	}
+	end := min(pd.PurgeSourceOffset+100, len(pd.Impact.SourceEventIDs))
+	for _, sourceID := range pd.Impact.SourceEventIDs[pd.PurgeSourceOffset:end] {
 		if err := purgePrivacySource(ctx, tx, scope, sourceID, r.ID, who); err != nil {
-			return err
+			return false, err
 		}
 	}
-	return eraseWorkPrivacyImpact(ctx, tx, scope, pd.Impact, r.ID)
+	pd.PurgeSourceOffset = end
+	if end < len(pd.Impact.SourceEventIDs) {
+		return false, nil
+	}
+	end = min(pd.PurgeRecordOffset+100, len(pd.Impact.Records))
+	part := PrivacyImpact{Records: pd.Impact.Records[pd.PurgeRecordOffset:end]}
+	if err := eraseWorkPrivacyImpact(ctx, tx, scope, part, r.ID); err != nil {
+		return false, err
+	}
+	pd.PurgeRecordOffset = end
+	return end == len(pd.Impact.Records), nil
 }
 
 func purgePrivacySource(ctx context.Context, tx Tx, scope Scope, sourceID, parentID string, who Decision) error {

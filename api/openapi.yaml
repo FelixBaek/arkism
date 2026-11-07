@@ -48547,6 +48547,154 @@
         },
         "x-go-contract": true
       }
+    },
+    "/metrics/health": {
+      "get": {
+        "summary": "Inspect component status as an authorized operator",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fixed component status codes; no internal errors or identifiers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComponentHealth"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "getComponentHealth"
+      }
     }
   },
   "components": {
@@ -51363,6 +51511,16 @@
           "completed_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "purge_source_offset": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Committed progress in bounded canonical purge; completion still requires full-impact verification."
+          },
+          "purge_record_offset": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Committed progress in bounded canonical purge; completion still requires full-impact verification."
           }
         },
         "required": [
@@ -79435,6 +79593,69 @@
         "x-go-type": "memory.SignalPolicy",
         "x-go-source": "internal/memory/memory_signal_policy.go",
         "description": "SignalPolicy opts into bounded, content-specific recent observations. Historical\noutcomes remain available; missing content attribution is never guessed."
+      },
+      "ComponentHealth": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "database",
+          "schema",
+          "search",
+          "write_gate",
+          "blobs"
+        ],
+        "properties": {
+          "database": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "unavailable",
+              "paused",
+              "unsupported",
+              "disabled"
+            ]
+          },
+          "schema": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "unavailable",
+              "paused",
+              "unsupported",
+              "disabled"
+            ]
+          },
+          "search": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "unavailable",
+              "paused",
+              "unsupported",
+              "disabled"
+            ]
+          },
+          "write_gate": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "unavailable",
+              "paused",
+              "unsupported",
+              "disabled"
+            ]
+          },
+          "blobs": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "unavailable",
+              "paused",
+              "unsupported",
+              "disabled"
+            ]
+          }
+        }
       }
     },
     "headers": {

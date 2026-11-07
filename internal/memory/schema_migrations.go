@@ -40,6 +40,9 @@ var schemaNamedEntitiesSQL string
 //go:embed migrations/0007_conversation_neighbors.sql
 var schemaConversationNeighborsSQL string
 
+//go:embed migrations/0008_search_tokens_nfc.sql
+var schemaSearchTokensNFCSQL string
+
 type schemaMigration struct {
 	version int
 	name    string
@@ -47,7 +50,7 @@ type schemaMigration struct {
 }
 
 func schemaMigrations() []schemaMigration {
-	return []schemaMigration{{1, "baseline", schemaBaselineSQL}, {2, "memory_context_search", schemaMemoryContextSearchSQL}, {3, "principal_token_lifecycle", schemaPrincipalTokenLifecycleSQL}, {4, "memory_graph_vector_index", schemaMemoryGraphVectorIndexSQL}, {5, "decision_daily_counts", schemaDecisionDailyCountsSQL}, {6, "named_entities", schemaNamedEntitiesSQL}, {7, "conversation_neighbors", schemaConversationNeighborsSQL}}
+	return []schemaMigration{{1, "baseline", schemaBaselineSQL}, {2, "memory_context_search", schemaMemoryContextSearchSQL}, {3, "principal_token_lifecycle", schemaPrincipalTokenLifecycleSQL}, {4, "memory_graph_vector_index", schemaMemoryGraphVectorIndexSQL}, {5, "decision_daily_counts", schemaDecisionDailyCountsSQL}, {6, "named_entities", schemaNamedEntitiesSQL}, {7, "conversation_neighbors", schemaConversationNeighborsSQL}, {8, "search_tokens_nfc", schemaSearchTokensNFCSQL}}
 }
 
 func (m schemaMigration) checksum() string {

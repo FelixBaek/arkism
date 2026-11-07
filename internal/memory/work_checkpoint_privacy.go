@@ -22,7 +22,7 @@ func (p *Postgres) discoverWorkPrivacyImpact(ctx context.Context, scope Scope, s
 	// Retention expiry does not invoke this discovery or erase independent work.
 	// The SQL identity predicate mirrors sameSourceArchiveMessages: stable record
 	// key plus message digest, or position plus digest (legacy archive hash).
-	for round := 0; round < 64; round++ {
+	for round := 0; limit == 0 || round < 64; round++ {
 		evidence := impact.Records
 		if evidence == nil {
 			evidence = []Ref{}
@@ -31,7 +31,7 @@ func (p *Postgres) discoverWorkPrivacyImpact(ctx context.Context, scope Scope, s
 		if err != nil {
 			return ErrInvalid
 		}
-		rows, err := p.selectRecords(ctx, colWorkCheckpoints, scope, `NOT COALESCE((doc->>'content_erased')::boolean,false) AND ($6 OR EXISTS (
+		rows, err := p.selectPrivacyRecords(ctx, colWorkCheckpoints, scope, `NOT COALESCE((doc->>'content_erased')::boolean,false) AND ($6 OR EXISTS (
  SELECT 1 FROM jsonb_array_elements(COALESCE(doc->'work_checkpoint'->'package'->'source_refs','[]'::jsonb)) w
  JOIN jsonb_array_elements($7::jsonb) evidence ON w->>'collection'=evidence->>'collection' AND w->>'id'=evidence->>'id'
  ) OR EXISTS (
@@ -43,7 +43,7 @@ func (p *Postgres) discoverWorkPrivacyImpact(ctx context.Context, scope Scope, s
  AND ((COALESCE(w->>'record_key','')<>'' AND w->>'record_key'=a->>'record_key' AND COALESCE(w->>'message_sha256','')<>'' AND w->>'message_sha256'=a->>'message_sha256')
  OR (w->>'chunk_index'=a->>'chunk_index' AND w->>'chunk_offset'=a->>'chunk_offset'
  AND CASE WHEN COALESCE(w->>'message_sha256','')<>'' AND COALESCE(a->>'message_sha256','')<>'' THEN w->>'message_sha256'=a->>'message_sha256' ELSE w->>'sha256'=a->>'sha256' END))
- ))`, []any{subject, string(refs)}, "id ASC", limit+1)
+ ))`, []any{subject, string(refs)}, "id ASC", limit)
 		if err != nil {
 			return err
 		}
@@ -58,7 +58,7 @@ func (p *Postgres) discoverWorkPrivacyImpact(ctx context.Context, scope Scope, s
 			impact.Records = append(impact.Records, Ref{Collection: colWorkCheckpoints, ID: row.ID, Revision: row.Revision})
 			workIDs = append(workIDs, row.ID)
 		}
-		if len(impact.Records) > limit {
+		if limit > 0 && len(impact.Records) > limit {
 			return ErrUnavailable
 		}
 		if !added {
@@ -72,14 +72,14 @@ func (p *Postgres) appendWorkPrivacyReceipts(ctx context.Context, scope Scope, i
 	if len(ids) == 0 {
 		return nil
 	}
-	receipts, err := p.selectRecords(ctx, colWorkCheckpointReceipts, scope, `doc->'work_checkpoint'->>'receipt_target_id'=ANY($6)`, []any{ids}, "id ASC", limit+1)
+	receipts, err := p.selectPrivacyRecords(ctx, colWorkCheckpointReceipts, scope, `doc->'work_checkpoint'->>'receipt_target_id'=ANY($6)`, []any{ids}, "id ASC", limit)
 	if err != nil {
 		return err
 	}
 	for _, row := range receipts {
 		impact.Records = append(impact.Records, Ref{Collection: colWorkCheckpointReceipts, ID: row.ID, Revision: row.Revision})
 	}
-	if len(impact.Records) > limit {
+	if limit > 0 && len(impact.Records) > limit {
 		return ErrUnavailable
 	}
 	return nil
@@ -197,7 +197,7 @@ func (p *Postgres) discoverSelectedWorkPrivacyImpact(ctx context.Context, scope 
 		}
 		impact.Records = append(impact.Records, Ref{Collection: colWorkCheckpoints, ID: id, Revision: r.Revision})
 	}
-	if len(impact.Records) > limit {
+	if limit > 0 && len(impact.Records) > limit {
 		return PrivacyImpact{}, ErrUnavailable
 	}
 	if err := p.discoverWorkPrivacyImpact(ctx, scope, false, &impact, limit); err != nil {

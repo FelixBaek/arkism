@@ -42,6 +42,7 @@ var httpRoutePolicies = map[string]routePolicy{
 	"GET /v1/mental-models/{id}/history":                   {action: "read:mental_models", scope: routeQuery},
 	"POST /v1/mental-models/{id}/refresh":                  {action: "write:mental_models", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman, roleService}},
 	"POST /v1/mental-models/{id}/review":                   {action: "write:mental_models", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},
+	"GET /metrics/health":                                  {action: "ops:metrics", scope: routeQuery, roles: []string{roleHuman, roleService}},
 	"GET /metrics":                                         {action: "ops:metrics", scope: routeQuery},
 	"GET /readyz":                                          {},
 	"GET /recovery-identity":                               {},

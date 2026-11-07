@@ -29,8 +29,10 @@ func (c *contractHTTP) call(op, id string, body any, extra url.Values) map[strin
 	c.t.Helper()
 	method, path, _ := strings.Cut(op, " ")
 	path = strings.ReplaceAll(path, "{id}", id)
+	path = strings.ReplaceAll(path, "{extension}", "fixture")
+	path = strings.ReplaceAll(path, "{key}", "key")
 	q := url.Values{}
-	if method == "GET" {
+	if method == "GET" || method == "DELETE" {
 		q.Set("workspace_id", c.scope.WorkspaceID)
 		q.Set("project_id", c.scope.ProjectID)
 		q.Set("user_id", c.scope.UserID)
@@ -119,8 +121,9 @@ func managementHTTPResponses(t *testing.T) []apiContractCase {
 	contractHostAndSessions(c)
 	contractWikiAndKnowledge(c)
 	contractCatalogQueries(c)
-	if len(c.seen) != 73 {
-		t.Fatalf("management contract coverage: %d/73", len(c.seen))
+	contractMissingManagement(c)
+	if len(c.seen) != 87 {
+		t.Fatalf("management contract coverage: %d/87", len(c.seen))
 	}
 	t.Logf("all %d management operations exercised successfully and anonymously", len(c.seen))
 	return c.cases

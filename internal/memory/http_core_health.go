@@ -9,6 +9,7 @@ import (
 )
 
 func registerHealthCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetrics) {
+	mux.HandleFunc("GET /metrics/health", s.serveComponentHealth)
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		if s.WebUIDir != "" {
 			http.Redirect(w, r, webUIPrefix, http.StatusFound)

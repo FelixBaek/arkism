@@ -97,3 +97,9 @@ the Go, JavaScript, Python and other configured Sonar analyses still run.
 
 PostgreSQL documents [transaction-scoped advisory locks](https://www.postgresql.org/docs/18/explicit-locking.html#ADVISORY-LOCKS)
 and [object privileges](https://www.postgresql.org/docs/18/ddl-priv.html).
+
+Version eight (`0008_search_tokens_nfc`) marks existing token vectors as version
+one and fresh writes as version two. The pending-version index drives a bounded,
+resumable NFC backfill; canonical payloads, approvals and revisions are unchanged.
+Until backfill finishes, old decomposed tokens may still differ from normalized
+queries. A paused recovery write gate keeps this backfill paused.

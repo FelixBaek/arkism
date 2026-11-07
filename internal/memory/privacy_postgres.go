@@ -13,6 +13,20 @@ func (p *Postgres) DiscoverPrivacyImpact(ctx context.Context, scope Scope, targe
 	if checkScope(scope) != nil || !slices.Contains([]string{"source_event", "trace", "subject", "work_checkpoint"}, targetType) || len(targetIDs) == 0 || len(targetIDs) > 64 || limit < 1 || limit > privacyImpactLimit {
 		return PrivacyImpact{}, ErrInvalid
 	}
+	return p.discoverPrivacyImpact(ctx, scope, targetType, targetIDs, limit)
+}
+
+// DiscoverPrivacyImpactComplete streams bounded cursor pages inside the request's
+// serializable transaction. Nothing is accepted/quarantined until the complete
+// fixed point is known; cancellation rolls back the entire request.
+func (p *Postgres) DiscoverPrivacyImpactComplete(ctx context.Context, scope Scope, targetType string, targetIDs []string) (PrivacyImpact, error) {
+	if p.tx == nil || checkScope(scope) != nil || !slices.Contains([]string{"source_event", "trace", "subject", "work_checkpoint"}, targetType) || len(targetIDs) == 0 || len(targetIDs) > 64 {
+		return PrivacyImpact{}, ErrInvalid
+	}
+	return p.discoverPrivacyImpact(ctx, scope, targetType, targetIDs, 0)
+}
+
+func (p *Postgres) discoverPrivacyImpact(ctx context.Context, scope Scope, targetType string, targetIDs []string, limit int) (PrivacyImpact, error) {
 	if targetType == "work_checkpoint" {
 		return p.discoverSelectedWorkPrivacyImpact(ctx, scope, targetIDs, limit)
 	}
@@ -25,7 +39,7 @@ func (p *Postgres) DiscoverPrivacyImpact(ctx context.Context, scope Scope, targe
 	// Follow only typed provenance edges. source_kind is the contaminated
 	// dependent and target_kind is its evidence dependency.
 	changed := true
-	for rounds := 0; changed && rounds < 64; rounds++ {
+	for rounds := 0; changed && (limit == 0 || rounds < 64); rounds++ {
 		var err error
 		changed, err = p.privacyImpactRound(ctx, scope, limit, sources, traces, handoffRuns, handoffThreads)
 		if err != nil {
@@ -35,14 +49,14 @@ func (p *Postgres) DiscoverPrivacyImpact(ctx context.Context, scope Scope, targe
 	if changed {
 		return PrivacyImpact{}, ErrUnavailable
 	}
-	if len(sources)+len(traces) > limit {
+	if limit > 0 && len(sources)+len(traces) > limit {
 		return PrivacyImpact{}, ErrUnavailable
 	}
 
 	// The fixed point above treats a trace as one privacy aggregate: any event
 	// contaminates all sibling events, and those siblings can in turn be used by
 	// downstream traces.
-	if len(sources)+len(traces) > limit {
+	if limit > 0 && len(sources)+len(traces) > limit {
 		return PrivacyImpact{}, ErrUnavailable
 	}
 
@@ -55,7 +69,7 @@ func (p *Postgres) DiscoverPrivacyImpact(ctx context.Context, scope Scope, targe
 	if err := p.privacyImpactRecords(ctx, scope, limit, &impact); err != nil {
 		return PrivacyImpact{}, err
 	}
-	if len(impact.Records) > limit {
+	if limit > 0 && len(impact.Records) > limit {
 		return PrivacyImpact{}, ErrUnavailable
 	}
 	if err := p.discoverWorkPrivacyImpact(ctx, scope, targetType == "subject", &impact, limit); err != nil {
@@ -89,7 +103,7 @@ func (p *Postgres) seedPrivacyImpact(ctx context.Context, scope Scope, targetTyp
 		if scope.UserID == "" || len(targetIDs) != 1 || targetIDs[0] != scope.UserID {
 			return ErrInvalid
 		}
-		rows, err := p.q().Query(ctx, `SELECT id FROM memory_records WHERE collection='sources' AND workspace_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 ORDER BY id LIMIT $5`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, limit+1)
+		rows, err := p.privacyImpactQuery(ctx, limit, `SELECT id FROM memory_records WHERE collection='sources' AND workspace_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 ORDER BY id LIMIT $5`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, limit+1)
 		if err != nil {
 			return pgErr(err)
 		}
@@ -140,7 +154,7 @@ func (p *Postgres) privacyImpactRound(ctx context.Context, scope Scope, limit in
 		}
 		changed = changed || grew
 	}
-	if len(sources)+len(traces) > limit {
+	if limit > 0 && len(sources)+len(traces) > limit {
 		return false, ErrUnavailable
 	}
 	return changed, nil
@@ -148,7 +162,7 @@ func (p *Postgres) privacyImpactRound(ctx context.Context, scope Scope, limit in
 
 func (p *Postgres) privacyImpactConsultations(ctx context.Context, scope Scope, limit int, sources, traces, handoffRuns, handoffThreads map[string]bool) (bool, error) {
 	changed := false
-	rows, err := p.q().Query(ctx, `SELECT payload FROM memory_records WHERE collection='consultations' AND workspace_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND (
+	rows, err := p.privacyImpactQuery(ctx, limit, `SELECT payload FROM memory_records WHERE collection='consultations' AND workspace_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND (
         doc->>'source_event_id'=ANY($5) OR doc->>'trace_id'=ANY($6) OR doc->'consultation'->'child'->>'trace_id'=ANY($6) OR doc->'consultation'->'parent'->>'trace_id'=ANY($6)) ORDER BY id LIMIT $7`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, sortedSet(sources), sortedSet(traces), limit+1)
 	if err != nil {
 		return false, pgErr(err)
@@ -179,7 +193,7 @@ func (p *Postgres) privacyImpactConsultations(ctx context.Context, scope Scope, 
 	if err != nil {
 		return false, pgErr(err)
 	}
-	if count > limit {
+	if limit > 0 && count > limit {
 		return false, ErrUnavailable
 	}
 	return changed, nil
@@ -202,7 +216,7 @@ func addConsultationHandoffs(c *Consultation, handoffRuns, handoffThreads map[st
 
 func (p *Postgres) privacyImpactRelations(ctx context.Context, scope Scope, limit int, sourceIDs []string, sources, traces map[string]bool) (bool, error) {
 	changed := false
-	rows, err := p.q().Query(ctx, `SELECT source_kind,source_id FROM relations WHERE organization_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND target_kind='source_event' AND target_id=ANY($5) AND relation_kind='context_uses' ORDER BY source_kind,source_id LIMIT $6`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, sourceIDs, limit+1)
+	rows, err := p.privacyImpactQuery(ctx, limit, `SELECT source_kind,source_id FROM relations WHERE organization_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND target_kind='source_event' AND target_id=ANY($5) AND relation_kind='context_uses' ORDER BY source_kind,source_id LIMIT $6`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, sourceIDs, limit+1)
 	if err != nil {
 		return false, pgErr(err)
 	}
@@ -230,7 +244,7 @@ func (p *Postgres) privacyImpactRelations(ctx context.Context, scope Scope, limi
 	if err != nil {
 		return false, pgErr(err)
 	}
-	if count > limit {
+	if limit > 0 && count > limit {
 		return false, ErrUnavailable
 	}
 	return changed, nil
@@ -262,7 +276,7 @@ func (p *Postgres) privacyImpactSourceTraces(ctx context.Context, scope Scope, s
 
 func (p *Postgres) privacyImpactTraceSources(ctx context.Context, scope Scope, limit int, sources, traces map[string]bool) (bool, error) {
 	changed := false
-	rows, err := p.q().Query(ctx, `SELECT id FROM source_events WHERE organization_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND trace_id=ANY($5) ORDER BY id LIMIT $6`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, sortedSet(traces), limit+1)
+	rows, err := p.privacyImpactQuery(ctx, limit, `SELECT id FROM source_events WHERE organization_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND trace_id=ANY($5) ORDER BY id LIMIT $6`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, sortedSet(traces), limit+1)
 	if err != nil {
 		return false, pgErr(err)
 	}
@@ -283,14 +297,14 @@ func (p *Postgres) privacyImpactTraceSources(ctx context.Context, scope Scope, l
 	if err != nil {
 		return false, pgErr(err)
 	}
-	if count > limit {
+	if limit > 0 && count > limit {
 		return false, ErrUnavailable
 	}
 	return changed, nil
 }
 
 func (p *Postgres) privacyImpactTraceOwners(ctx context.Context, scope Scope, targetType string, limit int, traces, handoffRuns, handoffThreads map[string]bool, impact *PrivacyImpact) error {
-	rows, err := p.q().Query(ctx, `SELECT id,thread_id,agent_run_id FROM execution_traces WHERE organization_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND id=ANY($5) ORDER BY id LIMIT $6`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, impact.TraceIDs, limit+1)
+	rows, err := p.privacyImpactQuery(ctx, limit, `SELECT id,thread_id,agent_run_id FROM execution_traces WHERE organization_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND id=ANY($5) ORDER BY id LIMIT $6`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, impact.TraceIDs, limit+1)
 	if err != nil {
 		return pgErr(err)
 	}
@@ -316,7 +330,7 @@ func (p *Postgres) privacyImpactTraceOwners(ctx context.Context, scope Scope, ta
 }
 
 func (p *Postgres) privacyImpactRecords(ctx context.Context, scope Scope, limit int, impact *PrivacyImpact) error {
-	rows, err := p.q().Query(ctx, `SELECT collection,payload FROM memory_records
+	rows, err := p.privacyImpactQuery(ctx, limit, `SELECT collection,payload FROM memory_records
 WHERE workspace_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4
   AND collection NOT IN ('jobs','audit_events','provider_usage','blobs') AND (
     (collection='sources' AND id=ANY($5)) OR (collection='execution_traces' AND id=ANY($6)) OR
