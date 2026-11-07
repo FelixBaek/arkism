@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"sort"
 	"strings"
@@ -123,7 +124,7 @@ func TestRecallDiversityKeepsTheSingleFactFirst(t *testing.T) {
 }
 
 func TestSelectDiverseSourceSpan(t *testing.T) {
-	base := Hit{ID: "first", Scope: scopeA, Sources: []SourceRef{{SourceID: "source-a"}}, evidenceSpan: "one two three four five six seven eight nine ten"}
+	base := Hit{vector: []float64{1, 0}, ID: "first", Scope: scopeA, Sources: []SourceRef{{SourceID: "source-a"}}, evidenceSpan: "one two three four five six seven eight nine ten"}
 	for _, tc := range []struct {
 		name   string
 		span   string
@@ -134,16 +135,18 @@ func TestSelectDiverseSourceSpan(t *testing.T) {
 		{"contained", "one two three four five", "source-a", scopeA, true},
 		{"ninety percent", "one two three four five six seven eight nine other", "source-a", scopeA, true},
 		{"below threshold", "one two three four five six seven eight other words", "source-a", scopeA, false},
+		{"one token", "one", "source-a", scopeA, false},
+		{"two tokens", "one two", "source-a", scopeA, false},
+		{"three tokens", "one two three", "source-a", scopeA, false},
+		{"four tokens", "one two three four", "source-a", scopeA, true},
+		{"repeated short tokens", "one one two two three three", "source-a", scopeA, false},
 		{"missing span", "", "source-a", scopeA, false},
 		{"separate capture", base.evidenceSpan, "source-b", scopeA, true},
 		{"different scope", base.evidenceSpan, "source-a", Scope{}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			copy := Hit{ID: "copy", Scope: tc.scope, Sources: []SourceRef{{SourceID: tc.source}}, evidenceSpan: tc.span}
-			if sameSourceSpan(base, copy) != tc.want || sameSourceSpan(copy, base) != tc.want {
-				t.Fatal("containment mismatch")
-			}
-			rows := []ScoredHit{{Hit: base, Score: 1}, {Hit: copy, Score: .95}, diverseRow("distinct", .8)}
+			copy := Hit{vector: []float64{.95, .31225}, ID: "copy", Scope: tc.scope, Sources: []SourceRef{{SourceID: tc.source}}, evidenceSpan: tc.span}
+			rows := []ScoredHit{{Hit: base, Score: 1}, {Hit: copy, Score: .95}, diverseRow("distinct", .7)}
 			got := selectDiverse(rows, 2)
 			if (got[1].ID == "distinct") != tc.want {
 				t.Fatal(got)
@@ -174,11 +177,68 @@ func TestRecallDiversitySourceSpanStaysPrivate(t *testing.T) {
 	}
 	setRecallQuality(t, f, SpaceRecallQuality{})
 	diverse := f.search(f.human, query)
-	if len(diverse.Items) != 2 || diverse.Items[0].ID != "span-a" || diverse.Items[1].ID != "span-c" {
-		t.Fatal("source span did not make room for the distinct fact", diverse.Items)
+	if len(diverse.Items) != 2 || diverse.Items[0].ID != "span-a" || diverse.Items[1].ID != "span-b" {
+		t.Fatal("missing vectors must preserve the distinct-fact possibility", diverse.Items)
 	}
 	encoded, err := json.Marshal(diverse)
 	if err != nil || strings.Contains(string(encoded), span) || strings.Contains(string(encoded), "evidenceSpan") {
 		t.Fatal("private provenance leaked into the response", err)
+	}
+}
+
+// The same broad quotation can support different facts from a single message.
+func TestSelectDiverseSharedEvidenceKeepsDistinctFacts(t *testing.T) {
+	span := "the valve was repaired monday and the copper coupling arrived friday"
+	for _, tc := range []struct {
+		name          string
+		first, second []float64
+	}{
+		{"different facts", []float64{1, 0}, []float64{.8, .6}},
+		{"no vectors", nil, nil},
+		{"missing first vector", nil, []float64{1, 0}},
+		{"missing second vector", []float64{1, 0}, nil},
+		{"incomparable vectors", []float64{1, 0}, []float64{1}},
+		{"zero vectors", []float64{0, 0}, []float64{0, 0}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rows := []ScoredHit{diverseRow("repair date", 1, tc.first...), diverseRow("arrival date", .95, tc.second...), diverseRow("unrelated", .8)}
+			for i := 0; i < 2; i++ {
+				rows[i].Scope = scopeA
+				rows[i].Sources = []SourceRef{{SourceID: "one-message"}}
+				rows[i].evidenceSpan = span
+			}
+			got := selectDiverse(rows, 2)
+			if got[0].ID != "repair date" || got[1].ID != "arrival date" {
+				t.Fatal("shared quote displaced a distinct fact", got)
+			}
+		})
+	}
+}
+
+func BenchmarkSelectDiverseSourceSpan(b *testing.B) {
+	for _, identical := range []bool{false, true} {
+		b.Run(fmt.Sprintf("identical=%t", identical), func(b *testing.B) {
+			rows := make([]ScoredHit, 100)
+			for i := range rows {
+				vector := make([]float64, 101)
+				vector[0], vector[i+1] = 1, .2
+				rows[i] = diverseRow(fmt.Sprint(i), 1-float64(i)/1000, vector...)
+				rows[i].Scope = scopeA
+				var quote strings.Builder
+				for j := 0; j < 200; j++ {
+					n := j
+					if !identical {
+						n += i * 200
+					}
+					fmt.Fprintf(&quote, "word%05d ", n)
+				}
+				rows[i].evidenceSpan = quote.String()
+			}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				_ = selectDiverse(rows, 50)
+			}
+		})
 	}
 }

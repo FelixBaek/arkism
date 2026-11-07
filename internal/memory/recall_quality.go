@@ -119,7 +119,7 @@ const diversityPenalty = 0.5
 
 // selectDiverse picks limit rows from rows (best score first) one at a time by score/best
 // minus diversityPenalty times the row's highest near-duplicate share to a picked row. A row
-// without a stored vector can still repeat a reviewed evidence span. Scores are kept,
+// must have comparable stored vectors before shared evidence can strengthen that penalty. Scores are kept,
 // so score floors still apply to the real values; the result is in pick order.
 func selectDiverse(rows []ScoredHit, limit int) []ScoredHit {
 	if len(rows) <= limit || limit <= 0 || rows[0].Score <= 0 {
@@ -127,6 +127,13 @@ func selectDiverse(rows []ScoredHit, limit int) []ScoredHit {
 	}
 	best, picked := rows[0].Score, make([]ScoredHit, 0, limit)
 	used, closest := make([]bool, len(rows)), make([]float64, len(rows))
+	spans := make([]map[string]bool, len(rows))
+	for i, r := range rows {
+		spans[i] = make(map[string]bool)
+		for _, token := range SearchTokens(r.evidenceSpan) {
+			spans[i][token] = true
+		}
+	}
 	for len(picked) < limit {
 		at, value := -1, math.Inf(-1)
 		for i, r := range rows {
@@ -137,35 +144,30 @@ func selectDiverse(rows []ScoredHit, limit int) []ScoredHit {
 		used[at] = true
 		picked = append(picked, rows[at])
 		for i := range rows {
-			if used[i] {
+			if used[i] || closest[i] >= 1 {
 				continue
 			}
-			if rows[at].vector != nil && rows[i].vector != nil {
-				closest[i] = max(closest[i], nearDuplicateShare(cosine(rows[at].vector, rows[i].vector)))
-			}
-			if sameSourceSpan(rows[at].Hit, rows[i].Hit) {
-				closest[i] = 1
+			if len(rows[at].vector) > 0 && len(rows[at].vector) == len(rows[i].vector) {
+				similarity := cosine(rows[at].vector, rows[i].vector)
+				closest[i] = max(closest[i], nearDuplicateShare(similarity))
+				if similarity >= defaultCaptureMergeSimilarity && rows[at].Scope == rows[i].Scope && sameSourceSpan(spans[at], spans[i]) {
+					closest[i] = 1
+				}
 			}
 		}
 	}
 	return picked
 }
 
-// sameSourceSpan recognises restatements when at least 90 percent of the smaller
-// evidence token set occurs in the other, including separate captures of the same text.
-func sameSourceSpan(a, b Hit) bool {
-	if a.Scope != b.Scope || a.evidenceSpan == "" || b.evidenceSpan == "" {
-		return false
+// sameSourceSpan compares precomputed evidence token sets. Short quotes cannot
+// establish restatement; longer quotes require 90 percent containment. The caller
+// also requires the same scope and vectors in the near-duplicate band, since one
+// broad quote can support several distinct facts.
+func sameSourceSpan(left, right map[string]bool) bool {
+	if len(left) > len(right) {
+		left, right = right, left
 	}
-	left, right := map[string]bool{}, map[string]bool{}
-	for _, t := range SearchTokens(a.evidenceSpan) {
-		left[t] = true
-	}
-	for _, t := range SearchTokens(b.evidenceSpan) {
-		right[t] = true
-	}
-	small := min(len(left), len(right))
-	if small == 0 {
+	if len(left) < 4 {
 		return false
 	}
 	shared := 0
@@ -174,7 +176,7 @@ func sameSourceSpan(a, b Hit) bool {
 			shared++
 		}
 	}
-	return float64(shared)/float64(small) >= 0.9
+	return float64(shared)/float64(len(left)) >= 0.9
 }
 
 // nearDuplicateShare is how far a similarity sits into the near-duplicate band: 0 below the
