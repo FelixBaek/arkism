@@ -44,6 +44,9 @@ func (s *Service) conversationTurns(ctx context.Context, token string, in Search
 		out.Degraded = append(out.Degraded, "conversation")
 		return
 	}
+	if in.ConversationContext {
+		out.conversationRecords = map[Ref]Record{}
+	}
 	terms := searchQueryTerms(in.Query)
 	selected := map[string]Record{}
 	for _, row := range rows {
@@ -54,17 +57,24 @@ func (s *Service) conversationTurns(ctx context.Context, token string, in Search
 		if err != nil || !conversationSource("sources", r) || !live(r) || r.ContentErased || r.PrivacyQuarantined || r.Sensitivity == "restricted" {
 			continue
 		}
+		if _, err := s.authorize(ctx, token, "read:sources", in.Scope, r.ID, structuredText(r)); err != nil {
+			continue
+		}
 		h := HitFromRecord("sources", r)
 		h.Origin, h.Text, h.Reasons, h.Authority, h.CollectedAt = conversationSourceKind, redactSessionPrivate(runeCutString(h.Text, sessionLaneRunes)), []string{conversationSourceKind}, AuthorityDataOnly, r.CollectedAt
 		if slices.Contains(row.Hit.Reasons, reasonVector) || lexicallyRelevant(terms, h) {
 			out.Conversation = append(out.Conversation, h)
 			selected[r.ID] = r
+			if in.ConversationContext {
+				out.conversationRecords[Ref{Collection: "sources", ID: r.ID, Revision: r.Revision}] = r
+			}
 		}
 	}
 	spare := len(out.Conversation) * sessionLaneRunes
 	for _, h := range out.Conversation {
 		spare -= utf8.RuneCountInString(h.Text)
 	}
+	in.conversationRecords = out.conversationRecords
 	for i := range out.Conversation {
 		before := utf8.RuneCountInString(out.Conversation[i].Text)
 		s.completeConversationTurn(ctx, token, in, &out.Conversation[i], selected, spare)
@@ -81,6 +91,24 @@ const conversationNeighborScan = 99 // one more is read to see truncation; sourc
 func (s *Service) completeConversationTurn(ctx context.Context, token string, in SearchInput, h *Hit, selected map[string]Record, spare int) {
 	r := selected[h.ID]
 	if r.SourceRef == "" || r.CollectedAt == nil || spare <= 1 {
+		return
+	}
+	if store, ok := s.Repo.(conversationNeighborStore); ok {
+		neighbors, err := store.ConversationNeighbors(ctx, r)
+		if err != nil || len(neighbors) > 2 {
+			return
+		}
+		for _, other := range neighbors {
+			if other.ID == r.ID || other.Scope != r.Scope || other.SourceRef != r.SourceRef || other.OriginProduct != r.OriginProduct || other.CollectedAt == nil || !other.CollectedAt.Equal(*r.CollectedAt) {
+				continue
+			}
+			if _, shown := selected[other.ID]; shown {
+				continue
+			}
+			before := utf8.RuneCountInString(h.Text)
+			s.appendConversationNeighbor(ctx, token, in, h, other, spare)
+			spare -= utf8.RuneCountInString(h.Text) - before
+		}
 		return
 	}
 	end := r.CollectedAt.Add(time.Millisecond)
@@ -129,6 +157,9 @@ func (s *Service) appendConversationNeighbor(ctx context.Context, token string, 
 	text := conversationNeighborExcerpt(r.Text, left)
 	if text == "" {
 		return
+	}
+	if in.conversationRecords != nil {
+		in.conversationRecords[Ref{Collection: "sources", ID: r.ID, Revision: r.Revision}] = r
 	}
 	h.Text += "\n" + text
 	h.Sources = append(slices.Clone(h.Sources), sourceReference(r, "conversation_neighbor"))

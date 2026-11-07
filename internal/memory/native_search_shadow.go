@@ -172,6 +172,12 @@ func (s *Service) beginNativeSearchShadow(ctx context.Context, in SearchInput, c
 		a.record.Reason = "unsupported_collection"
 		return a
 	}
+	// The native packer does not implement these opt-in delivery policies.
+	// Keep the baseline instead of silently replacing its consumed context.
+	if in.ConversationContext || in.WholeItems || in.BestEffortLanes {
+		a.record.Reason = "unsupported_context"
+		return a
+	}
 	snap, code := nativeFreezeSearch(in.Scope, lanes, history)
 	if code != "" {
 		if ctx.Err() != nil {

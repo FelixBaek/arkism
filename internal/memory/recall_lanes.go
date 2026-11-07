@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"sort"
 	"sync"
@@ -90,6 +91,7 @@ type RecallTimeWindow struct {
 
 // recallTrace follows one search through fusion; the maps are filled only for explain.
 type recallTrace struct {
+	degraded []string
 	explain  bool
 	lanes    []string
 	window   *timeWindow
@@ -191,6 +193,7 @@ func hitKey(h Hit) string { return h.Origin + ":" + h.Collection + ":" + h.ID }
 // chosen explicitly (in.Modes) and history searches keep exactly the lanes asked for.
 func (s *Service) recallLanes(ctx context.Context, in SearchInput, collection string, lists [][]Hit, clean func([]Hit) ([]Hit, error)) ([][]Hit, *recallTrace, error) {
 	trace := &recallTrace{explain: in.Explain, fused: map[string]float64{}, rerank: map[string]float64{}, clock: laneClockOf(ctx), weights: in.laneWeights(), expand: in.expandStatus, expandQueries: in.expandQueries}
+	in.optionalFailures = &trace.degraded
 	for i := range lists {
 		trace.lanes = append(trace.lanes, []string{"exact", "keyword", "vector", "relation"}[min(i, 3)])
 	}
@@ -207,16 +210,22 @@ func (s *Service) recallLanes(ctx context.Context, in SearchInput, collection st
 	if w, ok := in.timeWindow(s.recallClock(in)); ok && spaceLaneOn(in.space, "temporal", true) {
 		start := time.Now()
 		hits, err := s.Repo.SearchMemoriesInWindow(ctx, in, w.From, w.To)
-		if err == nil {
-			hits, err = clean(hits)
-		}
 		trace.clock.since("temporal", start)
-		if err != nil {
-			return nil, nil, err
+		if optionalLaneUnavailable(ctx, in, err) {
+			trace.degraded = append(trace.degraded, "temporal")
+		} else {
+			if err != nil {
+				return nil, nil, err
+			}
+			hits, err = clean(hits)
+			if err != nil {
+				return nil, nil, err
+			}
+			trace.window = &w
+			lists, trace.lanes = append(lists, hits), append(trace.lanes, "temporal")
 		}
-		trace.window = &w
-		lists, trace.lanes = append(lists, hits), append(trace.lanes, "temporal")
 	}
+
 	sources := []neighborSource{}
 	if spaceLaneOn(in.space, "graph", s.RecallGraph) {
 		sources = append(sources, neighborSource{reasonGraph, s.Repo.MemoryNeighbors})
@@ -246,6 +255,7 @@ func (s *Service) recallItems(ctx context.Context, token string, in SearchInput,
 	if err != nil {
 		return err
 	}
+	out.Degraded = append(out.Degraded, trace.degraded...)
 	scored, err := s.fuseRecallHits(ctx, token, lists, collection, in, d, trace)
 	if err != nil {
 		return err
@@ -321,15 +331,24 @@ func (s *Service) neighborLanes(ctx context.Context, in SearchInput, top []Score
 	for _, r := range top {
 		seen[r.ID], frontier = true, append(frontier, r.ID)
 	}
+	failed := make([]bool, len(sources))
 	lanes, budget := make([][]Hit, len(sources)), min(graphFanOut, 2*in.Limit)
 	for hop := 1; hop <= in.GraphDepth && len(frontier) > 0; hop++ {
 		var next []string
 		for i, src := range sources {
-			if len(lanes[i]) >= budget {
+			if failed[i] || len(lanes[i]) >= budget {
 				continue
 			}
 			hits, err := s.neighborStep(ctx, in, frontier, src, budget, seen, clean)
 			if err != nil {
+				var readErr *optionalNeighborError
+				if errors.As(err, &readErr) && optionalLaneUnavailable(ctx, in, readErr.err) {
+					failed[i] = true
+					if in.optionalFailures != nil {
+						*in.optionalFailures = append(*in.optionalFailures, src.reason)
+					}
+					continue
+				}
 				return nil, err
 			}
 			for _, h := range hits[:min(len(hits), budget-len(lanes[i]))] {
@@ -348,7 +367,7 @@ func (s *Service) neighborStep(ctx context.Context, in SearchInput, frontier []s
 	// Ask past the ids already seen (back-edges to earlier steps), so they cannot fill the step.
 	ids, err := src.next(ctx, in.Scope, frontier, min(limit+len(seen), graphStepMax))
 	if err != nil {
-		return nil, err
+		return nil, &optionalNeighborError{err}
 	}
 	hits := make([]Hit, 0, len(ids))
 	read := 0 // at most limit reads per step, however many ids came back
@@ -509,3 +528,14 @@ func (t *recallTrace) annotate(out *ContextBundle, lists [][]Hit) {
 		out.Explain.TimeWindow = &RecallTimeWindow{Phrase: t.window.Phrase, From: t.window.From, To: t.window.To}
 	}
 }
+
+// Only optional storage reads may degrade. Cleaning, authorization, cancellation
+// and usage-ledger failures retain their normal fail-closed behavior.
+func optionalLaneUnavailable(ctx context.Context, in SearchInput, err error) bool {
+	return in.BestEffortLanes && ctx.Err() == nil && errors.Is(err, ErrUnavailable)
+}
+
+type optionalNeighborError struct{ err error }
+
+func (e *optionalNeighborError) Error() string { return e.err.Error() }
+func (e *optionalNeighborError) Unwrap() error { return e.err }

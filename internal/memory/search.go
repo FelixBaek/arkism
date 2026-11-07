@@ -12,8 +12,13 @@ import (
 )
 
 type SearchInput struct {
-	contextView   *ContextInvocationView
-	finalRejected func(Hit, string, string)
+	ConversationContext bool `json:"conversation_context,omitempty"`
+	WholeItems          bool `json:"whole_items,omitempty"`
+	BestEffortLanes     bool `json:"best_effort_lanes,omitempty"`
+	optionalFailures    *[]string
+	conversationRecords map[Ref]Record
+	contextView         *ContextInvocationView
+	finalRejected       func(Hit, string, string)
 	SearchCriteria
 	RelatedTo       *Ref     `json:"related_to,omitempty"`
 	IncludeInactive bool     `json:"include_inactive,omitempty"`
@@ -338,9 +343,16 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 	for _, h := range out.Items {
 		snapshots[Ref{Collection: h.Collection, ID: h.ID, Revision: h.Revision}] = searchHitHash(h)
 	}
-	boundSearchHits(&out, in.MaxChars, historyRecords)
+	if in.WholeItems {
+		boundWholeSearchHits(&out, in.MaxChars, historyRecords)
+	} else {
+		boundSearchHits(&out, in.MaxChars, historyRecords)
+	}
+	if in.ConversationContext {
+		boundConversationContext(&out, in.MaxChars)
+	}
 	if in.BudgetTokens > 0 {
-		if e = packContext(ctx, &out, in.BudgetTokens, in.TokenEncoding); e != nil {
+		if e = packContext(ctx, &out, in.BudgetTokens, in.TokenEncoding, in.ConversationContext); e != nil {
 			return ContextBundle{}, Decision{}, e
 		}
 	}
@@ -372,6 +384,11 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 				return err
 			}
 		}
+		if in.ConversationContext {
+			if err := verifyConversationContext(ctx, tx, in.Scope, out); err != nil {
+				return err
+			}
+		}
 		if err := insertUsageReceipt(ctx, tx, in.Scope, out.ContextID, d.PrincipalID, usage); err != nil {
 			return err
 		}
@@ -387,6 +404,14 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 // prepareSearchInput validates the relation, history and criteria inputs,
 // stores the normalized criteria in in, and returns the text to authorize.
 func prepareSearchInput(in *SearchInput) (string, error) {
+	if in.ConversationContext {
+		if in.BudgetTokens < 1 {
+			return "", ErrInvalid
+		}
+		if !slices.Contains(in.Include, "sources") {
+			in.Include = append(slices.Clone(in.Include), "sources")
+		}
+	}
 	view, viewErr := freezeContextView(in.Scope, in.contextView)
 	if viewErr != nil {
 		return "", viewErr
@@ -668,8 +693,11 @@ func (s *Service) authorizeSearchHit(ctx context.Context, token string, in Searc
 func boundSearchHits(out *ContextBundle, maxChars int, historyRecords map[string]Record) {
 	left := maxChars
 	bounded := []Hit{}
-	for _, h := range out.Items {
+	for i, h := range out.Items {
 		if left == 0 {
+			for range len(out.Items) - i {
+				noteContextDrop(out, "character_budget")
+			}
 			break
 		}
 		text := []rune(h.Text)
@@ -677,10 +705,12 @@ func boundSearchHits(out *ContextBundle, maxChars int, historyRecords map[string
 		if len(text) > left {
 			text = text[:left]
 			h.Reasons = append(h.Reasons, "context_text_truncated")
+			noteContextDrop(out, "character_truncated")
 		}
 		h.Text = string(text)
 		left -= len(text)
 		if len(summary) > left {
+			noteContextDrop(out, "summary_truncated")
 			summary = summary[:left]
 		}
 		h.Summary = string(summary)

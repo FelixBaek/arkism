@@ -10,13 +10,14 @@ import (
 )
 
 // packContext counts the exact data string, including provenance and authority.
-// shortcut: greedy whole-item packing, at most 50 trials; no optimal knapsack.
-func packContext(ctx context.Context, out *ContextBundle, budget int, encoding string) error {
+// Greedy whole-item packing over the bounded memory and side lanes; no optimal knapsack.
+func packContext(ctx context.Context, out *ContextBundle, budget int, encoding string, conversation ...bool) error {
 	codec, err := tokenizer.Get(tokenizer.Encoding(encoding))
 	if err != nil {
 		return ErrInvalid
 	}
 	data := struct {
+		Conversation      []Hit  `json:"conversation,omitempty"`
 		Authority         string `json:"authority"`
 		Items             []Hit  `json:"items"`
 		Provisional       []Hit  `json:"provisional,omitempty"`
@@ -59,6 +60,7 @@ func packContext(ctx context.Context, out *ContextBundle, budget int, encoding s
 		}
 		if n > budget {
 			data.Items = data.Items[:len(data.Items)-1]
+			noteContextDrop(out, "token_budget")
 			continue
 		}
 		text, count = candidate, n
@@ -72,12 +74,29 @@ func packContext(ctx context.Context, out *ContextBundle, budget int, encoding s
 		}
 		if n > budget {
 			data.Provisional = data.Provisional[:len(data.Provisional)-1]
+			noteContextDrop(out, "provisional_token_budget")
 			continue
 		}
 		text, count = candidate, n
 	}
 	if len(data.Provisional) == 0 {
 		data.ProvisionalNotice = ""
+	}
+	if len(conversation) > 0 && conversation[0] {
+		for _, h := range out.Conversation {
+			data.Conversation = append(data.Conversation, h)
+			candidate, n, err := measure()
+			if err != nil {
+				return err
+			}
+			if n > budget {
+				data.Conversation = data.Conversation[:len(data.Conversation)-1]
+				noteContextDrop(out, "conversation_token_budget")
+				continue
+			}
+			text, count = candidate, n
+		}
+		out.Conversation = data.Conversation
 	}
 	out.Items, out.Provisional, out.ProvisionalNotice = data.Items, data.Provisional, data.ProvisionalNotice
 	out.ContextData, out.TokensUsed, out.TokenEncoding = text, count, encoding

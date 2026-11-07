@@ -6,7 +6,12 @@ import (
 )
 
 type ContextBuildInput struct {
-	ContextView *ContextInvocationView `json:"context_view,omitempty"`
+	// ConversationContext includes unreviewed source turns in the same token budget.
+	ConversationContext bool `json:"conversation_context,omitempty"`
+	// WholeItems skips text that cannot fit rather than truncating a fact.
+	WholeItems      bool                   `json:"whole_items,omitempty"`
+	BestEffortLanes bool                   `json:"best_effort_lanes,omitempty"`
+	ContextView     *ContextInvocationView `json:"context_view,omitempty"`
 	SearchCriteria
 	RelatedTo     *Ref     `json:"related_to,omitempty"`
 	Scope         Scope    `json:"scope"`
@@ -45,6 +50,9 @@ type ContextPack struct {
 
 func (s *Service) BuildContext(ctx context.Context, token string, in ContextBuildInput) (ContextPack, error) {
 	// Without budget_tokens the space's recall budget applies (read in directivesFirst, after validation).
+	if in.Agent != "" && (in.ConversationContext || in.WholeItems || in.BestEffortLanes) {
+		return ContextPack{}, ErrInvalid
+	}
 	maxItems, budget := 6, 2000
 	if in.MaxItems != nil {
 		maxItems = *in.MaxItems
@@ -61,6 +69,7 @@ func (s *Service) BuildContext(ctx context.Context, token string, in ContextBuil
 	}
 	in.ContextView = view
 	search := SearchInput{
+		ConversationContext: in.ConversationContext, WholeItems: in.WholeItems, BestEffortLanes: in.BestEffortLanes,
 		SearchCriteria: in.SearchCriteria, Scope: in.Scope, Query: in.Task, contextView: view,
 		Limit: maxItems, BudgetTokens: budget, TokenEncoding: in.TokenEncoding,
 		Destination: in.Destination, RunID: in.RunID, Modes: in.Modes, Purpose: "answer", RelatedTo: in.RelatedTo,
