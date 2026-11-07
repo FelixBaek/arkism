@@ -7,9 +7,12 @@ import (
 	"time"
 )
 
-func comparisonRecordFixture(t *testing.T, f *fixture) (RecordSkillComparisonInput, ImportSkillResult) {
+func comparisonRecordFixture(t *testing.T, f *fixture, holdout ...*SkillHoldoutPlan) (RecordSkillComparisonInput, ImportSkillResult) {
 	t.Helper()
 	proposed := proposalFixture(t, f)
+	if len(holdout) > 0 {
+		proposed.Skill.ComparisonPlan.Holdout = holdout[0]
+	}
 	candidate, e := f.svc.ProposeSkill(testCtx, f.agent, proposed)
 	if e != nil {
 		t.Fatal(e)

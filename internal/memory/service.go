@@ -1197,6 +1197,9 @@ func validation(ctx context.Context, tx Tx, r Record, id string, checkRevision b
 	if checkRevision && v.Target.Revision != r.Revision {
 		return ErrConflict
 	}
+	if e := checkSkillHoldoutEvidence(ctx, tx, r, v); e != nil {
+		return e
+	}
 	return checkEvaluationEvidence(ctx, tx, v)
 }
 func (s *Service) Transition(ctx context.Context, token, col, id string, in ChangeInput) (Record, error) {

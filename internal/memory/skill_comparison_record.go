@@ -321,7 +321,11 @@ func (s *Service) RecordSkillComparison(ctx context.Context, token string, in Re
 			}
 		}
 		evaluation := Record{ID: out.Evaluation.ID, Scope: in.Scope, Kind: "skill_comparison", Status: statusActive, Revision: 1, Text: "Measured fixed skill comparison", Sources: source.Sources, Relations: out.Runs, Target: &in.Result.Candidate, Evaluation: &Evaluation{EvalType: "automated_check", Passed: &in.Result.Passed, ComparisonReport: &measured}, Passed: in.Result.Passed, Sensitivity: level, CreatedAt: now, UpdatedAt: now, CreatedBy: actor.PrincipalID, CreatedByType: actor.Role}
-		if comparisonPasses(current, evaluation) != in.Result.Passed {
+		holdoutPassed, holdoutErr := skillHoldoutPasses(plan.Holdout, in.Result.Cases)
+		if holdoutErr != nil {
+			return holdoutErr
+		}
+		if (comparisonPasses(current, evaluation) && holdoutPassed) != in.Result.Passed {
 			return ErrInvalid
 		}
 		if e = insertSourceRecord(ctx, tx, "evaluations", evaluation); e != nil {

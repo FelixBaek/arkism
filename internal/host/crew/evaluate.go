@@ -67,6 +67,9 @@ func validateInputs(datasetRaw, environmentRaw []byte, plan map[string]any, toke
 	if dataset == nil || env == nil {
 		return nil, nil, errValue
 	}
+	if _, _, err := holdoutTasks(plan, dataset); err != nil {
+		return nil, nil, err
+	}
 	if err := validateDataset(dataset); err != nil {
 		return nil, nil, err
 	}
@@ -564,6 +567,10 @@ func evaluate(prepared, dataset, env map[string]any) (out map[string]any, err er
 	}
 	materialize := same(env["companions"], "skill_dir")
 	coverage := companionCoverage(materialize, bundles)
+	holdout, threshold, err := holdoutTasks(obj(at(prepared, "plan")), dataset)
+	if err != nil {
+		return nil, err
+	}
 	skills := obj(at(prepared, "skills"))
 	rows, err := runCases(dataset, env, skills, bundles, materialize)
 	if err != nil {
@@ -614,7 +621,7 @@ func evaluate(prepared, dataset, env map[string]any) (out map[string]any, err er
 	covers := same(bundleSHA["candidate"], bundleSHA["baseline"]) || coverage == "materialized"
 	base, cand := number(report["baseline_score"]), number(report["candidate_score"])
 	passed := covers && cand-base+1e-12 >= number(at(plan, "min_score_gain")) && number(cost) <= number(at(plan, "max_cost")) &&
-		float64(duration) <= number(at(plan, "max_duration_ms")) && regression && safety
+		float64(duration) <= number(at(plan, "max_duration_ms")) && regression && safety && holdoutRowsPass(holdout, threshold, rows)
 	contentSHA := map[string]any{}
 	for k, v := range skills {
 		contentSHA[k] = digest([]byte(mustStr(v)))

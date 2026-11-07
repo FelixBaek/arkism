@@ -10,12 +10,13 @@ import (
 // SkillComparisonPlan is fixed before a candidate is evaluated. Hashes identify
 // an externally retained dataset/environment; they do not certify execution.
 type SkillComparisonPlan struct {
-	BaselineVersion   string  `json:"baseline_version" bson:"baseline_version"`
-	DatasetSHA256     string  `json:"dataset_sha256" bson:"dataset_sha256"`
-	EnvironmentSHA256 string  `json:"environment_sha256" bson:"environment_sha256"`
-	MinScoreGain      float64 `json:"min_score_gain" bson:"min_score_gain"`
-	MaxCost           float64 `json:"max_cost" bson:"max_cost"`
-	MaxDurationMS     int64   `json:"max_duration_ms" bson:"max_duration_ms"`
+	Holdout           *SkillHoldoutPlan `json:"holdout,omitempty" bson:"holdout,omitempty"`
+	BaselineVersion   string            `json:"baseline_version" bson:"baseline_version"`
+	DatasetSHA256     string            `json:"dataset_sha256" bson:"dataset_sha256"`
+	EnvironmentSHA256 string            `json:"environment_sha256" bson:"environment_sha256"`
+	MinScoreGain      float64           `json:"min_score_gain" bson:"min_score_gain"`
+	MaxCost           float64           `json:"max_cost" bson:"max_cost"`
+	MaxDurationMS     int64             `json:"max_duration_ms" bson:"max_duration_ms"`
 }
 type SkillComparisonReport struct {
 	PlanSHA256          string  `json:"plan_sha256" bson:"plan_sha256"`
@@ -36,7 +37,7 @@ type SkillComparisonReport struct {
 
 func finiteNonnegative(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) && v >= 0 }
 func validComparisonPlan(p *SkillComparisonPlan) bool {
-	return p == nil || ((p.BaselineVersion == "" || validRunLabel(p.BaselineVersion, 256)) && sourceHashPattern.MatchString(p.DatasetSHA256) && sourceHashPattern.MatchString(p.EnvironmentSHA256) && finiteNonnegative(p.MinScoreGain) && p.MinScoreGain > 0 && p.MinScoreGain <= 1 && finiteNonnegative(p.MaxCost) && p.MaxDurationMS > 0)
+	return p == nil || ((p.BaselineVersion == "" || validRunLabel(p.BaselineVersion, 256)) && sourceHashPattern.MatchString(p.DatasetSHA256) && sourceHashPattern.MatchString(p.EnvironmentSHA256) && finiteNonnegative(p.MinScoreGain) && p.MinScoreGain > 0 && p.MinScoreGain <= 1 && finiteNonnegative(p.MaxCost) && p.MaxDurationMS > 0 && validSkillHoldout(p.Holdout))
 }
 func validComparisonReport(r *SkillComparisonReport) bool {
 	if r == nil {
