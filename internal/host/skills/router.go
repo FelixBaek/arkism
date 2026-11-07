@@ -752,6 +752,9 @@ func recall(query, idsArg, relatedTo any, opts map[string]any) (host.Obj, error)
 	var res map[string]any
 	project := sessionProjectKey()
 	if len(ids) > 0 {
+		if search["conversation_context"] == true || search["whole_items"] == true || search["best_effort_lanes"] == true || search["budget_tokens"] != nil {
+			return nil, errors.New("context options require query or related_to, not ids")
+		}
 		if found, err = recallByIDs(ids, project); err != nil {
 			return nil, err
 		}
@@ -764,7 +767,14 @@ func recall(query, idsArg, relatedTo any, opts map[string]any) (host.Obj, error)
 	}
 	out := host.Obj{{Key: "memories", Value: memories}, {Key: "authority", Value: "data_only_untrusted"}, {Key: "note", Value: recallNote}}
 	out = append(out, searchExtras(res)...)
-	if len(memories) == 0 && len(ids) == 0 && relatedTo == nil {
+	if search["budget_tokens"] != nil {
+		packed, e := recallContextResult(search, res)
+		if e != nil {
+			return nil, e
+		}
+		out = append(out, packed...)
+	}
+	if len(memories) == 0 && len(ids) == 0 && relatedTo == nil && !(search["conversation_context"] == true && len(asList(res["conversation"])) > 0) {
 		out = append(out, host.KV{Key: "result", Value: host.NoRelatedMemory})
 	}
 	if relatedTo != nil {
@@ -814,7 +824,7 @@ func recallByIDs(ids []string, project string) ([]any, error) {
 // recallSearchOptions checks the search-only recall options before any request.
 func recallSearchOptions(opts map[string]any) (map[string]any, error) {
 	out := map[string]any{}
-	for _, key := range []string{"explain", "expand_causal", "prefer_observations", "expand"} {
+	for _, key := range []string{"explain", "expand_causal", "prefer_observations", "expand", "conversation_context", "whole_items", "best_effort_lanes"} {
 		if v, ok := opts[key]; ok && v != nil {
 			b, isBool := v.(bool)
 			if !isBool {
@@ -824,6 +834,9 @@ func recallSearchOptions(opts map[string]any) (map[string]any, error) {
 				out[key] = true
 			}
 		}
+	}
+	if err := recallContextOptions(opts, out); err != nil {
+		return nil, err
 	}
 	if err := recallAnchorOptions(opts, out); err != nil {
 		return nil, err
@@ -976,7 +989,7 @@ func recallSearch(q string, isStr bool, relatedTo any, project string, opts map[
 		return nil, nil, err
 	}
 	found := asList(getOr(res, "items", []any{}))
-	if relatedTo == nil { // relation hits come from one lane, so the fused-score floor does not fit them
+	if relatedTo == nil && opts["budget_tokens"] == nil { // Explicit packed context keeps the server-selected packet and preview aligned. Relation hits come from one lane, so the fused-score floor does not fit them
 		found, _, _ = host.LoadRecallBudget().Apply(found, host.VectorRan(nil, res)) // nil: the server's default lanes
 	}
 	return found, res, nil

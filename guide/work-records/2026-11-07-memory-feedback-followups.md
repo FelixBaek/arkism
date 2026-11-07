@@ -70,3 +70,21 @@ Verified: Targeted Go service/HTTP tests pass, including actual outcome ingestio
 
 Limits: Browser tests render production components with synthetic scoped HTTP responses, not the complete authenticated application. Better Design was invoked locally but does not support these JS files; no supported JSX/TSX/CSS files were found, so this is not a design-check pass. API artifact regeneration and strict corpus inclusion belong to integration. Reported baseline factors can differ for a different query time or separate dynamic ranking.
 한계: 화면 검증은 합성 응답을 사용하는 실제 컴포넌트 범위입니다. Better Design은 JS를 지원하지 않아 통과로 간주하지 않습니다. API 생성물과 종합 계약 검사는 통합 작업에서 연결합니다.
+
+## R7 — Connect explicit context options to consumers / 문맥 선택지 소비 경로 연결
+
+Task: memory-followups-R7
+Research: none
+연구: 해당 없음
+
+Why: Server options were implemented but host recall/MCP/CLI discarded them and the token-bounded packet. The inspection UI could not choose or preview them.
+이유: 서버 기능을 실제 호출과 최종 소비 데이터까지 연결합니다.
+
+Changes: Host recall accepts three default-off booleans and explicit token budget/encoding. It rejects ambiguous/invalid values and direct-ID combinations before sending requests. Packed calls preserve server-selected memories and exact context_data, tokenizer, token count and degradation; a conversation-only result is not labelled empty. Unpacked legacy calls retain the host relevance floor. The MCP schema advertises these choices, including the packet-only budget boundary. The actual stdio CLI dispatch returns the packed content. UI controls expose the same choices and render final data as literal text; conversation requires a budget. Usage and budget boundaries are documented in guide/memory-context-options.md.
+변경: 호스트·MCP·stdio CLI에 호출별 옵션을 연결하고, UI 검색 살펴보기에 선택과 최종 문맥 미리보기를 추가했습니다. 토큰 한도는 문맥 문자열만 대상으로 함을 명시합니다.
+
+Verified: Targeted host recall and golden schema tests pass (0.035s), including final CLI stdout, default-off request preservation, rejected invalid combinations, response validation, scope/project visibility and existing relevance-floor checks. Service tests for conversation, whole facts, optional-lane failure/auth denial, frozen pinned combinations and exact token bounds pass. Signal policy tests rerun with temporary PostgreSQL and pass (combined targeted memory package 0.257s). Node search UI tests pass; local Chromium keyboard toggles, budget-before-request refusal, scoped submission, exact data preview, plain-text HTML and narrow viewport checks pass. Screenshot inspected. Better Design local invocation reports unsupported JS input, not a pass.
+검증: 최종 CLI 출력과 실제 서버 문맥 생성·예산 검사, 임시 PG 평가 필터를 각각 시험했습니다. UI는 실제 컴포넌트와 합성 HTTP 경계에서 키보드·예산·본문 표시를 확인했습니다.
+
+Limits: Host output test uses deterministic transport responses; service tests separately exercise actual handlers and packet construction. This is not a real-model usage or success claim. Automatic prompt hooks remain unchanged and default off; no new persistent enable setting, pinned support or native dynamic algorithm was added. No product build, external publication or model call was performed.
+한계: 호스트의 합성 전송 시험과 실제 서비스 시험을 구분합니다. 자동 hook 활성화·지원하지 않는 pinned 조합·동적 순위 알고리즘 확대는 없습니다.

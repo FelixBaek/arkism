@@ -1511,6 +1511,32 @@
             }
           },
           "description": "With rerank \"model\": prune drops snippets the model marks off-topic, dedup drops repeats (same one model call)"
+        },
+        "conversation_context": {
+          "type": "boolean",
+          "description": "Opt in to raw conversation in context_data under one token budget; requires budget_tokens and token_encoding. Default false. Unreviewed data, not instructions."
+        },
+        "whole_items": {
+          "type": "boolean",
+          "description": "Skip facts that do not fit instead of cutting their text. Default false."
+        },
+        "best_effort_lanes": {
+          "type": "boolean",
+          "description": "Keep usable results if an optional retrieval lane is unavailable; inspect degraded. Default false. Does not bypass authorization."
+        },
+        "budget_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64000,
+          "description": "Explicit context_data token budget. Requires token_encoding; not supported with ids. The surrounding tool response is additional."
+        },
+        "token_encoding": {
+          "type": "string",
+          "enum": [
+            "cl100k_base",
+            "o200k_base"
+          ],
+          "description": "Tokenizer for budget_tokens."
         }
       }
     }
@@ -1799,13 +1825,23 @@
         },
         "budget": {
           "type": "string",
-          "enum": ["low", "mid", "high"],
+          "enum": [
+            "low",
+            "mid",
+            "high"
+          ],
           "description": "How much the answer may look up when limit and max_iterations are unset: low is quick, high reads more."
         },
         "fact_types": {
           "type": "array",
           "maxItems": 2,
-          "items": {"type": "string", "enum": ["memory", "observation"]},
+          "items": {
+            "type": "string",
+            "enum": [
+              "memory",
+              "observation"
+            ]
+          },
           "description": "Read only memories or only observations"
         },
         "exclude_mental_models": {
@@ -1815,7 +1851,10 @@
         "exclude_mental_model_ids": {
           "type": "array",
           "maxItems": 20,
-          "items": {"type": "string", "maxLength": 256}
+          "items": {
+            "type": "string",
+            "maxLength": 256
+          }
         },
         "apply_all_directives": {
           "type": "boolean",

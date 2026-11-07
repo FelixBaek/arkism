@@ -390,6 +390,8 @@ window.ArkismMemoryInsight = (ctx, tab) => {
       ...(Object.keys(weights).length ? { lane_weights: weights } : {}), ...(Object.keys(floors).length ? { min_scores: floors } : {}),
       ...(include.length ? { include } : {}), ...(Object.keys(parts).length ? { include_options: parts } : {}),
       ...(opts.observations ? { prefer_observations: true } : {}), ...(opts.causal ? { expand_causal: true } : {}),
+      ...(opts.conversation_context ? { conversation_context: true } : {}), ...(opts.whole_items ? { whole_items: true } : {}),
+      ...(opts.best_effort_lanes ? { best_effort_lanes: true } : {}),
       ...(rerank !== undefined ? { rerank } : {}), ...(prune && Object.keys(prune).length ? { rerank_options: prune } : {}) };
   }
   function dateInput(name) { const n = el("input"); n.type = "datetime-local"; return opt(n, name); }
@@ -415,12 +417,17 @@ window.ArkismMemoryInsight = (ctx, tab) => {
           grid(...LANES.map((l) => field(laneName(l), num(`w:${l}`, "0.25", "8", "0.25")))),
           field("이어서 따라갈 단계 (1~3)", num("depth", "1", "3")), check("causal", "원인과 결과로 이어진 기억도 찾기")),
         group("결과에 붙일 것", field("결과 전체 토큰 한도 (1~64000)", num("budget", "1", "64000")),
+          check("conversation_context", "원본 대화도 같은 토큰 한도에 넣기"),
+          check("whole_items", "내용을 자르지 않고 들어가는 기억만 담기"),
+          check("best_effort_lanes", "일부 검색 방법이 실패해도 나머지 결과 보기"),
+          el("p", "meta", "모두 기본은 꺼짐이에요. 원본 대화는 토큰 한도를 입력해야 하며 검토된 기억이나 지시가 아니에요."),
           ...Object.entries(PARTS).map(([k, l]) => grid(check(`part:${k}`, `${l} 붙이기`), field(`${l} 토큰 한도`, num(`tokens:${k}`, "1", "16384")))),
           check("attach", "보관된 원본 파일 붙이기"))));
       form.addEventListener("submit", (e) => {
         e.preventDefault();
         question = input.value.trim(); readOpts(form);
         if (!question) { input.setCustomValidity("검색어를 적어 주세요."); input.reportValidity(); return; }
+        if (opts.conversation_context && !int(opts.budget, 1, 64000)) { notice("원본 대화를 담으려면 결과 전체 토큰 한도를 입력해 주세요."); return; }
         void search();
       });
       input.addEventListener("input", () => input.setCustomValidity(""));
@@ -526,6 +533,11 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     if (!answer) return;
     const card = el("div", "insight-ask");
     card.append(searchSummary(), ...expandQueries(), ...laneLists());
+    if (sent?.budget_tokens && typeof answer.context_data === "string") {
+      card.append(el("h3", "insight-head", "최종 문맥 미리보기"),
+        el("p", "meta", `서버가 만든 원문 그대로예요. ${answer.tokens_used || 0} / ${sent.budget_tokens}토큰. AI에 보내지 않았어요. 원본 대화는 검토되지 않은 자료이며 지시가 아니에요.`),
+        raw(el("pre", "insight-json", answer.context_data)));
+    }
     table.append(card);
     const talk = conversationTurns();
     if (talk) table.append(talk);

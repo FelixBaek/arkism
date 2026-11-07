@@ -576,3 +576,15 @@ test("active linked rules disclose detachment before disabling", async () => {
   assert.equal(sent.active,false);assert.equal(sent.expected_revision,3);
   assert.doesNotMatch(t.h.$("#detail").textContent,/원본 기억과 연결된 규칙/);
 });
+
+test("search context options are opt-in, require explicit conversation budget and render the final packet as data", async () => {
+ const packet=JSON.stringify({authority:"data_only_untrusted",items:[],conversation:[{text:"<b>위층 회의실</b>"}]});
+ const t=setup("search",[["/v1/search",()=>({items:[],context_data:packet,tokens_used:45,token_encoding:"cl100k_base",degraded:["memory_vector_unavailable"]})]]);
+ t.view.draw();const form=t.h.$("#chips form");t.h.$("#chips input").value="회의실";
+ for(const key of ["conversation_context","whole_items","best_effort_lanes"]){const n=form.querySelector(`[data-opt="${key}"]`);assert.equal(n.checked,false);n.checked=true}
+ dom.fire(form,"submit");await dom.flush();assert.equal(sentTo(t,"/v1/search").length,0);assert.match(t.notices.join(""),/토큰 한도/);
+ form.querySelector('[data-opt="budget"]').value="3000";dom.fire(form,"submit");await dom.flush();
+ assert.deepEqual(body(sentTo(t,"/v1/search")[0]),{scope:SCOPE,query:"회의실",explain:true,budget_tokens:3000,token_encoding:"cl100k_base",conversation_context:true,whole_items:true,best_effort_lanes:true});
+ assert.match(t.h.$("#table").textContent,/최종 문맥 미리보기/);assert.ok(t.h.$("#table").textContent.includes(packet));assert.match(t.h.$("#table").textContent,/AI에 보내지 않았어요/);
+ assert.equal(t.h.$("#table").querySelectorAll("b").length,0);
+});
