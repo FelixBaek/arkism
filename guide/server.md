@@ -797,6 +797,9 @@ lists no models and requests for it are refused without reaching anyone.
 - `cursor` runs text-only conversations: requests with tools, images or tool
   results are refused. The CLI runs in an empty temporary folder with every
   agent tool denied and sees only the environment it needs to find its login.
+  Requests for a JSON response format (Chat-style `response_format`) are also
+  refused for `cursor`, so a server model on `cursor/...` must use
+  `SKILL_LLM_PROTOCOL=messages`.
 - **Check the provider's terms first.** A subscription meant for the provider's
   own apps may restrict or forbid use from a third-party app such as this one.
   Signing in is your choice and your responsibility.
