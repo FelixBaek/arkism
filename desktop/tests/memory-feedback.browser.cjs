@@ -11,13 +11,14 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__
   for(const file of ["tokens.css","app.css","v4-memory.css"])await page.addStyleTag({content:fs.readFileSync(path.resolve(__dirname,"../ui",file),"utf8")});
   for(const file of ["keep.js","memory-evaluation.js"])await page.addScriptTag({path:path.resolve(__dirname,"../ui",file)});
   await page.evaluate(()=>{
-   window.calls=[];window.failHistory=true;window.fixed=0;
+   window.calls=[];window.failHistory=true;window.failPolicy=true;window.fixed=0;
    const el=(tag,cls="",text="")=>{const n=document.createElement(tag);n.className=cls;n.textContent=text;return n};
    const section=title=>{const n=el("section","section");n.append(el("h3","",title));return n};
    const facts=pairs=>{const n=el("dl","facts");for(const [k,v]of pairs)n.append(el("dt","",k),el("dd","",v));return n};
    window.ArkismMemoryEvaluation.mount({container:document.querySelector("#panel"),record:{id:"memory",revision:2},scope:{workspace_id:"work",project_id:"project"},el,section,facts,onFix:()=>window.fixed++,request:async(path,opts)=>{
     window.calls.push(path);
     if(path.includes("evaluations/summary"))return {authority:"data_only_untrusted",target:{collection:"memories",id:"memory",revision:2},groups:{automated_check:{count:1}},passed:false};
+    if(path.includes("signal-policy")){if(window.failPolicy){window.failPolicy=false;throw new Error("503")};return {authority:"data_only_untrusted",memory:{id:"memory",revision:2},mode:"recent_first_trace",as_of:"2026-11-07T10:00:00Z",policy:{dimension:"work_task",window_days:30,min_samples:3},historical_total:8,window_events:4,eligible_total:3,eligible_passed:2,excluded_window_events:1,minimum_met:true,evaluation_factor:1.1,work_factor:1,effective_factor:1.1}}
     if(path.includes("execution_traces"))return {id:"trace",revision:1,scope:{workspace_id:"work",project_id:"project"},text:"검사에서 잘못된 파일 경로를 확인했습니다. <b>원문</b>"};
     if(window.failHistory){window.failHistory=false;throw new Error("503")}
     const second=path.includes("cursor=next");
@@ -25,6 +26,9 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__
    }});
   });
   await page.getByText("관측에서 실패",{exact:true}).waitFor();
+  await page.getByRole("button",{name:"현재 순위 기준 보기"}).focus();await page.keyboard.press("Enter");
+  await page.getByRole("button",{name:"순위 기준 다시 시도"}).click();
+  await page.getByText("3건 · 통과 2건",{exact:true}).waitFor();
   await page.getByRole("button",{name:"실제 평가 이력 보기"}).focus();await page.keyboard.press("Enter");
   await page.getByText("평가 이력을 불러오지 못했어요.",{exact:true}).waitFor();
   await page.getByRole("button",{name:"다시 시도",exact:true}).click();

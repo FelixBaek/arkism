@@ -52,3 +52,21 @@ Limits: This implements classification and a durable measurement basis, not evid
 검증: 9개 합성 변경과 실제 DB의 원인 저장·기존 참조 거부·이전 상태 미사용 검증 통과.
 한계: 운영 빈도와 안전한 근거 재연결 효과 자료는 부족하여 보류한다. 정확 참조 fence와 purge는 그대로 유지한다.
 연구: 해당 없음
+
+## F3 — Show configured policy and applied samples / 평가 정책과 적용 표본 표시
+
+Task: memory-followups-F3
+Research: none
+연구: 해당 없음
+
+Why: People could not inspect the opt-in policy or distinguish retained events from independent evidence. Explicit disable is required to override an inherited policy.
+이유: 설정 화면에 최근 평가 정책을 연결하고, 전체 이력과 현재 내용·기간·평가 종류에 맞는 독립 표본을 구분합니다. 상속 정책도 명시적으로 끌 수 있습니다.
+
+Changes: Scoped settings now edit dimension, window and minimum samples. A scoped, authorized signal-policy endpoint reports the baseline factor, work factor, server timestamp, current-window events, eligible first-trace samples and excluded events. The memory detail panel has an explicit read/refresh/retry path. It does not label missing attribution as a duplicate or delivery as causal success.
+변경: 설정에서 평가 종류·기간·최소 표본을 바꾸며, 기억 평가 패널에서 실제 서버 계산 기준과 표본을 조회·재시도합니다. `disabled:true`는 기존 전체 이력 정책으로 돌아갑니다.
+
+Verified: Targeted Go service/HTTP tests pass, including actual outcome ingestion through Search factor parity, anonymous rejection and inherited disable. A helper supplies real 200/401 responses for the integrated strict contract corpus. Focused node tests and local Chromium component tests pass: keyboard toggle/save, dimension/window changes, sibling-setting preservation, explicit disable, failed explanation request/retry and scope query preservation. Screenshots inspected for policy settings and evaluation details.
+검증: 실제 서비스 계산과 검색 가중치 동일성, 인증 거부, 상속 해제, 키보드 조작과 재시도를 확인했습니다. 기존 PG 필터 검증은 F1/F2의 임시 DB 시험에서 실행했으며 이번 F3 Go 묶음의 PG 검사는 환경 미지정으로 건너뛰었습니다.
+
+Limits: Browser tests render production components with synthetic scoped HTTP responses, not the complete authenticated application. Better Design was invoked locally but does not support these JS files; no supported JSX/TSX/CSS files were found, so this is not a design-check pass. API artifact regeneration and strict corpus inclusion belong to integration. Reported baseline factors can differ for a different query time or separate dynamic ranking.
+한계: 화면 검증은 합성 응답을 사용하는 실제 컴포넌트 범위입니다. Better Design은 JS를 지원하지 않아 통과로 간주하지 않습니다. API 생성물과 종합 계약 검사는 통합 작업에서 연결합니다.

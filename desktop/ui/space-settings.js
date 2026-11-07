@@ -574,6 +574,16 @@
         qsw("auto_close_on_correction", "정정되면 옛 사실 끝내기 제안", "정정을 승인하면 옛 기억에 끝난 날짜를 붙이자고 제안해요. 내가 승인해야 바뀌어요.", !!q.auto_close_on_correction),
         ...recallDefaults(kit, q, edit),
         origin("recall_quality", () => { d.recall_quality = null; redraw(); })));
+      const policy = q.signal_policy, enabled = !!policy && !policy.disabled;
+      const defaultPolicy = { dimension: "work_task", window_days: 30, min_samples: 3 };
+      const updatePolicy = (patch) => setBlock("recall_quality", { signal_policy: { ...(enabled ? policy : defaultPolicy), ...patch } });
+      g.append(kit.line("최근 작업 평가로 순위 조정", "현재 내용·선택한 기간과 평가 종류에서 같은 작업의 첫 결과만 세요. 끄면 기존 전체 이력 정책을 써요.",
+        edit ? kit.sw(enabled, "최근 작업 평가로 순위 조정", (on) => setBlock("recall_quality", { signal_policy: on ? defaultPolicy : { disabled: true } })) : onOff(enabled)));
+      if (enabled) g.append(kit.more("평가 순위 정책",
+        kit.line("평가 종류", "한 번에 한 종류만 순위에 반영해요.", edit ? select([["work_task", "업무 결과"], ["personal_compliance", "개인 규칙 준수"]], policy.dimension, "평가 종류", (v) => updatePolicy({ dimension: v })) : readOnly(policy.dimension === "work_task" ? "업무 결과" : "개인 규칙 준수")),
+        kit.line("평가 기간 (일)", "1~3650일", numberBox(policy.window_days, 1, 3650, 30, "평가 기간 (일)", edit, (n) => updatePolicy({ window_days: n || 30 }))),
+        kit.line("최소 작업 평가 수", "3~1000개. 같은 작업의 반복 평가로 늘어나지 않아요.", numberBox(policy.min_samples, 3, 1000, 3, "최소 작업 평가 수", edit, (n) => updatePolicy({ min_samples: n || 3 }))),
+        el("p", "pg-hint", "평가 이력은 삭제하지 않아요. 기억 상세에서 현재 적용 표본과 가중치를 확인할 수 있어요. 성공의 원인을 입증하는 기능은 아니에요.")));
       return g;
     }
 

@@ -87,6 +87,7 @@ var httpRoutePolicies = map[string]routePolicy{
 	"GET /v1/memories/{id}/management-status":              {action: "read:memories", scope: routeQuery},
 	"GET /v1/memories/{id}/outcome-comparison":             {action: "read:memories", scope: routeQuery},
 	"GET /v1/memories/{id}/outcomes":                       {action: "read:memories", scope: routeQuery},
+	"GET /v1/memories/{id}/signal-policy":                  {action: "read:memories", scope: routeQuery},
 	"GET /v1/memories/{id}/signal":                         {action: "read:memories", scope: routeQuery},
 	"GET /v1/memories/{id}/sources":                        {action: "read:memories", scope: routeQuery},
 	"GET /v1/memories/{id}/usage":                          {action: "read:memories", scope: routeQuery},

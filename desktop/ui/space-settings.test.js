@@ -296,3 +296,19 @@ test("정리 전략 편집: order is priority, tags as a comma list, delete asks
   assert.equal(S.strategyIssue([{ name: "x", scopes: [{ tags: ["a"] }] }, { name: "x", scopes: [{ tags: ["b"] }] }]), "같은 이름의 전략이 둘 있어요. 이름을 바꿔 주세요.");
   assert.equal(S.strategyIssue([]), "");
 });
+
+test("recent signal policy can be edited and explicitly disabled over inheritance", async () => {
+  const state={view:"settings",settingsTab:"space",server:"s",scope:{workspace_id:"w",project_id:"p"},caps:{actions:{}}};
+  const sent=[],sws={};let stored={recall_quality:{diversity:false,signal_policy:{dimension:"work_task",window_days:30,min_samples:3}}};
+  const request=async(path,o)=>{if(o?.method){sent.push(JSON.parse(o.body));stored={...stored,...JSON.parse(o.body)};return {}};return {revision:2,config:structuredClone(stored),sources:{recall_quality:"template"}}};
+  const kit={side(){},sideSec:()=>h.el("div"),kvRow:()=>h.el("div"),sideNote:()=>h.el("p"),group:t=>h.el("section","",t),line:(t,hint,ctl)=>{const n=h.el("div","",t);n.append(h.el("small","",hint),ctl);return n},more:(t,...nodes)=>{const n=h.el("details","",t);n.append(...nodes);return n},spaceJob:async()=>({}),sw:(on,label,set)=>{sws[label]=set;return h.el("button","",`${label}:${on}`)}};
+  let box;const tab=S({state,...h,request,notice(){},render(){box=h.el("div");box.append(...tab.tab(kit))}});
+  tab.tab(kit);await dom.flush();await dom.flush();
+  assert.match(box.textContent,/최소 작업 평가 수/);
+  const period=box.querySelectorAll("input").find(n=>n.getAttribute("aria-label")==="평가 기간 (일)");period.value="60";dom.fire(period,"change");
+  box.querySelectorAll("button").find(n=>n.textContent==="저장").click();await dom.flush();
+  assert.equal(sent[0].recall_quality.signal_policy.window_days,60);assert.equal(sent[0].recall_quality.diversity,false);
+  sws["최근 작업 평가로 순위 조정"](false);
+  box.querySelectorAll("button").find(n=>n.textContent==="저장").click();await dom.flush();
+  assert.deepEqual(sent.at(-1).recall_quality.signal_policy,{disabled:true});
+});

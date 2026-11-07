@@ -35,6 +35,26 @@ window.ArkismMemoryEvaluation = (() => {
       const b = el("button", "btn ghost small", label); b.type = "button";
       b.addEventListener("click", run); return b;
     }
+    function policyView() {
+      const box = el("div"), note = el("p", "meta"), policyLoads = globalThis.ArkismKeep.latest();
+      const show = action("현재 순위 기준 보기", async () => {
+        const turn = policyLoads.begin(); show.disabled = true;
+        try {
+          const result = await request(`/v1/memories/${encodeURIComponent(record.id)}/signal-policy?${new URLSearchParams(scope)}`, { signal: turn.signal });
+          if (!turn.live() || !box.isConnected) return;
+          if (result.authority !== "data_only_untrusted" || result.memory?.id !== record.id || result.memory.revision !== record.revision || !["legacy", "recent_first_trace", "disabled"].includes(result.mode) || !Number.isFinite(result.effective_factor)) throw new Error("invalid_policy");
+          const recent = result.mode === "recent_first_trace";
+          note.textContent = result.mode === "disabled" ? "현재 이 기억에는 순위 가중치를 적용하지 않아요." : recent ? "현재 내용의 기간·종류가 맞는 평가에서 같은 작업의 첫 결과만 반영해요." : "기존 전체 이력 정책이에요. 저장된 신호를 기준으로 계산해요.";
+          const values = [["기준 시각", new Date(result.as_of).toLocaleString()], ["전체 평가 이력", `${result.historical_total}건`]];
+          if (recent) values.push(["평가 종류", result.policy?.dimension === "work_task" ? "업무 결과" : "개인 규칙 준수"], ["평가 기간", `${result.policy?.window_days}일`], ["현재 내용·기간의 이벤트", `${result.window_events}건`], ["중복·귀속 부족으로 제외", `${result.excluded_window_events}건`], ["적용 표본", `${result.eligible_total}건 · 통과 ${result.eligible_passed}건`], ["최소 표본", `${result.policy?.min_samples}건 · ${result.minimum_met ? "충족" : "미충족 (평가 가중치 1)"}`]);
+          values.push(["평가 가중치", String(result.evaluation_factor)], ["업무 관측 가중치", String(result.work_factor)], ["합산 가중치", String(result.effective_factor)]);
+          box.replaceChildren(note, facts(values), el("p", "meta", "일반 검색의 기준값이에요. 다른 기준 시각이나 별도 동적 순위는 다를 수 있어요. 반환·전달·실제 사용·성공 원인은 서로 달라요."), show);
+          show.textContent = "순위 기준 새로고침";
+        } catch (_) { if (turn.live() && box.isConnected) { note.textContent = "순위 기준을 불러오지 못했어요."; show.textContent = "순위 기준 다시 시도"; } }
+        finally { if (turn.live() && box.isConnected) show.disabled = false; }
+      });
+      box.append(note, show); return box;
+    }
     function historyView() {
       const box = el("div"), list = el("div"), note = el("p", "meta");
       const historyLoads = globalThis.ArkismKeep.latest();
@@ -85,7 +105,7 @@ window.ArkismMemoryEvaluation = (() => {
         if (!turn.live() || !panel.isConnected) return;
         const result = describe(summary, target);
         const more = el("details", "d-rules"); more.append(el("summary", "", "자세히"), facts([["평가 추적", result.tracking], ["독립된 관측", `${result.independent}건`], ["모델 자기평가", `${result.self}건`]]));
-        content.replaceChildren(el("span", `tag ${result.tone}`, result.label), el("p", "meta", result.note), more, historyView());
+        content.replaceChildren(el("span", `tag ${result.tone}`, result.label), el("p", "meta", result.note), more, policyView(), historyView());
       } catch (_) {
         if (!turn.live() || !panel.isConnected) return;
         // Retry once quietly, then offer an explicit retry without guessing the cause.

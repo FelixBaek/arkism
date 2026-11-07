@@ -9,13 +9,14 @@ import (
 // SignalPolicy opts into bounded, content-specific recent observations. Historical
 // outcomes remain available; missing content attribution is never guessed.
 type SignalPolicy struct {
+	Disabled   bool   `json:"disabled,omitempty" bson:"disabled,omitempty"`
 	Dimension  string `json:"dimension" bson:"dimension"`
 	WindowDays int    `json:"window_days" bson:"window_days"`
 	MinSamples int    `json:"min_samples" bson:"min_samples"`
 }
 
 func (p *SignalPolicy) valid() bool {
-	return p == nil || ((p.Dimension == "work_task" || p.Dimension == "personal_compliance") && p.WindowDays >= 1 && p.WindowDays <= 3650 && p.MinSamples >= 3 && p.MinSamples <= 1000)
+	return p == nil || (p.Disabled && p.Dimension == "" && p.WindowDays == 0 && p.MinSamples == 0) || (!p.Disabled && (p.Dimension == "work_task" || p.Dimension == "personal_compliance") && p.WindowDays >= 1 && p.WindowDays <= 3650 && p.MinSamples >= 3 && p.MinSamples <= 1000)
 }
 func signalContentHash(h Hit) string {
 	c := copyMemoryContext(h.MemoryContext)
@@ -87,7 +88,7 @@ func (s *Service) signalRecords(ctx context.Context, scope Scope, rows []ScoredH
 }
 func (s *Service) policyOutcomeWeights(ctx context.Context, in SearchInput, rows []ScoredHit) map[string]float64 {
 	p := in.space.recallQuality().SignalPolicy
-	if p == nil {
+	if p == nil || p.Disabled {
 		return s.outcomeWeights(ctx, in.Scope, rows)
 	}
 	if s.SignalRankingOff || !p.valid() {
