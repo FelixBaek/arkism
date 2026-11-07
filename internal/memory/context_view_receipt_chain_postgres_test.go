@@ -21,6 +21,11 @@ type productionViewReader struct {
 	refs []Ref
 }
 
+// This transport fixture must retrieve both synthetic topic families before
+// testing exact-revision exclusions. Unrelated framing words would exercise
+// the relevance gate instead and yield an empty result before masking.
+const productionViewFixtureQuery = "receiptfixture viewcanary"
+
 func (r *productionViewReader) ReceiptAcknowledgement(cycle string) (capture.ReceiptAcknowledgement, error) {
 	var wire struct {
 		Hook struct {
@@ -92,7 +97,7 @@ func productionViewInvoke(t *testing.T, f *receiptChainPGFixture, sid string, vi
 		t.Fatal(e)
 	}
 	out := &productionViewReader{receiptChainIndependentHost: receiptChainIndependentHost{reader: reader, baseURL: host.BaseURL, token: rawToken, client: &http.Client{Timeout: 2 * time.Second}, scope: f.p.in.Scope}}
-	if e = capture.HookWithReceiptChainView(map[string]any{"session_id": sid, "prompt": "receiptfixture viewcanary production invocation"}, "UserPromptSubmit", out, session, view); e != nil {
+	if e = capture.HookWithReceiptChainView(map[string]any{"session_id": sid, "prompt": productionViewFixtureQuery}, "UserPromptSubmit", out, session, view); e != nil {
 		t.Fatal(e)
 	}
 	for _, record := range session.Snapshot().Records {

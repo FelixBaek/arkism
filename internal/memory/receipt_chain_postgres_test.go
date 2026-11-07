@@ -298,7 +298,10 @@ func receiptChainMemories(t *testing.T, admin *Postgres) []Ref {
 	f.svc.Repo = admin
 	targets := []Ref{}
 	for _, label := range []string{"one", "two", "three"} {
-		m := f.activeMemory("receiptfixture BODY_CANARY "+label+strings.Repeat(" payload unit", 20), "receiptfixture")
+		// The actual hook asks for all three concepts. Keep the synthetic
+		// source relevant under the ordinary gate instead of relying on a
+		// single shared marker or weakening the production search policy.
+		m := f.activeMemory("receiptfixture context boundary BODY_CANARY "+label+strings.Repeat(" payload unit", 20), "receiptfixture")
 		m.Kind = "user"
 		if e := admin.Replace(testCtx, colMemories, m, m.Revision); e != nil {
 			t.Fatal(e)

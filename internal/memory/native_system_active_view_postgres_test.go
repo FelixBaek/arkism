@@ -128,7 +128,7 @@ func (a *activeViewFixture) invoke(t *testing.T, sid string, view *capture.Conte
 		t.Fatal(e)
 	}
 	out := &productionViewReader{receiptChainIndependentHost: receiptChainIndependentHost{reader: reader, baseURL: host.BaseURL, token: a.f.p.workerToken, client: &http.Client{Timeout: 3 * time.Second}, scope: a.f.p.in.Scope}}
-	e = capture.HookWithReceiptChainView(map[string]any{"session_id": sid, "prompt": "receiptfixture viewcanary production invocation"}, "UserPromptSubmit", out, s, view)
+	e = capture.HookWithReceiptChainView(map[string]any{"session_id": sid, "prompt": productionViewFixtureQuery}, "UserPromptSubmit", out, s, view)
 	return s, out.refs, append([]byte{}, out.Bytes()...), e
 }
 func TestNativeSystemActiveViewTransportPG(t *testing.T) {

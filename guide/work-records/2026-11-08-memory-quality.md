@@ -5,10 +5,11 @@ MQ4 development/holdout separation, MQ5 bounded resumable lifecycle maintenance.
 Research: none
 Why: improve the five follow-up areas while preserving original evidence, privacy,
 legacy defaults and honest category-level acceptance.
-Verified: initial actual PostgreSQL retrieval selection passed (1.373s); five
-category-gate checker tests passed. Post-review regressions and frozen retrieval
-comparison are pending. The earlier fake repository did not implement token-based
-full-text matching; the new opt-in functional test uses the real database.
+Verified: integrated PostgreSQL memory suite passed with2029 top-level tests and18
+explicit skips (726.896s); later retrieval corrections passed their combined
+selection (4.405s). Eleven additional real HTTP host/receipt tests passed (19.986s).
+API contract validation covered284 real HTTP cases; SDK tests and scoped vet passed.
+The first frozen quality comparison failed; the final corrected comparison is pending.
 Limits: no publication, production deployment, paid model calls or answer-quality
 claim. Only the previously authorized isolated offline recall harness is compiled.
 
@@ -70,9 +71,27 @@ UI screen is added, and no existing space is enabled automatically.
 
 ## MQ3 / MQ4 / MQ5 integration
 
-See the task-specific work records after integration. The implementation status
-and any unmet acceptance gate will be updated from actual test results, never
-inferred from code completion.
+- MQ3: [task-level feedback](2026-11-08-memory-quality-feedback.md) is integrated.
+  Explicit producer task keys group independent executions; only the first
+  eligible completed judged result contributes to the main analysis. Raw attempts
+  and costs remain. The real DB fixture retained7 raw outcomes and selected5
+  independent outcomes,4 passing. Keys cannot prove semantic task identity.
+- MQ4: [holdout promotion](2026-11-08-memory-quality-skills.md) is integrated.
+  Optional declared holdout tasks must be disjoint from development hashes and
+  complete in both baseline/candidate evidence, with a per-category floor of at
+  least90%. Admission and approval revalidate the source evidence. Declared hashes
+  cannot prove that undeclared exposure never occurred; no new live holdout model
+  experiment or production skill promotion is claimed.
+- MQ5: [resumable maintenance](2026-11-08-memory-quality-lifecycle.md) and the
+  [operator CLI](2026-11-08-memory-maintenance-cli.md) are integrated. Durable100-row
+  steps, hold/release, revision checks, safe pre-quarantine cancellation and actual
+  subprocess resumption are tested. This is an explicit global outage with an
+  upgraded-client prerequisite. Targeted work-checkpoint deletion remains atomic;
+  total manifest memory/rewrite cost remains proportional to impact size.
+
+MQ1/MQ2 implementation is present, but the category-level retrieval acceptance is
+not complete. Implementation and unit-test completion never substitute for the
+frozen evidence-recall target.
 
 
 Independent review also found native serving could replace the expanded result
@@ -189,3 +208,29 @@ The second run `memory-quality-integrated-20261108` was deliberately stopped
 when these confirmed defects made it a superseded candidate. Its partial rows
 and an `aborted_not_accepted` marker are retained; it is not a completed or
 passing quality comparison. A new full frozen run is required after integration.
+
+
+## Actual host transport verification
+
+After the full PostgreSQL suite,11 opt-in host/receipt tests were run with their
+own temporary host state, synthetic host identity and disposable database.
+External model execution was disabled. The first invocation omitted the fixture
+origin and failed identity checks. With the origin set, the old fixture's text
+held only one topic from a three-topic prompt, so the pre-existing relevance gate
+correctly returned no memories. Independent review confirmed this behavior in
+pre-task code as well. The synthetic source now contains the topics its receipt
+prompt asks for. The view-transport fixtures now ask for their two actual synthetic
+topic families, omitting unrelated framing words; exact-reference, revision,
+correction, withdrawal, new-reader and no-fallback assertions remain unchanged.
+These are functional fixture corrections, not changes to frozen benchmark
+questions, gold evidence, retrieval budgets or production relevance rules.
+
+The final11 host/receipt tests passed in19.986s. They cover actual HTTP source
+reads, context exclusions, retained-path delivery, correction/withdrawal, native
+active-view transport, lost replies, transaction failure and durable publication.
+They establish transport behavior, not model understanding or task success.
+The initial fixture failures remain in separate logs. The full suite's remaining
+opt-in research/export/live-model/scale/copy tests are not claimed as executed;
+the subprocess helper runs only through its parent test. The latest retrieval
+code also passed scoped static vet. No product release or production maintenance
+was run.
