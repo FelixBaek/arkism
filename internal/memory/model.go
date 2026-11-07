@@ -495,6 +495,9 @@ type Hit struct {
 	evidenceSpan string
 	// termShare: for a keyword lane hit of memory recall, the share of the query's topic concepts it holds (weighKeywordCoverage).
 	termShare float64
+	// keywordQueryKey identifies equivalent lexical queries in opt-in local
+	// expansion. Fusion retains their candidate union but credits each hit once.
+	keywordQueryKey string
 }
 type ContextBundle struct {
 	conversationRecords map[Ref]Record

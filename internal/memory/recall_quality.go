@@ -301,10 +301,20 @@ func conceptsFound(terms []string, h Hit) (found, concepts int) {
 // of the whole question, while a hit holding every concept counts as before.
 func weighKeywordCoverage(in SearchInput, lists [][]Hit) [][]Hit {
 	terms := searchQueryTerms(in.Query)
+	keywordKey := ""
+	if in.space.recallQuality().LocalExpand && len(terms) > 0 {
+		canonical := slices.Clone(terms)
+		slices.Sort(canonical)
+		keywordKey = strings.Join(canonical, "\x00")
+	}
 	out := make([][]Hit, len(lists))
 	for i, list := range lists {
 		out[i] = slices.Clone(list)
 		for j, h := range out[i] {
+			out[i][j].keywordQueryKey = ""
+			if slices.Contains(h.Reasons, reasonTextSearch) && !slices.Contains(h.Reasons, reasonExactKeyword) && !slices.Contains(h.Reasons, reasonVector) {
+				out[i][j].keywordQueryKey = keywordKey
+			}
 			exact := slices.Contains(h.Reasons, reasonExactKeyword)
 			if exact && (!in.space.recallQuality().LocalExpand || slices.ContainsFunc(h.keywords, func(k string) bool { return strings.EqualFold(k, strings.TrimSpace(in.Query)) })) {
 				continue

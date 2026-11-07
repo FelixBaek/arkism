@@ -135,3 +135,57 @@ cleanup. Integrated reruns and final frozen retrieval measurements remain pendin
 The focused maintenance/retention PostgreSQL rerun passed (15.178s), including
 blocked owner retention and rejection of roles without schema access. Final
 whole-package rerun will include the subsequent bounded rollback cleanup.
+
+## Frozen development comparison 1 — rejected
+
+Run `memory-quality-local-20261108` completed all 906 searches (453 questions,
+451 scored). It used the initial retrieval snapshot, identified by harness
+revision `cdb400bd +dirty`, before the subsequent coverage/anchor/context fixes.
+All HTTP searches succeeded; degraded results0, model trap calls0 and
+non-embedding provider-usage rows0→0. These are execution checks, not quality
+acceptance. The frozen-question fingerprint was
+`f6a6492fa38c0fece24811e68d6f2cb91759748ea0c987162293738c090052ab`.
+
+| Category | Baseline | First experiment |
+| --- | ---: | ---: |
+| multi-hop |59.55%|59.35%|
+| temporal |91.09%|87.84%|
+| open-domain |61.46%|62.24%|
+| single-hop |97.07%|96.65%|
+| overall (diagnostic aggregate) |85.65%|84.82%|
+
+The category checker returned1 (failed acceptance). This attempt is retained as
+negative evidence; no category was counted as accepted. The revised integrated
+snapshot `fb129389` is being measured separately with identical questions,
+evidence mapping and limits. No installed space is enabled by this experiment.
+
+The first full PostgreSQL package invocation also hit Go's default10-minute
+package timeout after1928 top-level passes,17 skips and the already-corrected
+retention test failure. It is not a passing full suite. The final-source rerun
+uses a14-minute Go package timeout inside the existing15-minute outer cap.
+The general non-PostgreSQL invocation completed2058 top-level passes and334 skips;
+its skipped DB checks are not counted as database evidence. Scoped static vet
+and102 management-operation DTO mappings passed. Three clean worker worktrees
+were removed only after confirming every worker patch was integrated.
+
+## Equivalent lexical evidence correction
+
+Independent review identified that scaffolding removal produces the same
+PostgreSQL FTS concepts/order as the original question. Fusion nevertheless
+counted each rewritten query as independent evidence. In local-expansion mode,
+FTS hits now carry a private canonical query-term signature. Fusion preserves
+the union after relevance checks and credits each hit/signature at its strongest
+surviving rank once. Distinct predicates, exact-keyword lanes and vector lanes
+retain separate credit. Non-opt-in fusion retains its existing behavior. This
+also covers derived-memory and conversation FTS; no positional lane assumption
+is used and no candidate is removed solely because a wording is equivalent.
+
+Two synthetic regressions fail against the prior source overlay (0.055s).
+The corrected local-expansion/conversation/fusion/diversity/lexical selection,
+including real PostgreSQL conversation retrieval, passes (1.864s). The separate
+excerpt eligibility correction is documented in its own record.
+
+The second run `memory-quality-integrated-20261108` was deliberately stopped
+when these confirmed defects made it a superseded candidate. Its partial rows
+and an `aborted_not_accepted` marker are retained; it is not a completed or
+passing quality comparison. A new full frozen run is required after integration.

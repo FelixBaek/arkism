@@ -157,7 +157,8 @@ func fuseWeighted(lists [][]Hit, limit int, weights map[string]float64) []Scored
 	const exactKeywordWeight = 2.0
 	type ranked struct {
 		ScoredHit
-		key string
+		key            string
+		keywordCredits map[string]float64
 	}
 	merged := map[string]*ranked{}
 	for lane, list := range lists {
@@ -189,7 +190,19 @@ func fuseWeighted(lists [][]Hit, limit int, weights map[string]float64) []Scored
 			} else if hit.termShare > 0 {
 				weight = hit.termShare
 			}
-			entry.Score += weight / (rankOffset + float64(position+1)/laneWeight(weights, hit.Reasons))
+			credit := weight / (rankOffset + float64(position+1)/laneWeight(weights, hit.Reasons))
+			if hit.keywordQueryKey != "" {
+				// Equivalent FTS queries are the same evidence, even when query
+				// wording changed. Keep post-gate candidate union and the best
+				// surviving rank without adding repeated lexical votes.
+				if entry.keywordCredits == nil {
+					entry.keywordCredits = map[string]float64{}
+				}
+				prior := entry.keywordCredits[hit.keywordQueryKey]
+				entry.keywordCredits[hit.keywordQueryKey] = max(prior, credit)
+				credit = max(0, credit-prior)
+			}
+			entry.Score += credit
 			for _, reason := range hit.Reasons {
 				if !slices.Contains(entry.Hit.Reasons, reason) {
 					entry.Hit.Reasons = append(entry.Hit.Reasons, reason)
