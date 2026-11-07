@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -347,14 +348,21 @@ func TestPostgresMemoryListChangedDuringPolicy(t *testing.T) {
 	f := newFixture(t)
 	f.svc.Repo = isolatedPostgres(t)
 	r := f.activeMemory("needle")
+	// The approval hook may already have fenced entity evidence after forming
+	// its response. Isolate the read contract from those completed writes.
+	before, e := f.svc.Repo.Get(testCtx, colMemories, scopeA, r.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
 	p, e := f.svc.ListMemories(testCtx, f.human, MemoryListInput{Scope: scopeA, Query: "needle"})
 	if e != nil || len(p.Items) != 1 {
 		t.Fatal("list", p, e)
 	}
 	after, e := f.svc.Repo.Get(testCtx, colMemories, scopeA, r.ID)
-	if e != nil || after.MemoryReferenceFence != r.MemoryReferenceFence {
+	if e != nil || !reflect.DeepEqual(after, before) {
 		t.Fatal("list read rewrote the memory row", e)
 	}
+	t.Logf("memory fence: approval response=%d, before list=%d, after list=%d", r.MemoryReferenceFence, before.MemoryReferenceFence, after.MemoryReferenceFence)
 }
 
 type sourceReadCountRepo struct {

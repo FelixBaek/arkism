@@ -47,3 +47,11 @@ Independent review found three regressions introduced by the recovery/fencing ch
 Reindex now calls the embedding-only queue helper and preserves existing approval jobs exactly. Entity preview validates through the original transaction reader without persistent fence updates, while real extraction retains source/memory fences. ExtractEntities filters time-ineligible rows before forming the batch; a concurrent change to a selected row still fails its write fence rather than publishing stale evidence. Focused database tests verify new embedding jobs, unchanged pending/completed outboxes, no preview fence/graph writes, and successful extraction of the current memory from a mixed batch.
 
 검토에서 발견한 재색인 충돌, 미리보기의 내부 fence 쓰기, 만료·미래 기억에 의한 전체 배치 중단을 실제 임시 DB에서 먼저 재현했다. 임베딩 재색인과 승인 부수 작업을 분리하고, 미리보기는 쓰기 없는 검증을 사용하며, 실제 추출 대상의 시간 유효성을 선별한다. 새 공개 API나 운영 권한은 추가하지 않았고 추가 감사 후보 5개는 구현하지 않았다.
+
+## Follow-up: inventory read fixture boundary
+
+The integrated suite's TestPostgresMemoryListChangedDuringPolicy compared the memory returned by activation with the row after a later inventory read. The response is formed before afterMemoryApproval runs deterministic extraction; its internal MemoryReferenceFence therefore predates completed approval-hook fence writes. That response was not a valid snapshot of the row immediately before ListMemories.
+
+The fixture now reads the stored row after approval and immediately before listing, then compares the entire Record with the stored row after listing. This preserves and strengthens the original assertion that listing does not rewrite memory data, while retaining all concurrent body/source/deletion/quarantine rejection cases. The test logs only the three internal fence counters to distinguish completed creation work from read effects. No product code changed in this follow-up; the focused database result is recorded in its commit.
+
+통합 검사 실패는 생성 후 후처리 이전에 만든 응답을 목록 조회 직전 DB 상태로 간주한 시험 기준 오류였다. 조회 직전·직후 실제 레코드 전체를 비교하도록 바꿔 목록 조회의 불변성 검증은 유지하고 강화했다. 제품 동작이나 권한은 변경하지 않았다.
