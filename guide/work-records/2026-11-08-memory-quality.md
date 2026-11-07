@@ -104,3 +104,34 @@ lookups, unrecognized identifiers and legacy mode retain their existing exact
 behavior. Each fragment uses its own query, preserving complementary subject
 evidence. The combined expansion/conversation/context/fusion/lexical regression
 selection passed (1.830s), including the linear long-input excerpt case.
+
+## Integrated maintenance review
+
+The durable maintenance engine and operator CLI are integrated. Privacy discovery
+supports subject, source-event and trace targets; targeted work-checkpoint
+requests retain the existing atomic API. Each scan/mutation step is bounded,
+while the complete impact manifest still requires memory and JSON rewriting
+proportional to its total size. This is an explicit global maintenance outage,
+not an online replacement for ordinary APIs. All clients must be upgraded or
+stopped; direct administrator SQL is outside the application guard. Migration
+nine installs an idle gate and does not activate maintenance.
+
+The first combined PostgreSQL run found an authorization regression: a
+non-owner without schema USAGE could not execute the new gate function, changing
+retention's explicit owner denial into an unavailable error. The preflight now
+reads only role metadata through the pool; all record reads and deletes retain
+the transaction gate. A paused-maintenance regression checks dry-run and deleting
+retention calls remain blocked. The failing test now closes its pool through
+cleanup even when an assertion fails. The initial failure is retained in the
+local test log. A previous invocation used the wrong DB environment-variable
+name and therefore cannot be counted as PostgreSQL validation.
+
+Independent review checked normal transactions, native/recovery raw-pool paths,
+read-only snapshot leases and CLI resume without initialization. It found no
+additional gate bypass or lock cycle. Maintenance rollback cleanup now has a
+five-second deadline so a cancelled command does not wait without a bound for
+cleanup. Integrated reruns and final frozen retrieval measurements remain pending.
+
+The focused maintenance/retention PostgreSQL rerun passed (15.178s), including
+blocked owner retention and rejection of roles without schema access. Final
+whole-package rerun will include the subsequent bounded rollback cleanup.

@@ -26,7 +26,10 @@ func (p *Postgres) expireCollection(ctx context.Context, collection string, cuto
 	if _, bound := p.effectiveTokenHash(ctx); bound {
 		return 0, ErrDenied
 	}
-	owner, err := retentionOwner(ctx, p.q())
+	// Role metadata is safe to inspect before the application gate. A caller
+	// without schema USAGE must still receive the explicit owner denial. Every
+	// subsequent record read/delete remains behind p.q()'s maintenance gate.
+	owner, err := retentionOwner(ctx, p.pool)
 	if err != nil {
 		return 0, ErrUnavailable
 	}
@@ -72,7 +75,7 @@ func (p *Postgres) retentionBatch(ctx context.Context, collection string, cutoff
 	if _, bound := p.effectiveTokenHash(ctx); bound {
 		return 0, ErrDenied
 	}
-	owner, err := retentionOwner(ctx, p.q())
+	owner, err := retentionOwner(ctx, p.pool)
 	if err != nil {
 		return 0, ErrUnavailable
 	}

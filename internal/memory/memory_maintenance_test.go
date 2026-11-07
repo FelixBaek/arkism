@@ -57,6 +57,17 @@ func TestMaintenanceSubjectRestartHoldAndEquivalentImpact(t *testing.T) {
 	if err = p.Insert(testCtx, "sources", Record{ID: "during-maintenance", Scope: scope, Kind: "document", Status: statusActive, Revision: 1}); !errors.Is(err, ErrUnavailable) {
 		t.Fatal("owner application write bypass", err)
 	}
+	cutoff := time.Now().Add(-48 * time.Hour)
+	for _, operation := range []func() (int64, error){
+		func() (int64, error) { return p.ExpireAuditEvents(testCtx, cutoff, false) },
+		func() (int64, error) { return p.ExpireAuditEvents(testCtx, cutoff, true) },
+		func() (int64, error) { return p.ExpireAuditEventsBatch(testCtx, cutoff, 10) },
+		func() (int64, error) { return p.ExpireLLMRequestsBatch(testCtx, cutoff, 10) },
+	} {
+		if n, err := operation(); n != 0 || !errors.Is(err, ErrUnavailable) {
+			t.Fatal("retention bypassed maintenance", n, err)
+		}
+	}
 	same, err := p.MemoryMaintenanceStatus(testCtx)
 	if err != nil || same.Revision != st.Revision {
 		t.Fatal("status changed revision", same, err)

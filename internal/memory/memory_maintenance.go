@@ -56,7 +56,11 @@ func (p *Postgres) maintenanceTransaction(ctx context.Context, fn func(*Postgres
 	if err != nil {
 		return MemoryMaintenanceStatus{}, pgErr(err)
 	}
-	defer tx.Rollback(context.WithoutCancel(ctx))
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		_ = tx.Rollback(cleanup)
+	}()
 	var owner bool
 	if err = tx.QueryRow(ctx, `SELECT rolsuper OR rolbypassrls OR current_user='arkism_init' FROM pg_roles WHERE rolname=current_user`).Scan(&owner); err != nil || !owner {
 		return MemoryMaintenanceStatus{}, ErrDenied

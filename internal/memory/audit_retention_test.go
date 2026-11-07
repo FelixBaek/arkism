@@ -72,6 +72,7 @@ func TestExpireAuditEventsNeedsTheSchemaOwnerAndAWorkingConnection(t *testing.T)
 		t.Fatal(err)
 	}
 	reader := &Postgres{pool: pool}
+	t.Cleanup(pool.Close)
 	if _, err := reader.ExpireAuditEvents(ctx, cutoff, false); !errors.Is(err, ErrDenied) {
 		t.Fatal("a role that is not the schema owner must be refused", err)
 	}

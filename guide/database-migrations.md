@@ -32,6 +32,19 @@ memory's name mentions when it is deleted, erased, quarantined or leaves
 `active`. A name no other memory mentions is removed with a deleted, erased or
 quarantined memory. Existing rows get empty metadata; no record is rewritten.
 
+Version nine (`0009_maintenance_gate`) adds a persistent owner-only maintenance
+operation and a transaction gate. With no operation, application access remains
+open. An explicitly started operation blocks upgraded repository clients while
+bounded privacy discovery or stale-dependency updates checkpoint their progress.
+Restarting a process does not clear the operation. Older binaries and direct SQL
+administrators bypass the application gate: stop old clients, upgrade remaining
+clients and stop direct administrative writes before starting maintenance. Schema
+history alone cannot establish that these prerequisites hold. See the
+[operator CLI contract](work-records/2026-11-08-memory-maintenance-cli.md) for
+status, revision checks, resume, hold and restricted cancellation. Initialization
+refuses to proceed during active maintenance; use the matching maintenance CLI
+to complete it first. Installing the migration does not start maintenance.
+
 ## Upgrade
 
 1. Keep a tested backup and its matching binary. Stop the API, worker, timers and
