@@ -255,29 +255,30 @@ func (s *Service) draftQueuedSummaries(ctx context.Context, token string, scope 
 // queueEntitySummaries puts the people an approved memory states facts or relations about on the
 // scope's auto_derive job, which noteApprovedMemory queued. Best effort, like the count.
 func (s *Service) queueEntitySummaries(ctx context.Context, r Record) {
-	ids := s.approvedPeople(ctx, r)
-	if len(ids) == 0 || s.Wiki == nil || !s.autoDeriveSettingsFor(ctx, r.Scope).Enabled {
+	set := s.autoDeriveSettingsFor(ctx, r.Scope)
+	if s.Wiki == nil || !set.Enabled {
 		return
 	}
 	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		job, err := tx.Get(ctx, colJobs, r.Scope, autoDeriveJobID(r.Scope))
-		if err != nil || job.Kind != autoDeriveJobKind || job.AutoDerive == nil {
-			return err
+		store, e := entityTx(tx)
+		if e != nil {
+			return e
 		}
-		state := *job.AutoDerive
-		state.Entities = slices.Clone(state.Entities)
-		for _, id := range ids {
-			if !slices.Contains(state.Entities, id) && len(state.Entities) < autoDeriveEntitiesMax {
-				state.Entities = append(state.Entities, id)
-			}
+		if e = store.LockNamedEntities(ctx, r.Scope); e != nil {
+			return e
 		}
-		if len(state.Entities) == len(job.AutoDerive.Entities) {
-			return nil
+		checked := searchReadTx{Tx: tx}
+		current, e := checked.Get(ctx, colMemories, r.Scope, r.ID)
+		if e != nil {
+			return e
 		}
-		job.AutoDerive, job.UpdatedAt = &state, time.Now().UTC()
-		prev := job.Revision
-		job.Revision++
-		return tx.Replace(ctx, colJobs, job, prev)
+		if !validKnowledgeEvidence(current, Ref{Collection: colMemories, ID: r.ID, Revision: r.Revision}, r.Scope) {
+			return ErrConflict
+		}
+		if e = checkSources(ctx, checked, current); e != nil {
+			return e
+		}
+		return recoverSummarySchedule(ctx, tx, store, current, set, r.ApprovedBy)
 	})
 	if err != nil {
 		slog.Debug("person summary not queued", "memory", r.ID, "error", err)
@@ -290,6 +291,11 @@ func (s *Service) approvedPeople(ctx context.Context, r Record) []string {
 	if err != nil || r.ApprovedBy == "" {
 		return nil
 	}
+	ids, _ := approvedPeopleIn(ctx, store, r)
+	return ids
+}
+
+func approvedPeopleIn(ctx context.Context, store namedEntityStore, r Record) ([]string, error) {
 	names := []string{}
 	for _, e := range r.Entities {
 		if e.Type == "person" {
@@ -300,11 +306,14 @@ func (s *Service) approvedPeople(ctx context.Context, r Record) []string {
 		names = append(names, rel.Source, rel.Target)
 	}
 	if len(names) == 0 {
-		return nil
+		return nil, nil
 	}
 	g, err := loadEntityGraph(ctx, store, r.Scope)
 	if err != nil {
-		return nil
+		return nil, err
+	}
+	if g.truncated {
+		return nil, ErrUnavailable
 	}
 	ids := []string{}
 	for _, name := range names {
@@ -312,5 +321,5 @@ func (s *Service) approvedPeople(ctx context.Context, r Record) []string {
 			ids = append(ids, e.ID)
 		}
 	}
-	return ids
+	return ids, nil
 }

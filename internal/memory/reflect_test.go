@@ -102,7 +102,7 @@ func TestDirectiveListPages(t *testing.T) {
 		f.svc.CreateDirective(testCtx, f.human, directiveInput("t", "rule", "both", i))
 	}
 	first, err := f.svc.ListDirectives(testCtx, f.human, scopeA, 3, "")
-	if err != nil || len(first.Items) != 3 || first.NextCursor != "3" || first.Items[0].Priority != 4 {
+	if err != nil || len(first.Items) != 3 || first.NextCursor == "" || first.Items[0].Priority != 4 {
 		t.Fatal(first, err)
 	}
 	second, err := f.svc.ListDirectives(testCtx, f.human, scopeA, 3, first.NextCursor)

@@ -49,6 +49,7 @@ func (s *Service) runApprovedEntities(ctx context.Context, token string, job Rec
 	if _, err = s.applyEntityExtraction(ctx, r.Scope, actor.PrincipalID, cfg, memoryEntityFinds(r, cfg), false); err != nil {
 		return err
 	}
+	summarySettings := s.autoDeriveSettingsFor(ctx, r.Scope)
 	return s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		// Match extraction: acquire the scope entity lock before fencing memory
 		// and source rows, so the two writers cannot form a lock-order cycle.
@@ -75,11 +76,8 @@ func (s *Service) runApprovedEntities(ctx context.Context, token string, job Rec
 		if e != nil {
 			return e
 		}
-		if len(edges) == 0 {
-			return nil
-		}
 		graph, ok := tx.(knowledgeGraphStore)
-		if !ok {
+		if len(edges) > 0 && !ok {
 			return ErrUnavailable
 		}
 		for _, edge := range edges {
@@ -90,6 +88,9 @@ func (s *Service) runApprovedEntities(ctx context.Context, token string, job Rec
 			if e = graph.PutKnowledgeRelation(ctx, edge); e != nil {
 				return e
 			}
+		}
+		if s.Wiki != nil && summarySettings.Enabled {
+			return recoverSummarySchedule(ctx, tx, store, current, summarySettings, job.CreatedBy)
 		}
 		return nil
 	})

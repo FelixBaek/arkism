@@ -114,9 +114,13 @@ func storeTurns(job map[string]any, cued []any, origin string, checkpoint func()
 		return sessionWait("capture_private_content")
 	}
 	event := str(or(job["event_id"], ""))
+	if event == "" {
+		return sessionWait("capture_event_missing")
+	}
 	for i, text := range chunks[:min(len(chunks), turnSourcesMax)] {
 		body := host.Obj{{Key: "scope", Value: capScope()}, {Key: "kind", Value: "conversation"}, {Key: "text", Value: text},
 			{Key: "origin_product", Value: origin}, {Key: "source_ref", Value: head("capture-turns:"+event, 500)}, {Key: "collected_at", Value: at},
+			{Key: "conversation_order", Value: host.Obj{{Key: "epoch", Value: sha256Hex([]byte(event))}, {Key: "index", Value: i + 1}, {Key: "total", Value: min(len(chunks), turnSourcesMax)}}},
 			{Key: "on_secret", Value: "redact"}, {Key: "idempotency_key", Value: "turns-" + sha256Hex([]byte(fmt.Sprintf("%s\n%d", event, i)))[:58]}}
 		if _, err := capPost("/v1/sources", body, turnSourceTimeout); err != nil {
 			return err

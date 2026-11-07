@@ -1068,23 +1068,17 @@ func (s *Service) ReviewObservations(ctx context.Context, token string, in Obser
 // proposed observation citing the replaced memory (part of staleCascade).
 func staleObservations(ctx context.Context, tx Tx, lister statusLister, scope Scope, mark *StaleMark, actor string) error {
 	for _, status := range []string{obsActive, obsProposed} {
-		rows, err := lister.ListRecordsByStatus(ctx, scope, colObservations, status, obsListLimit)
-		if err != nil {
-			return err
-		}
-		for _, row := range rows {
+		if e := walkStatusRows(ctx, lister, scope, colObservations, status, func(row Record) error {
 			if row.Observation == nil || !namesMemory(row.Observation.SourceMemories, mark.Memory.ID) {
-				continue
+				return nil
 			}
-			err := markStale(ctx, tx, colObservations, scope, row.ID, mark, actor, func(r *Record) {
+			return markStale(ctx, tx, colObservations, scope, row.ID, mark, actor, func(r *Record) {
 				o := *r.Observation
-				o.History = appendRevision(o.History, DerivedRevision{Status: obsStale, Action: "stale", Text: r.Text, Citations: o.SourceMemories, Durability: o.Durability,
-					DurabilityReason: o.DurabilityReason, Confidence: r.Confidence, Generator: r.Generator, By: actor, At: mark.At})
+				o.History = appendRevision(o.History, DerivedRevision{Status: obsStale, Action: "stale", Text: r.Text, Citations: o.SourceMemories, Durability: o.Durability, DurabilityReason: o.DurabilityReason, Confidence: r.Confidence, Generator: r.Generator, By: actor, At: mark.At})
 				r.Observation, r.Status = &o, obsStale
 			})
-			if err != nil {
-				return err
-			}
+		}); e != nil {
+			return e
 		}
 	}
 	return nil

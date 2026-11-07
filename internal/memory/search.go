@@ -914,6 +914,11 @@ func (s *Service) WorkOnce(ctx context.Context, workerToken string) (result erro
 	}
 	if job.Kind == approvedEntitiesJobKind {
 		e = s.runApprovedEntities(ctx, workerToken, job)
+		if errors.Is(e, errSummaryScheduleBusy) {
+			e = s.deferApprovedSummary(ctx, job)
+			handled = e == nil
+			return e
+		}
 		success = e == nil
 		return e
 	}

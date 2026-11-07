@@ -53,7 +53,8 @@ type ExtractBatch struct {
 	ID          string    `json:"id" bson:"id"`
 	SubmittedAt time.Time `json:"submitted_at" bson:"submitted_at"`
 	// Reserved maps each prompt id to the ledger row reserved for it at submit.
-	Reserved map[string]string `json:"-" bson:"reserved"`
+	Reserved  map[string]string `json:"-" bson:"reserved"`
+	Accounted map[string]bool   `json:"-" bson:"accounted,omitempty"`
 }
 
 func extractBatchID(i int) string { return "chunk-" + strconv.Itoa(i) }
@@ -109,7 +110,13 @@ func (s *Service) extractBatchAnswers(ctx context.Context, token string, d Decis
 		if err = s.fileBatchAnswer(ctx, scope, job, i, a, ok); err != nil {
 			return nil, err
 		}
-		job.Calls, job.Tokens = job.Calls+1, job.Tokens+max(a.Usage.TotalTokens, a.Usage.InputTokens+a.Usage.OutputTokens)
+		if job.Batch.Accounted == nil {
+			job.Batch.Accounted = map[string]bool{}
+		}
+		if !job.Batch.Accounted[extractBatchID(i)] {
+			job.Calls, job.Tokens = job.Calls+1, job.Tokens+max(a.Usage.TotalTokens, a.Usage.InputTokens+a.Usage.OutputTokens)
+			job.Batch.Accounted[extractBatchID(i)] = true
+		}
 		if !ok {
 			out[i] = ExtractPreviewResult{Skipped: []ExtractSkip{{Locator: ch.Locator, Reason: "batch_failed"}}}
 			continue
@@ -138,11 +145,16 @@ func (s *Service) fileBatchAnswer(ctx context.Context, scope Scope, job *FileExt
 // chunk within the day's call cap, then submits them as one batch.
 func (s *Service) submitExtractBatch(ctx context.Context, token string, d Decision, scope Scope, b BatchLLM, job *FileExtractJob) error {
 	prompts, ids := []BatchPrompt{}, []string{}
+	estimated := job.Tokens
 	for i := job.Next; i < extractBatchEnd(job); i++ {
 		if err := s.modelTransfer(ctx, token, d, "generate:memory_candidates", scope, "", job.Chunks[i].Text); err != nil {
 			return err
 		}
 		system, user := extractPrompt(job.Chunks[i].Text, job)
+		estimated += int64(utf8.RuneCountInString(system)+utf8.RuneCountInString(user))/3 + wikiMaxCallTokens
+		if estimated > fileExtractJobTokens {
+			return errWikiBudget
+		}
 		prompts, ids = append(prompts, BatchPrompt{ID: extractBatchID(i), System: system, User: user}), append(ids, extractBatchID(i))
 	}
 	rows, err := s.reserveProviderCalls(ctx, scope, fileExtractOperation, wikiProvider, s.Wiki.Generator().Model, len(ids), operationCap(fileExtractOperation))

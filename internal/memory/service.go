@@ -131,9 +131,10 @@ type Service struct {
 	reviewScores     reviewScoreCache
 }
 type CreateInput struct {
-	capture         *captureWrite       // Server-owned; omitted from all JSON/BSON input.
-	MemoryContext   *MemoryContext      `json:"memory_context,omitempty" bson:"memory_context,omitempty"`
-	ArchiveMessages []ArchiveMessageRef `json:"archive_messages,omitempty" bson:"archive_messages,omitempty"`
+	ConversationOrder *ConversationOrder  `json:"conversation_order,omitempty" bson:"conversation_order,omitempty"`
+	capture           *captureWrite       // Server-owned; omitted from all JSON/BSON input.
+	MemoryContext     *MemoryContext      `json:"memory_context,omitempty" bson:"memory_context,omitempty"`
+	ArchiveMessages   []ArchiveMessageRef `json:"archive_messages,omitempty" bson:"archive_messages,omitempty"`
 	// Entities: memory candidates only; the names apply when the memory is approved.
 	Entities []EntityInput `json:"entities,omitempty"`
 	// entityRelations: server-owned, set by capture only (capture_labels.go).
@@ -598,7 +599,7 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 	if e = normalizeCreateTimes(col, &in, now); e != nil {
 		return Record{}, e
 	}
-	r := Record{MemoryContext: copyMemoryContext(in.MemoryContext), ArchiveMessages: append([]ArchiveMessageRef(nil), in.ArchiveMessages...), Confidence: in.Confidence, Evaluation: in.Evaluation, Run: in.Run, ToolCall: in.ToolCall, OriginProduct: in.OriginProduct, SourceRef: in.SourceRef, SourceEventID: in.SourceEventID, TraceID: in.TraceID, CollectedAt: in.CollectedAt, Generator: in.Generator, CreatedByType: d.Role, Sensitivity: in.Sensitivity, Inspection: &inspection, ID: ID(), Scope: in.Scope, Kind: in.Kind, Status: "active", Revision: 1, Text: in.Text, Summary: in.Summary, Keywords: in.Keywords, Tags: in.Tags, Entities: in.Entities, EntityRelations: in.entityRelations, Sources: in.Sources, Relations: in.Relations, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, Trust: 0.5, EffectiveAt: in.EffectiveAt, Occurred: in.Occurred, ExpiresAt: in.ExpiresAt, SkillID: in.SkillID, BaseVersion: in.BaseVersion, Target: in.Target, Passed: in.Passed, Reflection: in.Reflection}
+	r := Record{ConversationOrder: in.ConversationOrder, MemoryContext: copyMemoryContext(in.MemoryContext), ArchiveMessages: append([]ArchiveMessageRef(nil), in.ArchiveMessages...), Confidence: in.Confidence, Evaluation: in.Evaluation, Run: in.Run, ToolCall: in.ToolCall, OriginProduct: in.OriginProduct, SourceRef: in.SourceRef, SourceEventID: in.SourceEventID, TraceID: in.TraceID, CollectedAt: in.CollectedAt, Generator: in.Generator, CreatedByType: d.Role, Sensitivity: in.Sensitivity, Inspection: &inspection, ID: ID(), Scope: in.Scope, Kind: in.Kind, Status: "active", Revision: 1, Text: in.Text, Summary: in.Summary, Keywords: in.Keywords, Tags: in.Tags, Entities: in.Entities, EntityRelations: in.entityRelations, Sources: in.Sources, Relations: in.Relations, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, Trust: 0.5, EffectiveAt: in.EffectiveAt, Occurred: in.Occurred, ExpiresAt: in.ExpiresAt, SkillID: in.SkillID, BaseVersion: in.BaseVersion, Target: in.Target, Passed: in.Passed, Reflection: in.Reflection}
 	if r.ExpiresAt != nil && !r.ExpiresAt.After(now) {
 		return Record{}, ErrInvalid
 	}
@@ -792,6 +793,9 @@ func (s *Service) authorizeArtifactCreate(ctx context.Context, token string, sco
 }
 
 func normalizeCreateTimes(col string, in *CreateInput, now time.Time) error {
+	if !validConversationOrder(in.ConversationOrder) || in.ConversationOrder != nil && (col != "sources" || in.Kind != conversationSourceKind) {
+		return ErrInvalid
+	}
 	if col == "memory_candidates" {
 		effective := now.Truncate(time.Millisecond)
 		if in.EffectiveAt != nil {
@@ -1249,7 +1253,7 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 			return r, ErrUnavailable
 		}
 	}
-	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+	e = s.Repo.Transaction(s.digestCtx(ctx), func(ctx context.Context, tx Tx) error {
 		result = Record{}
 		r, e := tx.Get(ctx, col, in.Scope, id)
 		if e != nil {

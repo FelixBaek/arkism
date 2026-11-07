@@ -111,15 +111,10 @@ func ruleDirective(ctx context.Context, tx Tx, memory Record, d Decision) error 
 		return nil
 	}
 	scope := projectScope(memory.Scope)
-	if lister := listerOf(ctx, tx); lister != nil {
-		existing, err := lister.ListRecordsByStatus(ctx, scope, colDirectives, "active", directiveMaxPerScope)
-		if err != nil {
-			return err
-		}
-		if len(existing) >= directiveMaxPerScope {
-			return ErrConflict
-		}
+	if e := checkDirectiveCapacity(ctx, tx, scope, d.PrincipalID, ""); e != nil {
+		return e
 	}
+
 	title := ""
 	if len(memory.Keywords) > 0 {
 		title = strings.TrimSpace(memory.Keywords[0])
@@ -173,18 +168,45 @@ func approvedEntityRelations(ctx context.Context, store namedEntityStore, r Reco
 		return nil, ErrUnavailable
 	}
 	var edges []KnowledgeRelation
-	// A stated name resolves to its live entity of whatever type it was stored as.
-	node := func(name string) (GraphEntity, bool) {
-		for _, c := range g.byKey[entityKey(name)] {
-			if !c.Deleted {
-				return GraphEntity{Kind: namedEntityKind, ID: c.ID}, true
+	// A name alone must identify exactly one live endpoint. A unique explicit
+	// type supplied by the approved memory can narrow it; never choose by order.
+	node := func(name string) (GraphEntity, bool, error) {
+		types := map[string]bool{}
+		for _, e := range r.Entities {
+			if entityKey(e.Name) == entityKey(name) && e.Type != "" && e.Type != entityTypeConcept {
+				types[e.Type] = true
 			}
 		}
-		return GraphEntity{}, false
+		// Extraction can reuse a pre-existing generic concept for a stated
+		// type. Prefer exact typed nodes; otherwise preserve only an unambiguous
+		// generic match, as the extraction resolver already does.
+		exact := false
+		for _, c := range g.byKey[entityKey(name)] {
+			if !c.Deleted && types[c.Type] {
+				exact = true
+			}
+		}
+		var found GraphEntity
+		for _, c := range g.byKey[entityKey(name)] {
+			if c.Deleted || len(types) == 1 && (exact && !types[c.Type] || !exact && c.Type != entityTypeConcept) {
+				continue
+			}
+			if found.ID != "" && found.ID != c.ID {
+				return GraphEntity{}, false, ErrConflict
+			}
+			found = GraphEntity{Kind: namedEntityKind, ID: c.ID}
+		}
+		return found, found.ID != "", nil
 	}
 	for _, rel := range r.EntityRelations {
-		src, okS := node(rel.Source)
-		dst, okT := node(rel.Target)
+		src, okS, e := node(rel.Source)
+		if e != nil {
+			return nil, e
+		}
+		dst, okT, e := node(rel.Target)
+		if e != nil {
+			return nil, e
+		}
 		if !okS || !okT || src == dst {
 			continue
 		}

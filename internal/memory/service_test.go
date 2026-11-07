@@ -120,7 +120,7 @@ func (x fakeTx) Replace(_ context.Context, col string, rec Record, revision int6
 	if col == "sources" && old.TrustLevel != rec.TrustLevel {
 		return ErrConflict
 	}
-	if old.ErasureParentID != rec.ErasureParentID || structuredText(old.Proposal) != structuredText(rec.Proposal) || old.OriginProduct != rec.OriginProduct || old.SourceRef != rec.SourceRef || structuredText(old.CollectedAt) != structuredText(rec.CollectedAt) || old.CreatedBy != rec.CreatedBy || old.CreatedByType != rec.CreatedByType || !old.CreatedAt.Equal(rec.CreatedAt) || structuredText(old.Sources) != structuredText(rec.Sources) || structuredText(old.Generator) != structuredText(rec.Generator) {
+	if structuredText(old.ConversationOrder) != structuredText(rec.ConversationOrder) || old.ErasureParentID != rec.ErasureParentID || structuredText(old.Proposal) != structuredText(rec.Proposal) || old.OriginProduct != rec.OriginProduct || old.SourceRef != rec.SourceRef || structuredText(old.CollectedAt) != structuredText(rec.CollectedAt) || old.CreatedBy != rec.CreatedBy || old.CreatedByType != rec.CreatedByType || !old.CreatedAt.Equal(rec.CreatedAt) || structuredText(old.Sources) != structuredText(rec.Sources) || structuredText(old.Generator) != structuredText(rec.Generator) {
 		return ErrConflict
 	}
 	if old.Revision != revision {

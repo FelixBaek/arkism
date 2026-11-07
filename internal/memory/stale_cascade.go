@@ -61,40 +61,35 @@ func staleDigests(ctx context.Context, tx Tx, lister statusLister, scope Scope, 
 	userGone := false
 	for _, col := range []string{colTopicDigests, colUserDigests} {
 		for _, status := range []string{digestActive, digestCandidate} {
-			rows, err := lister.ListRecordsByStatus(ctx, scope, col, status, digestListLimit)
+			err := walkStatusRows(ctx, lister, scope, col, status, func(row Record) error {
+				if row.Digest == nil || row.Kind == digestKindState || !namesMemory(row.Digest.Members, mark.Memory.ID) {
+					return nil
+				}
+				if e := markStale(ctx, tx, col, scope, row.ID, mark, actor, func(r *Record) { r.Status, r.Text = digestStale, "" }); e != nil {
+					return e
+				}
+				userGone = userGone || col == colUserDigests
+				return nil
+			})
 			if err != nil {
 				return err
 			}
-			for _, row := range rows {
-				if row.Digest == nil || row.Kind == digestKindState || !namesMemory(row.Digest.Members, mark.Memory.ID) {
-					continue
-				}
-				if err := markStale(ctx, tx, col, scope, row.ID, mark, actor, func(r *Record) { r.Status, r.Text = digestStale, "" }); err != nil {
-					return err
-				}
-				userGone = userGone || col == colUserDigests
-			}
 		}
 	}
-	if !userGone {
-		return nil
+	if userGone {
+		return requestUserDigest(ctx, tx, scope, mark.At)
 	}
-	return requestUserDigest(ctx, tx, scope, mark.At)
+	return nil
 }
-
 func staleSkillProposals(ctx context.Context, tx Tx, lister statusLister, scope Scope, mark *StaleMark, actor string) error {
 	for _, status := range []string{"candidate", "approved", statusActive} {
-		rows, err := lister.ListRecordsByStatus(ctx, scope, colSkillVersions, status, digestListLimit)
-		if err != nil {
-			return err
-		}
-		for _, row := range rows {
+		if e := walkStatusRows(ctx, lister, scope, colSkillVersions, status, func(row Record) error {
 			if row.Kind != proposedSkillKind || !namesMemory(row.Relations, mark.Memory.ID) {
-				continue
+				return nil
 			}
-			if err := markStale(ctx, tx, colSkillVersions, scope, row.ID, mark, actor, nil); err != nil {
-				return err
-			}
+			return markStale(ctx, tx, colSkillVersions, scope, row.ID, mark, actor, nil)
+		}); e != nil {
+			return e
 		}
 	}
 	return nil

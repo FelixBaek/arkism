@@ -57,6 +57,15 @@ func (s *Service) createSource(ctx context.Context, token string, in CreateInput
 	digestID := "source-digest-" + ContentHash(structuredText(in.Scope)+"\n"+proposed.ContentHash)
 	receiptID := "source-receipt-" + ContentHash(structuredText(in.Scope)+"\n"+actor+"\n"+in.IdempotencyKey)
 	requestHash := ContentHash(structuredText(in))
+	if proposed.ConversationOrder != nil {
+		// One immutable slot per producer epoch, even when neighboring text repeats.
+		slot := struct {
+			Scope                 Scope
+			Origin, Source, Epoch string
+			Index                 int
+		}{in.Scope, proposed.OriginProduct, proposed.SourceRef, proposed.ConversationOrder.Epoch, proposed.ConversationOrder.Index}
+		digestID = "source-digest-" + ContentHash("conversation-slot-v1\n"+structuredText(slot))
+	}
 	if file != nil {
 		digestID = "source-digest-" + ContentHash(structuredText(in.Scope)+"\nsource-file-v1\n"+proposed.ContentHash+"\n"+file.Data.Digest)
 		requestHash = ContentHash(structuredText(in) + "\nsource-file-v1\n" + structuredText(file))
@@ -227,7 +236,7 @@ func digestSource(ctx context.Context, tx Tx, scope Scope, pointer, proposed Rec
 	if saved.Revision != pointer.Target.Revision || saved.ContentHash != proposed.ContentHash {
 		return Record{}, ErrConflict
 	}
-	if sourceTrustLevel(saved.TrustLevel) != sourceTrustLevel(proposed.TrustLevel) || saved.Sensitivity != proposed.Sensitivity || saved.Kind != proposed.Kind || saved.OriginProduct != proposed.OriginProduct || saved.SourceRef != proposed.SourceRef || !sameSourceArchiveMessages(saved.ArchiveMessages, proposed.ArchiveMessages) || structuredText(saved.Generator) != structuredText(proposed.Generator) || structuredText(saved.ExpiresAt) != structuredText(proposed.ExpiresAt) || structuredText(saved.Relations) != structuredText(proposed.Relations) {
+	if structuredText(saved.ConversationOrder) != structuredText(proposed.ConversationOrder) || sourceTrustLevel(saved.TrustLevel) != sourceTrustLevel(proposed.TrustLevel) || saved.Sensitivity != proposed.Sensitivity || saved.Kind != proposed.Kind || saved.OriginProduct != proposed.OriginProduct || saved.SourceRef != proposed.SourceRef || !sameSourceArchiveMessages(saved.ArchiveMessages, proposed.ArchiveMessages) || structuredText(saved.Generator) != structuredText(proposed.Generator) || structuredText(saved.ExpiresAt) != structuredText(proposed.ExpiresAt) || structuredText(saved.Relations) != structuredText(proposed.Relations) {
 		return Record{}, errSourceOtherProvenance
 	}
 	return saved, nil

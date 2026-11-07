@@ -283,6 +283,9 @@ func (p *Postgres) Replace(ctx context.Context, c string, r Record, revision int
 	return nativeInvalidateReplacedRecordTx(ctx, p, c, current, r)
 }
 func sameProvenance(a, b Record) bool {
+	if !reflect.DeepEqual(a.ConversationOrder, b.ConversationOrder) {
+		return false
+	}
 	if !reflect.DeepEqual(a.SkillBasis, b.SkillBasis) || a.SkillBasis != nil && a.SkillID != b.SkillID {
 		return false
 	}

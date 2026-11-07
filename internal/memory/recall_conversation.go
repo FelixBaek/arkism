@@ -99,7 +99,7 @@ func (s *Service) completeConversationTurn(ctx context.Context, token string, in
 			return
 		}
 		for _, other := range neighbors {
-			if other.ID == r.ID || other.Scope != r.Scope || other.SourceRef != r.SourceRef || other.OriginProduct != r.OriginProduct || other.CollectedAt == nil || !other.CollectedAt.Equal(*r.CollectedAt) {
+			if other.ID == r.ID || other.Scope != r.Scope || other.SourceRef != r.SourceRef || other.OriginProduct != r.OriginProduct || !adjacentConversation(r, other) {
 				continue
 			}
 			if _, shown := selected[other.ID]; shown {
@@ -111,6 +111,9 @@ func (s *Service) completeConversationTurn(ctx context.Context, token string, in
 		}
 		return
 	}
+	if r.ConversationOrder != nil {
+		return
+	} // explicit ordering needs the exact-slot reader, never a time guess
 	end := r.CollectedAt.Add(time.Millisecond)
 	rows, err := s.Repo.ListSources(ctx, SourceListInput{Scope: in.Scope, Kind: conversationSourceKind, OriginProduct: r.OriginProduct, CollectedFrom: r.CollectedAt, CollectedTo: &end, Limit: conversationNeighborScan + 1})
 	// A truncated list cannot say which batch is next; skip rather than guess.
@@ -118,7 +121,7 @@ func (s *Service) completeConversationTurn(ctx context.Context, token string, in
 		return
 	}
 	rows = slices.DeleteFunc(rows, func(other Record) bool {
-		return other.SourceRef != r.SourceRef || other.OriginProduct != r.OriginProduct
+		return other.SourceRef != r.SourceRef || other.OriginProduct != r.OriginProduct || other.ConversationOrder != nil
 	})
 	slices.SortFunc(rows, func(a, b Record) int {
 		if c := a.CreatedAt.Compare(b.CreatedAt); c != 0 {

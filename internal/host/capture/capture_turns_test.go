@@ -138,7 +138,13 @@ func TestProcessConversationWindowsSplitsCaptureAndStoresTurns(t *testing.T) {
 	if len(sources) == 0 || job["turns_stored"] != true {
 		t.Fatal("turns were not stored", len(sources))
 	}
-	for _, s := range sources {
+	for i, s := range sources {
+		order, ok := s["conversation_order"].(map[string]any)
+		index, indexOK := num(order["index"])
+		total, totalOK := num(order["total"])
+		if !ok || !indexOK || !totalOK || order["epoch"] != sha256Hex([]byte("conv-event")) || index != float64(i+1) || total != float64(len(sources)) {
+			t.Fatal("missing explicit capture order", order)
+		}
 		if s["kind"] != "conversation" || s["on_secret"] != "redact" || !strings.HasPrefix(s["text"].(string), "[2023-05-08] user: Mina: fact") ||
 			!strings.HasPrefix(s["idempotency_key"].(string), "turns-") || len(s["idempotency_key"].(string)) > 128 {
 			t.Fatal("bad source", s)

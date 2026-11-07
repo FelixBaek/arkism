@@ -235,7 +235,6 @@ func (s *Service) runExtractJob(ctx context.Context, token string, d Decision, r
 		observeOperation(fileExtractJobKind, cmp.Or(runErr, err), time.Since(start))
 	}(time.Now())
 	job := r.FileExtract
-	budget := &WikiJob{MaxTotalTokens: fileExtractJobTokens}
 	var answers map[int]ExtractPreviewResult
 	if b := s.extractBatcher(ctx, r.Scope, job); b != nil {
 		answers, err = s.extractBatchAnswers(ctx, token, d, r.Scope, b, job)
@@ -252,9 +251,9 @@ func (s *Service) runExtractJob(ctx context.Context, token string, d Decision, r
 		if _, ok := answers[job.Next]; answers != nil && !ok {
 			return s.runExtractJob(ctx, token, d, r) // the batch ended before the job: send the next one
 		}
+		budget := &WikiJob{MaxTotalTokens: fileExtractJobTokens, Tokens: job.Tokens}
 		ids, skipped, runErr := s.nextExtractChunk(ctx, token, d, r.Scope, budget, job, answers)
-		job.Calls, job.Tokens = job.Calls+budget.Calls, job.Tokens+budget.Tokens
-		budget.Calls, budget.Tokens = 0, 0
+		job.Calls, job.Tokens = job.Calls+budget.Calls, budget.Tokens
 		if runErr != nil {
 			return s.failExtractJob(ctx, r, runErr)
 		}

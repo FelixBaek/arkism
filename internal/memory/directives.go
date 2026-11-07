@@ -140,15 +140,12 @@ func (s *Service) CreateDirective(ctx context.Context, token string, in Directiv
 	r := Record{ID: ID(), Scope: projectScope(in.Scope), Kind: directiveKind, Status: status, Revision: 1,
 		Text: strings.TrimSpace(in.Rule), Tags: in.Tags, Directive: &Directive{Title: strings.TrimSpace(in.Title), Priority: in.Priority, AppliesTo: in.AppliesTo},
 		CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role}
-	// shortcut: the total per-scope cap is checked outside the transaction, so two racing creates may pass it by one.
-	existing, err := s.Repo.ListRecords(ctx, r.Scope, colDirectives, directiveMaxPerScope)
-	if err != nil {
-		return DirectiveView{}, err
-	}
-	if len(existing) >= directiveMaxPerScope {
-		return DirectiveView{}, ErrConflict
-	}
 	err = s.Repo.Transaction(s.digestCtx(ctx), func(ctx context.Context, tx Tx) error {
+		if status == statusActive {
+			if e := checkDirectiveCapacity(ctx, tx, r.Scope, d.PrincipalID, ""); e != nil {
+				return e
+			}
+		}
 		if status == obsProposed {
 			if err := proposalCapReached(ctx, tx, r.Scope, colDirectives, directiveProposedMax); err != nil {
 				return err
@@ -205,13 +202,18 @@ func (s *Service) UpdateDirective(ctx context.Context, token, id string, in Dire
 		return DirectiveView{}, err
 	}
 	var out Record
-	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+	err = s.Repo.Transaction(s.digestCtx(ctx), func(ctx context.Context, tx Tx) error {
 		r, err := s.getDirective(ctx, tx.Get, in.Scope, id)
 		if err != nil {
 			return err
 		}
 		if r.Revision != in.ExpectedRevision {
 			return ErrConflict
+		}
+		if directiveStatus(in.Active) == statusActive {
+			if e := checkDirectiveCapacity(ctx, tx, r.Scope, d.PrincipalID, r.ID); e != nil {
+				return e
+			}
 		}
 		prev := r.Revision
 		r.Revision++
@@ -255,12 +257,13 @@ func (s *Service) DeleteDirective(ctx context.Context, token, id string, in Dire
 	})
 }
 
-// ListDirectives pages a scope's directives by priority (highest first). cursor is an offset.
+// ListDirectives traverses all active, proposed and inactive records using a
+// scope-bound priority/id keyset. Concurrent priority edits require a fresh walk.
 func (s *Service) ListDirectives(ctx context.Context, token string, scope Scope, limit int, cursor string) (DirectiveList, error) {
 	out := DirectiveList{Items: []DirectiveView{}}
-	offset, ok := parseOffsetCursor(cursor, directiveMaxPerScope-1)
-	if !ok {
-		return out, ErrInvalid
+	c, err := decodeDirectiveCursor(cursor, scope)
+	if err != nil {
+		return out, err
 	}
 	if limit == 0 {
 		limit = directiveListDefault
@@ -268,18 +271,24 @@ func (s *Service) ListDirectives(ctx context.Context, token string, scope Scope,
 	if limit < 1 || limit > directiveMaxPerScope {
 		return out, ErrInvalid
 	}
-	if _, err := s.wikiAuthorize(ctx, token, "read:"+colDirectives, scope, "", ""); err != nil {
+	if _, err = s.wikiAuthorize(ctx, token, "read:"+colDirectives, scope, "", ""); err != nil {
 		return out, err
 	}
-	rows, err := s.directives(ctx, scope, "")
+	rows, err := s.directivePage(ctx, scope, c, limit+1)
 	if err != nil {
 		return out, err
 	}
-	page, next := offsetPage(rows, offset, limit)
-	for _, r := range page {
+	if len(rows) > limit {
+		rows = rows[:limit]
+		out.NextCursor = encodeDirectiveCursor(scope, rows[len(rows)-1])
+	}
+	for _, r := range rows {
+		r, err = s.resolveDirectiveSource(ctx, r)
+		if err != nil {
+			return DirectiveList{}, err
+		}
 		out.Items = append(out.Items, viewDirective(r))
 	}
-	out.NextCursor = next
 	return out, nil
 }
 
@@ -287,7 +296,7 @@ func (s *Service) ListDirectives(ctx context.Context, token string, scope Scope,
 // target keeps only active ones that apply to it ("reflect" or "context").
 // Callers authorize first.
 func (s *Service) directives(ctx context.Context, scope Scope, target string) ([]Record, error) {
-	rows, err := s.Repo.ListRecords(ctx, projectScope(scope), colDirectives, directiveMaxPerScope)
+	rows, err := s.Repo.ListRecordsByStatus(ctx, projectScope(scope), colDirectives, statusActive, directiveMaxPerScope)
 	if err != nil {
 		return nil, err
 	}

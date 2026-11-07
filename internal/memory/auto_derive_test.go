@@ -417,7 +417,9 @@ func TestAutoDeriveDraftsSummariesOfApprovedPeople(t *testing.T) {
 	if got := autoDeriveJobs(f)[0].AutoDerive.Entities; len(got) != 0 {
 		t.Fatalf("a project is not a person: %v", got)
 	}
-	approved := Record{ID: "y", Scope: scopeA, ApprovedBy: "human", EntityRelations: []EntityRelationInput{{Source: "Mina", Relation: "works_on", Target: "harbor"}}}
+	approved := m
+	approved.EntityRelations = []EntityRelationInput{{Source: "Mina", Relation: "works_on", Target: "harbor"}}
+	f.repo.store[colMemories][recKey(scopeA, m.ID)] = approved
 	f.svc.queueEntitySummaries(testCtx, approved)
 	f.svc.queueEntitySummaries(testCtx, approved)
 	var job Record
