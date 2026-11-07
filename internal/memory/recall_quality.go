@@ -305,7 +305,11 @@ func weighKeywordCoverage(in SearchInput, lists [][]Hit) [][]Hit {
 	for i, list := range lists {
 		out[i] = slices.Clone(list)
 		for j, h := range out[i] {
-			if !slices.Contains(h.Reasons, reasonTextSearch) {
+			exact := slices.Contains(h.Reasons, reasonExactKeyword)
+			if exact && (!in.space.recallQuality().LocalExpand || slices.ContainsFunc(h.keywords, func(k string) bool { return strings.EqualFold(k, strings.TrimSpace(in.Query)) })) {
+				continue
+			}
+			if !exact && !slices.Contains(h.Reasons, reasonTextSearch) {
 				continue
 			}
 			if found, concepts := conceptsFound(terms, h); concepts > 0 && found > 0 {
@@ -419,7 +423,7 @@ func (s *Service) provisionalHits(ctx context.Context, token string, in SearchIn
 // sideLane runs the recall's own lanes (exact, keyword and, with the recall's query vector,
 // vector) over another collection and fuses them, best first. The caller rechecks each row.
 func (s *Service) sideLane(ctx context.Context, collection string, in SearchInput, criteria SearchCriteria) ([]ScoredHit, error) {
-	lane := SearchInput{Scope: in.Scope, Query: in.Query, Modes: in.Modes, Limit: provisionalLaneLimit, SearchCriteria: criteria}
+	lane := SearchInput{Scope: in.Scope, Query: in.Query, Modes: in.Modes, Limit: provisionalLaneLimit, SearchCriteria: criteria, space: in.space}
 	lists, err := s.Repo.SearchCollection(ctx, collection, lane, in.queryVector, in.querySpace)
 	if err != nil {
 		return nil, err

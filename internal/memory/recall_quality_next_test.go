@@ -186,3 +186,28 @@ func TestConversationQueryExcerptBoundsManyEmptyTurns(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestLocalExactCoveragePreservesIntentionalLookups(t *testing.T) {
+	partial := Hit{ID: "partial", Origin: "memory", Collection: colMemories, Text: "Rowan unrelated chatter", keywords: []string{"Rowan"}, Reasons: []string{reasonExactKeyword}}
+	full := Hit{ID: "full", Origin: "memory", Collection: colMemories, Text: "Rowan repaired pump", keywords: []string{"pump"}, Reasons: []string{reasonExactKeyword}}
+	in := SearchInput{Query: "Rowan pump", Modes: []string{"exact"}, space: &SpaceConfig{RecallQuality: &SpaceRecallQuality{LocalExpand: true}}}
+	weighted := weighKeywordCoverage(in, [][]Hit{{partial, full}})
+	if weighted[0][0].termShare != .5 || weighted[0][1].termShare != 1 || fuseWeighted(weighted, 2, nil)[0].ID != "full" {
+		t.Fatal(weighted)
+	}
+	in.space.RecallQuality.LocalExpand = false
+	weighted = weighKeywordCoverage(in, [][]Hit{{partial, full}})
+	if weighted[0][0].termShare != 0 || fuseWeighted(weighted, 2, nil)[0].ID != "partial" {
+		t.Fatal("legacy order changed", weighted)
+	}
+	in.space.RecallQuality.LocalExpand = true
+	for _, q := range []string{"Rowan", "Rowan pump", "X"} {
+		h := partial
+		h.keywords = []string{q}
+		in.Query = q
+		w := weighKeywordCoverage(in, [][]Hit{{h}})
+		if w[0][0].termShare != 0 {
+			t.Fatal("whole keyword lookup discounted", q, w)
+		}
+	}
+}

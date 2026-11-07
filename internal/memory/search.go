@@ -181,6 +181,9 @@ func fuseWeighted(lists [][]Hit, limit int, weights map[string]float64) []Scored
 			weight := 1.0
 			if slices.Contains(hit.Reasons, "exact_keyword") {
 				weight = exactKeywordWeight
+				if hit.termShare > 0 {
+					weight *= hit.termShare
+				}
 			} else if slices.ContainsFunc(hit.Reasons, isNeighborReason) {
 				weight = graphLaneWeight * math.Pow(graphHopDecay, float64(max(hit.graphHops, 1)-1))
 			} else if hit.termShare > 0 {

@@ -96,3 +96,11 @@ The native fallback/expansion/context regression selection passed (1.305s) after
 using a fixed query clock. The excerpt window search was then made linear in
 line count times query-term count, avoiding repeated window scans on many empty
 turns; the long-input regression and integration rerun remain pending.
+
+In opt-in local expansion, exact-keyword votes also use query-concept coverage
+for compound questions. A common name alone no longer receives the full2x vote
+of a complete topical match. Deliberate whole-query keywords, single-concept
+lookups, unrecognized identifiers and legacy mode retain their existing exact
+behavior. Each fragment uses its own query, preserving complementary subject
+evidence. The combined expansion/conversation/context/fusion/lexical regression
+selection passed (1.830s), including the linear long-input excerpt case.
