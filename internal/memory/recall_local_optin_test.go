@@ -60,4 +60,25 @@ func TestLocalQualitySideWeightIsOptIn(t *testing.T) {
 	if err != nil || len(on) != 2 || on[0].ID != "full" {
 		t.Fatal("opt-in lost compound-query weighting", on, err)
 	}
+	in.contextView = &ContextInvocationView{}
+	frozen, err := s.sideLane(testCtx, "sources", in, SearchCriteria{})
+	if err != nil || len(frozen) != 2 || frozen[0].ID != "partial" {
+		t.Fatal("frozen context changed side weighting", frozen, err)
+	}
+}
+
+func TestLocalQualityExcludedContextsKeepLegacyWeights(t *testing.T) {
+	base := SearchInput{Query: "Rowan repair", space: &SpaceConfig{RecallQuality: &SpaceRecallQuality{LocalExpand: true}}}
+	history, related, frozen := base, base, base
+	history.IncludeInactive = true
+	related.RelatedTo = &Ref{Collection: colMemories, ID: "related", Revision: 1}
+	frozen.contextView = &ContextInvocationView{}
+	for _, in := range []SearchInput{history, related, frozen} {
+		exact := Hit{ID: "partial", Text: "Rowan", Reasons: []string{reasonExactKeyword}}
+		keyword := Hit{ID: "full", Text: "Rowan repair", Reasons: []string{reasonTextSearch}}
+		lanes := weighKeywordCoverage(in, [][]Hit{{exact}, {keyword}})
+		if lanes[0][0].termShare != 0 || lanes[1][0].keywordQueryKey != "" {
+			t.Fatal("excluded context received local quality weighting")
+		}
+	}
 }

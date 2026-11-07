@@ -255,3 +255,9 @@ full-corpus quality measurement of the disabled/default path.
 The earlier evidence-dependent ANN-index and snapshot-reuse research holds remain
 in place. Neither a passing functional suite nor partial retrieval scores remove
 those holds or satisfy the90% per-category acceptance gate.
+
+The opt-in eligibility guard also excludes history, relation lookups and frozen
+context views from the new exact/duplicate-FTS credits and side-lane weighting.
+This matches the documented expansion boundary. The final combined real-DB
+retrieval, context, option and legacy-expansion regression passed (5.569s).
+The plain enabled recall path used by the frozen comparison remains unchanged.

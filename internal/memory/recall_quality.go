@@ -301,8 +301,9 @@ func conceptsFound(terms []string, h Hit) (found, concepts int) {
 // of the whole question, while a hit holding every concept counts as before.
 func weighKeywordCoverage(in SearchInput, lists [][]Hit) [][]Hit {
 	terms := searchQueryTerms(in.Query)
+	localQuality := localExpandOn(in, colMemories)
 	keywordKey := ""
-	if in.space.recallQuality().LocalExpand && len(terms) > 0 {
+	if localQuality && len(terms) > 0 {
 		canonical := slices.Clone(terms)
 		slices.Sort(canonical)
 		keywordKey = strings.Join(canonical, "\x00")
@@ -316,7 +317,7 @@ func weighKeywordCoverage(in SearchInput, lists [][]Hit) [][]Hit {
 				out[i][j].keywordQueryKey = keywordKey
 			}
 			exact := slices.Contains(h.Reasons, reasonExactKeyword)
-			if exact && (!in.space.recallQuality().LocalExpand || slices.ContainsFunc(h.keywords, func(k string) bool { return strings.EqualFold(k, strings.TrimSpace(in.Query)) })) {
+			if exact && (!localQuality || slices.ContainsFunc(h.keywords, func(k string) bool { return strings.EqualFold(k, strings.TrimSpace(in.Query)) })) {
 				continue
 			}
 			if !exact && !slices.Contains(h.Reasons, reasonTextSearch) {
@@ -438,7 +439,7 @@ func (s *Service) sideLane(ctx context.Context, collection string, in SearchInpu
 	if err != nil {
 		return nil, err
 	}
-	if in.space.recallQuality().LocalExpand {
+	if localExpandOn(in, colMemories) {
 		lists = weighKeywordCoverage(lane, lists)
 	}
 	original := slices.Clone(lists)
