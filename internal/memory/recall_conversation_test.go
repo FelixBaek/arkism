@@ -197,15 +197,18 @@ func TestConversationNeighborRejectsStaleCandidate(t *testing.T) {
 }
 
 func TestConversationNeighborBoundedFallback(t *testing.T) {
-	f := newFixture(t)
-	a := conversationBatch(f, "Rowan: copper repair needs a washer.", "session-alpha", 0)
-	for i := range 100 {
-		conversationBatch(f, "Avery: neighboring context.", "session-alpha", i+1)
-	}
-	h := HitFromRecord("sources", a)
-	f.svc.completeConversationTurn(testCtx, f.agent, SearchInput{Scope: scopeA}, &h, map[string]Record{a.ID: a}, sessionLaneRunes-utf8.RuneCountInString(h.Text))
-	if h.Text != a.Text {
-		t.Fatal("partial conversation window was grouped", h.Text)
+	// The scan reads conversationNeighborScan batches; one more means the list was cut.
+	for _, total := range []int{conversationNeighborScan, conversationNeighborScan + 1, conversationNeighborScan + 2} {
+		f := newFixture(t)
+		a := conversationBatch(f, "Rowan: copper repair needs a washer.", "session-alpha", 0)
+		for i := range total - 1 {
+			conversationBatch(f, "Avery: neighboring context.", "session-alpha", i+1)
+		}
+		h := HitFromRecord("sources", a)
+		f.svc.completeConversationTurn(testCtx, f.agent, SearchInput{Scope: scopeA}, &h, map[string]Record{a.ID: a}, sessionLaneRunes-utf8.RuneCountInString(h.Text))
+		if grouped := h.Text != a.Text; grouped != (total <= conversationNeighborScan) {
+			t.Fatalf("%d batches at one instant: grouped=%v %q", total, grouped, h.Text)
+		}
 	}
 }
 
