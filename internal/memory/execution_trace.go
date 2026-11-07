@@ -28,6 +28,7 @@ type TraceEventInput struct {
 }
 
 type CompletedAgentRunInput struct {
+	TaskKey string `json:"task_key,omitempty"`
 	// AgentID names the executing agent when the trace lives in the shared
 	// (agent-less) user scope; with a scope agent_id it must match or be omitted.
 	AgentID       string    `json:"agent_id,omitempty"`
@@ -216,7 +217,7 @@ func validTraceIdentity(in TraceIngestInput, agent string) bool {
 	return validScope(in.Scope) && traceIdentifier(agent) && (in.AgentRun.AgentID == "" || in.AgentRun.AgentID == agent) && traceIdentifier(in.TraceID) && traceIdentifier(in.ThreadID) && (in.LangSmithRunID == "" || traceIdentifier(in.LangSmithRunID)) && len(in.Events) != 0 && len(in.Events) <= maxTraceEvents
 }
 func validCompletedAgentRun(run CompletedAgentRunInput) bool {
-	return traceIdentifier(run.ID) && validRunLabel(run.TaskType, 128) && terminalOutcome(run.Outcome) && traceTime(run.StartedAt) && traceTime(run.FinishedAt) && !run.FinishedAt.Before(run.StartedAt) && !run.FinishedAt.After(time.Now()) && strings.TrimSpace(run.Text) != "" && len(run.Text) <= 64000 && utf8.ValidString(run.Text)
+	return (run.TaskKey == "" || validRunLabel(run.TaskKey, 256)) && traceIdentifier(run.ID) && validRunLabel(run.TaskType, 128) && terminalOutcome(run.Outcome) && traceTime(run.StartedAt) && traceTime(run.FinishedAt) && !run.FinishedAt.Before(run.StartedAt) && !run.FinishedAt.After(time.Now()) && strings.TrimSpace(run.Text) != "" && len(run.Text) <= 64000 && utf8.ValidString(run.Text)
 }
 
 // prepareTraceEvent validates and normalizes one event, returning it with its

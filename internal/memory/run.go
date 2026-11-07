@@ -8,6 +8,8 @@ import (
 )
 
 type RunDetails struct {
+	// TaskKey explicitly groups retries by the authenticated run creator.
+	TaskKey string `json:"task_key,omitempty" bson:"task_key,omitempty"`
 	// OriginAgentID is declared runtime provenance, never an authorization identity.
 	OriginAgentID string     `json:"origin_agent_id,omitempty" bson:"origin_agent_id,omitempty"`
 	AgentID       string     `json:"agent_id" bson:"agent_id"`
@@ -27,7 +29,7 @@ func terminalOutcome(outcome string) bool {
 	return outcome == "success" || outcome == "partial" || outcome == "failed"
 }
 func validRun(x *RunDetails, scope Scope, now time.Time) bool {
-	if x == nil || x.OriginAgentID != "" && !validRunLabel(x.OriginAgentID, 256) || !validRunLabel(x.AgentID, 256) || !validRunLabel(x.TaskType, 128) || scope.AgentID != "" && scope.AgentID != x.AgentID || x.StartedAt.Truncate(time.Millisecond).IsZero() || x.StartedAt.After(now) {
+	if x == nil || x.TaskKey != "" && !validRunLabel(x.TaskKey, 256) || x.OriginAgentID != "" && !validRunLabel(x.OriginAgentID, 256) || !validRunLabel(x.AgentID, 256) || !validRunLabel(x.TaskType, 128) || scope.AgentID != "" && scope.AgentID != x.AgentID || x.StartedAt.Truncate(time.Millisecond).IsZero() || x.StartedAt.After(now) {
 		return false
 	}
 	if x.Outcome == "running" {

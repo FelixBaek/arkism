@@ -28,7 +28,7 @@ func (p *Postgres) independentOutcomeCounts(ctx context.Context, in MemoryOutcom
  (SELECT ref->>'id' FROM jsonb_array_elements(CASE WHEN jsonb_typeof(doc->'relations')='array' THEN doc->'relations' ELSE '[]'::jsonb END) ref WHERE ref->>'collection'='execution_traces' LIMIT 1) AS trace
  FROM memory_records WHERE collection=$1 AND workspace_id=$2 AND project_id=$3 AND user_id=$4 AND agent_id=$5 AND (` + w + `) AND COALESCE(doc->>'memory_outcome_content_hash','')<>''
  ), ranked AS (
- SELECT doc,judged,row_number() OVER (PARTITION BY doc->'target'->>'id',doc->>'memory_outcome_content_hash',CASE WHEN doc->'tags' ? 'dimension:personal_compliance' THEN 'personal_compliance' ELSE 'work_task' END,trace ORDER BY judged,id) AS position
+ SELECT doc,judged,row_number() OVER (PARTITION BY doc->'target'->>'id',doc->>'memory_outcome_content_hash',CASE WHEN doc->'tags' ? 'dimension:personal_compliance' THEN 'personal_compliance' ELSE 'work_task' END,CASE WHEN COALESCE(doc->>'memory_outcome_task_hash','')<>'' AND doc->'memory_outcome_completed_at'->>'$date' IS NOT NULL THEN 'task:' || (doc->>'memory_outcome_task_hash') ELSE 'trace:' || trace END ORDER BY COALESCE((doc->'memory_outcome_completed_at'->>'$date')::timestamptz,judged),judged,id) AS position
  FROM eligible WHERE COALESCE(trace,'')<>''
  ) SELECT doc->'target'->>'id',count(*),count(*) FILTER (WHERE (doc->>'passed')::boolean),max(judged) FROM ranked WHERE ` + where + ` GROUP BY 1 ORDER BY 1`
 	rows, err := p.q().Query(ctx, query, params...)

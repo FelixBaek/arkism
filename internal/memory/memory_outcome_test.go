@@ -20,7 +20,7 @@ func outcomeFixture(t *testing.T) (*fixture, Record, MemoryOutcomeInput) {
 		t.Fatal(e)
 	}
 	finish := time.Now().UTC()
-	run := Record{ID: "outcome-run", Scope: scopeA, Status: "active", Revision: 1, Run: &RunDetails{Outcome: "failed", FinishedAt: &finish}}
+	run := Record{Sources: []SourceRef{sourceReference(source, "run")}, ID: "outcome-run", Scope: scopeA, Status: "active", Revision: 1, Run: &RunDetails{Outcome: "failed", FinishedAt: &finish}}
 	trace := Record{ID: source.TraceID, Scope: scopeA, Status: "active", Revision: 1, CreatedBy: "runner", Sources: []SourceRef{sourceReference(source, "trace")}, Relations: []Ref{{Collection: "agent_runs", ID: run.ID, Revision: 1}}}
 	if e := f.repo.Insert(testCtx, "agent_runs", run); e != nil {
 		t.Fatal(e)

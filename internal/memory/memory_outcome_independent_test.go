@@ -17,6 +17,16 @@ func independentOutcomeRows(rows []Record, in MemoryOutcomeQuery) []Record {
 	base.From, base.To = nil, nil
 	ordered := slices.Clone(rows)
 	slices.SortFunc(ordered, func(a, b Record) int {
+		aAt, bAt := a.CreatedAt, b.CreatedAt
+		if a.MemoryOutcomeCompletedAt != nil {
+			aAt = *a.MemoryOutcomeCompletedAt
+		}
+		if b.MemoryOutcomeCompletedAt != nil {
+			bAt = *b.MemoryOutcomeCompletedAt
+		}
+		if n := aAt.Compare(bAt); n != 0 {
+			return n
+		}
 		if n := a.CreatedAt.Compare(b.CreatedAt); n != 0 {
 			return n
 		}
@@ -32,7 +42,11 @@ func independentOutcomeRows(rows []Record, in MemoryOutcomeQuery) []Record {
 		if trace == nil || trace.ID == "" {
 			continue
 		}
-		key := structuredText([]string{r.Target.ID, r.MemoryOutcomeContentHash, outcomeDimension(r), trace.ID})
+		identity := "trace:" + trace.ID
+		if r.MemoryOutcomeTaskHash != "" && r.MemoryOutcomeCompletedAt != nil {
+			identity = "task:" + r.MemoryOutcomeTaskHash
+		}
+		key := structuredText([]string{r.Target.ID, r.MemoryOutcomeContentHash, outcomeDimension(r), identity})
 		if seen[key] {
 			continue
 		}

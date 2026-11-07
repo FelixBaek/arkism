@@ -98,6 +98,10 @@ func (s *Service) RecordMemoryOutcome(ctx context.Context, token string, in Memo
 		if !completed {
 			return ErrConflict
 		}
+		taskHash, completedAt, e := memoryOutcomeTask(ctx, tx, in.Scope, trace)
+		if e != nil {
+			return e
+		}
 		sources, relations, e := memoryOutcomeEvidence(in, trace, actor.PrincipalID, read)
 		if e != nil {
 			return e
@@ -119,7 +123,7 @@ func (s *Service) RecordMemoryOutcome(ctx context.Context, token string, in Memo
 		}
 		now := time.Now().UTC()
 		passed := in.Passed
-		record := Record{MemoryOutcomeContentHash: signalContentHash(HitFromRecord(colMemories, target)), NativeOutcomeCaptureStamp: stamp, ID: id, Scope: in.Scope, Kind: "memory_outcome", Status: "active", Revision: 1, Text: "Independent pinned memory checker " + in.CheckerSHA256, Tags: []string{"dimension:" + in.Dimension}, Sources: sources, Relations: relations, Target: &in.Target, Evaluation: &Evaluation{EvalType: "automated_check", Passed: &passed}, Passed: passed, RequestHash: hash, CreatedBy: actor.PrincipalID, CreatedByType: actor.Role, CreatedAt: now, UpdatedAt: now}
+		record := Record{MemoryOutcomeTaskHash: taskHash, MemoryOutcomeCompletedAt: completedAt, MemoryOutcomeContentHash: signalContentHash(HitFromRecord(colMemories, target)), NativeOutcomeCaptureStamp: stamp, ID: id, Scope: in.Scope, Kind: "memory_outcome", Status: "active", Revision: 1, Text: "Independent pinned memory checker " + in.CheckerSHA256, Tags: []string{"dimension:" + in.Dimension}, Sources: sources, Relations: relations, Target: &in.Target, Evaluation: &Evaluation{EvalType: "automated_check", Passed: &passed}, Passed: passed, RequestHash: hash, CreatedBy: actor.PrincipalID, CreatedByType: actor.Role, CreatedAt: now, UpdatedAt: now}
 		if e = checkEvaluationEvidence(ctx, tx, record); e != nil {
 			return e
 		}
@@ -218,4 +222,38 @@ func validateMemoryOutcomeRetryTx(ctx context.Context, tx Tx, in MemoryOutcomeIn
 		return e
 	}
 	return nativeCaptureIntegrityTx(ctx, tx, in, old)
+}
+
+// The checker cannot supply the identity. It is bound to the run author's namespace
+// and exact trace/run revision. Old traces retain their existing per-trace behavior.
+func memoryOutcomeTask(ctx context.Context, tx Tx, scope Scope, trace Record) (string, *time.Time, error) {
+	var bound *Record
+	for _, ref := range trace.Relations {
+		if ref.Collection != "agent_runs" {
+			continue
+		}
+		r, err := tx.Get(ctx, ref.Collection, scope, ref.ID)
+		if err != nil {
+			return "", nil, err
+		}
+		if bound != nil {
+			return "", nil, ErrConflict
+		}
+		bound = &r
+		if r.Revision != ref.Revision || !live(r) || r.ContentErased || r.PrivacyQuarantined || r.Run == nil || r.Run.FinishedAt == nil || !terminalOutcome(r.Run.Outcome) {
+			return "", nil, ErrConflict
+		}
+		if err := checkSources(ctx, tx, r); err != nil {
+			return "", nil, err
+		}
+	}
+	if bound == nil || bound.Run.TaskKey == "" {
+		return "", nil, nil
+	}
+	if !validRunLabel(bound.Run.TaskKey, 256) || bound.CreatedBy == "" || bound.CreatedByType == "" {
+		return "", nil, ErrConflict
+	}
+	key := ContentHash(structuredText(scope) + "\n" + structuredText([]string{bound.CreatedByType, bound.CreatedBy, bound.Run.TaskType, bound.Run.TaskKey}))
+	at := bound.Run.FinishedAt.UTC().Truncate(time.Millisecond)
+	return key, &at, nil
 }
