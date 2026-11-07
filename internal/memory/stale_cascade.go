@@ -36,6 +36,15 @@ func listerOf(ctx context.Context, tx Tx) statusLister {
 }
 
 func staleCascade(ctx context.Context, tx Tx, old, next Record, actor string, now time.Time) error {
+	if job, ok := ctx.Value(maintenanceCascadeKey{}).(*memoryMaintenance); ok {
+		if _, pg := tx.(*Postgres); !pg || job.Kind != "stale" || job.Scope != old.Scope {
+			return ErrUnavailable
+		}
+		job.Mark = &StaleMark{Memory: Ref{Collection: colMemories, ID: old.ID, Revision: old.Revision}, ReplacedBy: Ref{Collection: colMemories, ID: next.ID, Revision: next.Revision}, At: now}
+		job.Actor = actor
+		return nil
+	}
+
 	lister := listerOf(ctx, tx)
 	if lister == nil {
 		return ErrUnavailable

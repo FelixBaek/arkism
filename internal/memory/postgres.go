@@ -366,6 +366,10 @@ func (p *Postgres) transactionWithIsolation(ctx context.Context, isolation pgx.T
 		if e != nil {
 			return ErrUnavailable
 		}
+		if _, e = tx.Exec(ctx, `SELECT arkism.check_maintenance_access()`); e != nil {
+			_ = tx.Rollback(ctx)
+			return pgErr(e)
+		}
 		tokenHash, bound := p.effectiveTokenHash(ctx)
 		if bound {
 			if _, e = tx.Exec(ctx, `SELECT set_config('arkism.token_hash',$1,true)`, tokenHash); e != nil {

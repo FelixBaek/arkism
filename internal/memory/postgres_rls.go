@@ -51,6 +51,10 @@ func (q postgresQuery) begin(ctx context.Context) (pgx.Tx, error) {
 	if err != nil {
 		return nil, err
 	}
+	if _, err = tx.Exec(ctx, `SELECT arkism.check_maintenance_access()`); err != nil {
+		_ = tx.Rollback(ctx)
+		return nil, err
+	}
 	hash, bound := q.store.effectiveTokenHash(ctx)
 	if bound {
 		if _, err = tx.Exec(ctx, `SELECT set_config('arkism.token_hash',$1,true)`, hash); err != nil {

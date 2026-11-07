@@ -28,6 +28,9 @@ func (p *Postgres) ReconcileDynamicsLoadRecovery(ctx context.Context, source *Po
 		return pgErr(err)
 	}
 	defer func() { _ = lease.Rollback(ctx) }() // Source is read-only; no cross-database commit is asserted.
+	if _, err = lease.Exec(ctx, `SELECT arkism.check_maintenance_access()`); err != nil {
+		return pgErr(err)
+	}
 	if err = disableSnapshotRowSecurity(ctx, lease); err != nil {
 		return err
 	}
@@ -41,6 +44,9 @@ func (p *Postgres) ReconcileDynamicsLoadRecovery(ctx context.Context, source *Po
 		return pgErr(err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err = tx.Exec(ctx, `SELECT arkism.check_maintenance_access()`); err != nil {
+		return pgErr(err)
+	}
 	if err = disableSnapshotRowSecurity(ctx, tx); err != nil {
 		return err
 	}

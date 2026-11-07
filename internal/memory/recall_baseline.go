@@ -130,7 +130,12 @@ func (p *Postgres) RecallBaseline(ctx context.Context, scope Scope, queries []Ba
 	if p == nil || p.pool == nil || p.tx != nil || checkScope(scope) != nil {
 		return BaselineReport{}, ErrInvalid
 	}
-	tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	maintenanceConnection, releaseMaintenance, leaseErr := p.maintenanceReadLease(ctx)
+	if leaseErr != nil {
+		return BaselineReport{}, leaseErr
+	}
+	defer releaseMaintenance()
+	tx, err := maintenanceConnection.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return BaselineReport{}, pgErr(err)
 	}

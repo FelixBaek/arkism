@@ -81,7 +81,12 @@ func (p *Postgres) exportRecoverySnapshotMode(ctx context.Context, restored bool
 	if generation != "" {
 		mode = pgx.ReadWrite // Row locks are forbidden in PostgreSQL ReadOnly.
 	}
-	tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable, AccessMode: mode})
+	maintenanceConnection, releaseMaintenance, leaseErr := p.maintenanceReadLease(ctx)
+	if leaseErr != nil {
+		return nil, leaseErr
+	}
+	defer releaseMaintenance()
+	tx, err := maintenanceConnection.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable, AccessMode: mode})
 	if err != nil {
 		return nil, pgErr(err)
 	}

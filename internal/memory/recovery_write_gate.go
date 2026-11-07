@@ -96,6 +96,9 @@ func (p *Postgres) ManageRecoveryWrites(ctx context.Context, action, expectedIde
 		return RecoveryWriteGateStatus{}, pgErr(err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }() // a no-op after Commit
+	if _, err = tx.Exec(ctx, `SELECT arkism.check_maintenance_access()`); err != nil {
+		return RecoveryWriteGateStatus{}, pgErr(err)
+	}
 	var privileged bool
 	if err = tx.QueryRow(ctx, `SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname=current_user`).Scan(&privileged); err != nil {
 		return RecoveryWriteGateStatus{}, pgErr(err)

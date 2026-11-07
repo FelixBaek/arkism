@@ -97,6 +97,9 @@ func (p *Postgres) nativeRecoveryTransaction(ctx context.Context, generation str
 		return pgErr(err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err = tx.Exec(ctx, `SELECT arkism.check_maintenance_access()`); err != nil {
+		return pgErr(err)
+	}
 	if err = disableSnapshotRowSecurity(ctx, tx); err != nil {
 		return err
 	}

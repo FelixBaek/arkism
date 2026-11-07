@@ -43,6 +43,9 @@ var schemaConversationNeighborsSQL string
 //go:embed migrations/0008_search_tokens_nfc.sql
 var schemaSearchTokensNFCSQL string
 
+//go:embed migrations/0009_maintenance_gate.sql
+var schemaMaintenanceGateSQL string
+
 type schemaMigration struct {
 	version int
 	name    string
@@ -50,7 +53,7 @@ type schemaMigration struct {
 }
 
 func schemaMigrations() []schemaMigration {
-	return []schemaMigration{{1, "baseline", schemaBaselineSQL}, {2, "memory_context_search", schemaMemoryContextSearchSQL}, {3, "principal_token_lifecycle", schemaPrincipalTokenLifecycleSQL}, {4, "memory_graph_vector_index", schemaMemoryGraphVectorIndexSQL}, {5, "decision_daily_counts", schemaDecisionDailyCountsSQL}, {6, "named_entities", schemaNamedEntitiesSQL}, {7, "conversation_neighbors", schemaConversationNeighborsSQL}, {8, "search_tokens_nfc", schemaSearchTokensNFCSQL}}
+	return []schemaMigration{{1, "baseline", schemaBaselineSQL}, {2, "memory_context_search", schemaMemoryContextSearchSQL}, {3, "principal_token_lifecycle", schemaPrincipalTokenLifecycleSQL}, {4, "memory_graph_vector_index", schemaMemoryGraphVectorIndexSQL}, {5, "decision_daily_counts", schemaDecisionDailyCountsSQL}, {6, "named_entities", schemaNamedEntitiesSQL}, {7, "conversation_neighbors", schemaConversationNeighborsSQL}, {8, "search_tokens_nfc", schemaSearchTokensNFCSQL}, {9, "maintenance_gate", schemaMaintenanceGateSQL}}
 }
 
 func (m schemaMigration) checksum() string {
@@ -127,6 +130,15 @@ func (p *Postgres) migrateSchema(ctx context.Context, migrations []schemaMigrati
 		defer cancel()
 		_ = tx.Rollback(cleanup)
 	}()
+	var gateInstalled bool
+	if err = tx.QueryRow(ctx, `SELECT to_regprocedure('arkism.check_maintenance_access()') IS NOT NULL`).Scan(&gateInstalled); err != nil {
+		return schemaFailure("maintenance gate unavailable")
+	}
+	if gateInstalled {
+		if _, err = tx.Exec(ctx, `SELECT arkism.check_maintenance_access()`); err != nil {
+			return schemaFailure("maintenance in progress")
+		}
+	}
 	if err = lockSchemaMigration(ctx, tx); err != nil {
 		return err
 	}

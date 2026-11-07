@@ -105,18 +105,22 @@ func TestSchemaMigrationContextIndexUpgradePreservesRecord(t *testing.T) {
 	historicalSchema(t, p, 1)
 	now := time.Now().UTC()
 	r := Record{ID: ID(), Scope: scopeA, Kind: "memory", Status: statusActive, ApprovedBy: "reviewer", Revision: 7, Text: "검증한 복구 절차", UpdatedAt: now, CreatedAt: now, MemoryContext: &MemoryContext{Domains: []string{"work"}, EvidenceKind: "inference", SemanticKind: "lesson", Applicability: "검수된 보고서에서만", Uncertainty: "타부서는 미확인", ValidFrom: "2027년부터"}}
-	if err := p.Insert(ctx, colMemories, r); err != nil {
+	legacyWriter, finishLegacyWrite := legacyMigrationStore(t, p)
+	if err := legacyWriter.Insert(ctx, colMemories, r); err != nil {
 		t.Fatal(err)
 	}
 	plain := r
 	plain.ID = ID()
 	plain.MemoryContext = nil
-	if err := p.Insert(ctx, colMemories, plain); err != nil {
+	if err := legacyWriter.Insert(ctx, colMemories, plain); err != nil {
 		t.Fatal(err)
 	}
+	finishLegacyWrite()
 	// Emulate the old writer: a non-NULL vector with body/summary/keywords only.
 	schemaExec(t, p, `UPDATE memory_records SET search_tokens=$1::tsvector WHERE id=$2`, searchTokensVector(searchTokensText(r.Text, r.Summary, r.Keywords)), r.ID)
-	before, err := p.Get(ctx, colMemories, scopeA, r.ID)
+	legacyReader, finishLegacyRead := legacyMigrationStore(t, p)
+	before, err := legacyReader.Get(ctx, colMemories, scopeA, r.ID)
+	finishLegacyRead()
 	if err != nil {
 		t.Fatal(err)
 	}

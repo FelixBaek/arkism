@@ -158,15 +158,19 @@ func TestSchemaMigrationsAdoptLegacyPreservesDataAndPausedGate(t *testing.T) {
 	schemaExec(t, p, string(legacy))
 	schemaExec(t, p, `INSERT INTO memory_storage_metadata(key,value) VALUES('storage_identity',$1),('recovery_write_gate',$2)`, identity, gate)
 	row := Record{ID: "before-upgrade", Scope: scopeA, Status: statusActive, Kind: "decision", Revision: 7, Text: "기존 승인된 자료는 그대로 보존한다", UpdatedAt: time.Now().UTC(), MemoryContext: &MemoryContext{Domains: []string{"work"}, EvidenceKind: "inference", SemanticKind: "fact", Applicability: "검수된 보고서에서만"}}
-	if err := p.Insert(ctx, "memories", row); err != nil {
+	legacyWriter, finishLegacyWrite := legacyMigrationStore(t, p)
+	if err := legacyWriter.Insert(ctx, "memories", row); err != nil {
 		t.Fatal(err)
 	}
+	finishLegacyWrite()
 	schemaExec(t, p, `UPDATE memory_storage_metadata SET value=convert_to(replace(convert_from(value,'UTF8'),'"open"','"paused"'),'UTF8') WHERE key='recovery_write_gate'`)
-	before, err := p.Get(ctx, "memories", scopeA, row.ID)
+	legacyReader, finishLegacyRead := legacyMigrationStore(t, p)
+	before, err := legacyReader.Get(ctx, "memories", scopeA, row.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	beforeGate, err := p.recoveryWriteGate(ctx, "")
+	beforeGate, err := legacyReader.recoveryWriteGate(ctx, "")
+	finishLegacyRead()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -409,6 +413,23 @@ func TestSchemaMigrationFilesMatchTheEmbeddedListWithoutGapsOrDoubles(t *testing
 		raw, err := os.ReadFile(fmt.Sprintf("migrations/%04d_%s.sql", m.version, m.name))
 		if err != nil || string(raw) != m.sql {
 			t.Fatalf("migration %d: embedded SQL is not the file on disk", m.version)
+		}
+	}
+}
+
+// Historical-writer fixtures deliberately use an owner transaction directly:
+// current application queries require migration 9's maintenance guard and cannot
+// be used to seed/read a schema that predates that guard.
+func legacyMigrationStore(t *testing.T, p *Postgres) (*Postgres, func()) {
+	t.Helper()
+	tx, err := p.pool.Begin(testCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
+	return &Postgres{pool: p.pool, tx: tx}, func() {
+		if err := tx.Commit(testCtx); err != nil {
+			t.Fatal(err)
 		}
 	}
 }
