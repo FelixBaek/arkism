@@ -1,0 +1,25 @@
+[project]
+name = "arkism-langchain"
+version = "0.2.0"
+description = "Arkism memory adapter for langchain-core: retriever, recall message, conversation capture and memory tools"
+license = "MIT"
+requires-python = ">=3.9"
+dependencies = ["arkism-client>=0.2.0", "langchain-core>=0.3"]
+keywords = ["arkism", "memory", "agents", "langchain"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+]
+
+[project.urls]
+Homepage = "https://github.com/FelixBaek/arkism"
+Documentation = "https://github.com/FelixBaek/arkism/blob/main/guide/development.md#framework-adapters"
+Source = "https://github.com/FelixBaek/arkism/tree/main/sdk/python/adapters/langchain"
+
+[tool.setuptools]
+packages = ["arkism_langchain"]
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"

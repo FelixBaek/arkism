@@ -1,0 +1,37 @@
+{
+  "name": "arkism-ai-sdk",
+  "version": "0.2.0",
+  "description": "Arkism memory adapter for the ai package: recall middleware, conversation capture and memory tools",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FelixBaek/arkism.git",
+    "directory": "sdk/typescript/adapters/ai-sdk"
+  },
+  "keywords": ["arkism", "memory", "agents", "ai-sdk"],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "src"],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --experimental-strip-types --test test/*.test.ts"
+  },
+  "peerDependencies": {
+    "ai": ">=5",
+    "arkism-client": "^0.2.0"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3"
+  }
+}

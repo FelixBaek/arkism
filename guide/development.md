@@ -278,6 +278,36 @@ otherwise). `python3 tools/update_api_contracts.py` gives a new route without
 one a stable name from method and path (`POST /v1/reflect` → `postV1Reflect` /
 `post_v1_reflect`, numbered on a clash) and never renames an existing one.
 
+### Framework adapters
+
+Framework adapters connect agent frameworks to Arkism memory. They live in
+`sdk/python/adapters/` and `sdk/typescript/adapters/`, one folder per framework,
+each a separate package with its own README. They are a thin layer over the
+client libraries above: every request goes through `ArkismClient`, mostly
+`recall_text`/`recallText`, `capture_text`/`captureText` and `remember`. The
+framework is a dependency of the adapter package only (a peer dependency in
+TypeScript), so installing the base client never pulls a framework in.
+
+Each adapter offers the same three pieces in the framework's own shape:
+
+| Piece | What it does |
+|---|---|
+| Memory read | Recalls approved memories for the current question and puts them into the model's context as a system message under a header that marks them as data, not instructions (a retriever, a message helper or a model middleware). |
+| Memory write | Sends the conversation as `role: text` lines to `POST /v1/memories/ingest`. Extracted claims become candidates; none is used until a person approves it. A session id appends to one document. |
+| Tools | `recall_memory` (search approved memories) and `remember` (propose one memory as a candidate). |
+
+No adapter approves anything: model output always stays a candidate in the
+review queue.
+
+Offline tests use fake server answers. A framework that is not installed makes
+its adapter's tests skip with the reason, so CI (which installs no framework)
+runs them as skips; install the framework next to the adapter to run them:
+
+```bash
+for d in sdk/python/adapters/*/tests; do python3 -m unittest discover -s "$d"; done
+node --experimental-strip-types --test sdk/typescript/adapters/*/test/*.test.ts
+```
+
 ### Extension hooks
 
 A program that embeds `internal/memory` can add its own rules through
