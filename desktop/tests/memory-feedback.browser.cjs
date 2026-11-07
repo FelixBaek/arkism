@@ -50,7 +50,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__
     const $=s=>document.querySelector(s);
     for(const id of ["app","chips","stats","table","detail"]){const n=el("div");n.id=id;$("#panel").append(n)}
     const state={view:"memories",memTab:"rules",server:"local",token:"synthetic",scope:{workspace_id:"work",project_id:"project"},caps:{role:"human"}};
-    let current={id:"rule",revision:3,scope:state.scope,title:"배포 규칙",rule:"배포 전에 검증한다.",applies_to:"both",priority:80,active:false,source_state,tags:[]};
+    let current={id:"rule",revision:3,scope:state.scope,title:"배포 규칙",rule:"배포 전에 검증한다.",applies_to:"both",priority:80,active:source_state==="active",source_state,tags:[]};
     const button=(label,cls,unused,run)=>{const b=el("button","btn "+cls,label);b.type="button";if(run)b.addEventListener("click",run);return b};
     const section=title=>{const n=el("section","section");n.append(el("h3","",title));return n};
     const facts=pairs=>{const n=el("dl","facts");for(const[k,v]of pairs)n.append(el("dt","",k),el("dd","",v||""));return n};
@@ -71,7 +71,16 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__
    assert.deepEqual(await page.evaluate(()=>window.ruleWrites.map(w=>[w.path,w.body.scope,w.body.expected_revision,w.body.active,w.body.source_state||null])),[["/v1/directives/rule",{workspace_id:"work",project_id:"project"},3,true,null]]);
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   }
+  await page.evaluate(()=>window.mountRules("active"));
+  await page.locator("#table .original-row").waitFor();
+  await page.locator("#table .original-row").focus();await page.keyboard.press("Enter");
+  await page.getByText(/수정하거나 끄면 독립된 수동 규칙으로 바뀌어요/).waitFor();
+  await page.screenshot({path:"/tmp/arkism-rule-active-link.png",fullPage:true});
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.getByRole("button",{name:"끄기",exact:true}).focus();await page.keyboard.press("Enter");
+  await page.getByText("규칙 · 꺼짐",{exact:true}).waitFor();
+  assert.deepEqual(await page.evaluate(()=>window.ruleWrites.map(w=>[w.body.active,w.body.expected_revision])),[[false,3]]);
   assert.deepEqual(errors,[]);
-  console.log("PASS: evaluation retry/pagination/trace/scoped requests/safe text/keyboard correction; all suspended rule states and keyboard manual approval payload");
+  console.log("PASS: evaluation retry/pagination/trace/scoped requests/safe text/keyboard correction; all suspended rule states/manual approval and active-linked disable disclosure");
  }finally{await browser.close()}
 })().catch(e=>{console.error(e);process.exitCode=1});

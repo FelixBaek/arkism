@@ -664,6 +664,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     const head = el("div", "d-head");
     head.append(el("p", "d-kind", `규칙 · ${ruleState(r)}`), raw(el("h2", "", r.title)));
     if (needsRuleReview(r)) head.append(el("p", "dg-warn", RULE_SOURCE[r.source_state][1]), el("p", "meta", independentRuleNote));
+    if (r.source_state === "active") head.append(el("p", "meta", "원본 기억과 연결된 규칙이에요. 수정하거나 끄면 독립된 수동 규칙으로 바뀌어요. 이후 원본이 바뀌거나 만료되어도 별도로 유지돼요."));
     if (r.proposed) head.append(el("p", "dg-warn", "에이전트가 제안한 규칙이에요. 사람이 승인하기 전에는 AI가 지키지 않아요."));
     const text = section("내용"); text.append(raw(el("p", "original-text", r.rule)));
     const use = section("언제 쓰나요");

@@ -47,3 +47,14 @@ Browser verification covered the mounted evaluation component and correction cal
 신규 정책은 명시적으로 설정해야 한다. 내용 해시가 없는 과거 평가는 이력에는 남지만 신규 순위 표본에는 포함하지 않는다. 평가 이벤트 수는 독립된 업무 수와 같지 않다. 전체 앱의 교정 제출이나 운영 성능·답변 품질 향상을 입증한 것은 아니다. API/SDK 계약은 통합 단계에서 갱신한다.
 
 연구: 해당 없음
+
+## M01 integration follow-up: active source links
+
+An active linked rule also becomes independent when a human edits or disables it. The detail view now states this before the action, including that later source changes or expiry no longer control the rule. The existing backend and save payload are unchanged. The focused rule UI test and local browser checks passed, including keyboard disable, the existing revision/scoped request, and a 390px screen without horizontal overflow. The rendered active-link explanation was inspected separately. The local code checker still reports no supported files for JS; it is not recorded as a pass.
+
+Read-only integration audit used a temporary source overlay rather than changing the integrated worktree: HTTP policy PATCH, GET, effective settings, invalid dimension/window/minimum/unknown field rejection and clearing to legacy all passed. Existing context-delivery HTTP and linked-rule lifecycle tests passed alongside it (0.146s). The audit found no additional confirmed implementation regression in those paths.
+
+제목: 활성 연결 규칙의 수동 전환 의미 표시
+이유: 원본이 유효한 규칙도 수정·끄기 때 연결에서 독립된다는 실제 동작을 사용자에게 알린다.
+검증: 규칙 UI 시험과 로컬 브라우저 키보드 끄기·요청값·좁은 화면 검증 통과. 통합본 정책 설정 HTTP 경계는 임시 overlay로 검증했다.
+한계: 동작 안내만 바꿨고 백엔드 정책은 유지했다. 브라우저는 합성 API 응답이며 운영 사용을 입증하지 않는다.

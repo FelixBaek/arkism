@@ -562,3 +562,17 @@ test("editing a suspended source rule explains manual approval; agents cannot ap
   const agent = setup("rules", routes, {role:"agent"});agent.view.draw();await dom.flush();agent.h.$("#table .original-row").click();
   assert.equal(dom.buttons(agent.h.$("#detail"), "수동 규칙으로 다시 승인").length,0);
 });
+
+
+test("active linked rules disclose detachment before disabling", async () => {
+  let current = rule({ source_state: "active" });
+  const t = setup("rules", [["/v1/directives?", () => ({ items: [current], next_cursor: "" })],
+    ["/v1/directives/d1", (_, o) => (current = {...rule(), ...JSON.parse(o.body), source_state:undefined, revision:4})]]);
+  t.view.draw(); await dom.flush(); t.h.$("#table .original-row").click();
+  assert.match(t.h.$("#detail").textContent, /수정하거나 끄면 독립된 수동 규칙으로 바뀌어요/);
+  assert.match(t.h.$("#detail").textContent, /원본이 바뀌거나 만료되어도 별도로 유지/);
+  dom.buttons(t.h.$("#detail"), "끄기")[0].click();await dom.flush();
+  const sent=body(sentTo(t,"/v1/directives/d1")[0]);
+  assert.equal(sent.active,false);assert.equal(sent.expected_revision,3);
+  assert.doesNotMatch(t.h.$("#detail").textContent,/원본 기억과 연결된 규칙/);
+});
