@@ -41,7 +41,10 @@ import (
 //   - custom-<id>/<model>: the provider's Anthropic endpoint when it has one, otherwise its
 //     OpenAI Chat API through the Messages -> Chat translation;
 //   - openai/<model>: the host Codex login, or the stored key in explicit codex API mode; xai
-//     uses its stored key in grok API mode; google/<model> uses the native host adapter;
+//     uses its stored key in grok API mode, else its account login; copilot/<model> and
+//     nous/<model> use their account login (subscription/oauth.go), each a Chat API with a fresh
+//     token; cursor/<model> runs text-only requests through the signed-in cursor CLI (cursor.go);
+//     google/<model> uses the native host adapter;
 //   - group/<slug>: Arkism's scoped decision and up to three fallbacks, failing over on a
 //     rejection, a 5xx (529 included) or a transport failure, only before any client response
 //     starts. When no member answers the caller gets the pick's own error. Each attempt is
@@ -107,6 +110,8 @@ var (
 	claudeHeaders     = subscription.ClaudeHeaders
 	chatConnection    = subscription.ChatConnection
 	codexIterMessages = subscription.IterMessages
+	oauthConnection   = subscription.OAuthConnection
+	oauthExpire       = subscription.OAuthExpire
 	codexProfile      = func(model string, exclude []string) map[string]any {
 		if host.APIModeOn("codex") {
 			return nil
@@ -277,7 +282,7 @@ func geminiPath(target string) (string, map[string]string, error) {
 
 // where is a model's destination: kind "anthropic", "google" (model), "codex" (model), "direct"
 // (base, key, name) or "chat" (base, key, name).
-type where struct{ kind, model, base, key, name, headers string } // headers: a custom row's "Name: Value" lines
+type where struct{ kind, model, base, key, name, headers, oauth string } // headers: "Name: Value" lines; oauth: the login's provider
 
 func zaiKey() string {
 	raw, err := os.ReadFile(ZAIEnv)
@@ -316,17 +321,8 @@ func resolve(model string) (*where, error) {
 	if provider == "google" {
 		return &where{kind: "google", model: strings.ToLower(strings.Join(strings.Fields(name), "-"))}, nil
 	}
-	if provider == "openai" || provider == "xai" {
-		base, key, err := chatConnection(provider)
-		if err != nil {
-			return nil, err
-		}
-		if base != "" {
-			return &where{kind: "chat", base: base, key: key, name: name}, nil
-		}
-	}
-	if provider == "openai" && !host.APIModeOn("codex") {
-		return &where{kind: "codex", model: name}, nil
+	if w, err, ok := hostTarget(provider, name); ok {
+		return w, err
 	}
 	if provider == "zai" {
 		if key := zaiKey(); key != "" {
@@ -351,6 +347,43 @@ func resolve(model string) (*where, error) {
 		return &where{kind: "chat", base: strings.TrimRight(base, "/"), key: secret, name: name, headers: headers}, nil
 	}
 	return nil, nil
+}
+
+// hostTarget is the openai, xai, copilot, nous and cursor target: a stored key in explicit API
+// mode, else the host's own login; ok is false when the provider has none of these.
+func hostTarget(provider, name string) (w *where, err error, ok bool) {
+	if provider == "openai" || provider == "xai" {
+		base, key, err := chatConnection(provider)
+		if err != nil {
+			return nil, err, true
+		}
+		if base != "" {
+			return &where{kind: "chat", base: base, key: key, name: name}, nil, true
+		}
+	}
+	if provider == "openai" && !host.APIModeOn("codex") {
+		return &where{kind: "codex", model: name}, nil, true
+	}
+	if subscription.OAuthProviders[provider] != nil {
+		w, err = oauthTarget(provider, name)
+		return w, err, true
+	}
+	if provider == "cursor" {
+		return cursorTarget(name), nil, true
+	}
+	return nil, nil, false
+}
+
+// oauthTarget serves an account login's Chat API with a fresh token; nil until the owner signs in.
+func oauthTarget(provider, name string) (*where, error) {
+	base, key, headers, err := oauthConnection(provider)
+	if errors.Is(err, subscription.ErrOAuthLogin) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, &host.CrewError{Msg: "로그인 토큰을 새로 받지 못했어요. 잠시 뒤 다시 시도해 주세요."}
+	}
+	return &where{kind: "chat", base: strings.TrimRight(base, "/"), key: key, name: name, headers: headers, oauth: provider}, nil
 }
 
 var models struct {
@@ -727,6 +760,7 @@ type exchange struct {
 	googleResume             string
 	structured               bool
 	requested                string
+	oauth                    *where   // the account-login target in flight: a 401 retires its token
 	origin                   host.Obj // a Messages call's kind, session and turn (trace.go); nil elsewhere
 }
 
@@ -1679,6 +1713,11 @@ func (x *exchange) execute(body host.Obj, w *where) error {
 		return x.executeClaude(body)
 	case "codex":
 		return x.executeCodex(body, w)
+	case "cursor":
+		return x.cursor(body, w)
+	}
+	if x.oauth = nil; w.oauth != "" {
+		x.oauth = w
 	}
 	hostChatAPI := w.kind == "chat" && (strings.HasPrefix(get(body, "model").(string), "openai/") || strings.HasPrefix(get(body, "model").(string), "xai/"))
 	if w.kind == "chat" && x.chat {
@@ -2117,6 +2156,9 @@ func (x *exchange) groupAttempt(body host.Obj, mid string, release func(), last 
 }
 
 func (x *exchange) reject(status int) error {
+	if status == 401 && x.oauth != nil {
+		oauthExpire(x.oauth.oauth, x.oauth.key)
+	}
 	if x.group != nil && !x.started && (retryStatuses[status] || status >= 500 && status <= 599) {
 		return rejected(status)
 	}
