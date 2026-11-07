@@ -56,6 +56,7 @@ const (
 
 // SpaceRecallQuality is the recall_quality block; the block is inherited whole.
 type SpaceRecallQuality struct {
+	LocalExpand           bool          `json:"local_expand,omitempty" bson:"local_expand,omitempty"`
 	SignalPolicy          *SignalPolicy `json:"signal_policy,omitempty" bson:"signal_policy,omitempty"`
 	RelevanceGate         *bool         `json:"relevance_gate,omitempty" bson:"relevance_gate,omitempty"`
 	ConflictPending       string        `json:"conflict_pending,omitempty" bson:"conflict_pending,omitempty"`
@@ -389,6 +390,7 @@ func (s *Service) pendingReadable(ctx context.Context, token string, in SearchIn
 // recall's own lanes (exact, keyword and, with the recall's query vector, vector) over the
 // candidates waiting for review. A lexical match must also hold the query's topic.
 func (s *Service) provisionalHits(ctx context.Context, token string, in SearchInput, out *ContextBundle) error {
+	in.optionalFailures = &out.Degraded
 	rows, err := s.sideLane(ctx, "memory_candidates", in, in.SearchCriteria)
 	if err != nil {
 		return err
@@ -421,6 +423,21 @@ func (s *Service) sideLane(ctx context.Context, collection string, in SearchInpu
 	lists, err := s.Repo.SearchCollection(ctx, collection, lane, in.queryVector, in.querySpace)
 	if err != nil {
 		return nil, err
+	}
+	original := slices.Clone(lists)
+	if in.expandStatus == "local_applied" {
+		for _, expanded := range in.expanded {
+			sub := lane
+			sub.Query = expanded.query
+			extra, err := s.Repo.SearchCollection(ctx, collection, sub, expanded.vector, expanded.space)
+			if err != nil {
+				if in.optionalFailures != nil {
+					*in.optionalFailures = append(*in.optionalFailures, "local_expansion")
+				}
+				return fuseWeighted(original, provisionalLaneLimit, nil), nil
+			}
+			lists = append(lists, extra...)
+		}
 	}
 	return fuseWeighted(lists, provisionalLaneLimit, nil), nil
 }

@@ -39,6 +39,7 @@ func (s *Service) conversationTurns(ctx context.Context, token string, in Search
 	if !conversationLaneOn(in, collection) || !s.probeAllowed(ctx, token, "read:sources", in.Scope) {
 		return
 	}
+	in.optionalFailures = &out.Degraded
 	rows, err := s.sideLane(ctx, "sources", in, SearchCriteria{Kinds: []string{conversationSourceKind}})
 	if err != nil {
 		out.Degraded = append(out.Degraded, "conversation")
@@ -61,7 +62,7 @@ func (s *Service) conversationTurns(ctx context.Context, token string, in Search
 			continue
 		}
 		h := HitFromRecord("sources", r)
-		h.Origin, h.Text, h.Reasons, h.Authority, h.CollectedAt = conversationSourceKind, redactSessionPrivate(runeCutString(h.Text, sessionLaneRunes)), []string{conversationSourceKind}, AuthorityDataOnly, r.CollectedAt
+		h.Origin, h.Text, h.Reasons, h.Authority, h.CollectedAt = conversationSourceKind, conversationQueryExcerpt(in.Query, h.Text, sessionLaneRunes), []string{conversationSourceKind}, AuthorityDataOnly, r.CollectedAt
 		if slices.Contains(row.Hit.Reasons, reasonVector) || lexicallyRelevant(terms, h) {
 			out.Conversation = append(out.Conversation, h)
 			selected[r.ID] = r
@@ -90,6 +91,11 @@ const conversationNeighborScan = 99 // one more is read to see truncation; sourc
 
 func (s *Service) completeConversationTurn(ctx context.Context, token string, in SearchInput, h *Hit, selected map[string]Record, spare int) {
 	r := selected[h.ID]
+	// A selected middle window is not the end of the batch. Joining a neighbor
+	// across omitted turns could hide a correction or qualification.
+	if h.Text != redactSessionPrivate(r.Text) {
+		return
+	}
 	if r.SourceRef == "" || r.CollectedAt == nil || spare <= 1 {
 		return
 	}

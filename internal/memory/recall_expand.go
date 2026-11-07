@@ -32,8 +32,10 @@ const (
 
 // expandedQuery is one sub-query and its cleaned lanes, gated in recallLanes against its own wording.
 type expandedQuery struct {
-	query string
-	lists [][]Hit
+	vector []float64
+	space  string
+	query  string
+	lists  [][]Hit
 }
 
 // expandOn: the request's expand, else the space's recall_quality.expand; only plain memory recall expands.
@@ -49,6 +51,9 @@ func expandOn(in SearchInput, collection string) bool {
 // the outcome. It never fails the recall: an error leaves plain recall.
 func (s *Service) expandRecall(ctx context.Context, token string, in *SearchInput, d Decision, collection string, run *Ref, out *ContextBundle) {
 	if !expandOn(*in, collection) {
+		if localExpandOn(*in, collection) {
+			s.expandRecallLocally(ctx, token, in, d, collection, run, out)
+		}
 		return
 	}
 	defer laneClockOf(ctx).since("expand", time.Now())
