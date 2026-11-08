@@ -450,7 +450,7 @@ func (p *Postgres) fence(ctx context.Context, s Scope, c, id string, rev int64, 
 	if mode == "run" {
 		r.RunCallFence++
 	}
-	return p.writePayload(ctx, c, r)
+	return p.writePayload(ctx, c, r, true)
 }
 
 func checkFenceMode(r Record, c string, rev int64, mode string) error {
@@ -480,7 +480,7 @@ func mapFence(e error) error {
 	}
 	return e
 }
-func (p *Postgres) writePayload(ctx context.Context, c string, r Record) error {
+func (p *Postgres) writePayload(ctx context.Context, c string, r Record, fenceOnly bool) error {
 	// Fence/lease updates must retain fields not modeled by this binary.
 	var original []byte
 	e := p.q().QueryRow(ctx, `SELECT payload FROM memory_records WHERE collection=$1 AND id=$2 AND workspace_id=$3 AND project_id=$4 AND user_id=$5 AND agent_id=$6 FOR UPDATE`, c, r.ID, r.Scope.WorkspaceID, r.Scope.ProjectID, r.Scope.UserID, r.Scope.AgentID).Scan(&original)
@@ -499,7 +499,11 @@ func (p *Postgres) writePayload(ctx context.Context, c string, r Record) error {
 	if e = json.Unmarshal(updated, &values); e != nil {
 		return ErrInvalid
 	}
-	for _, key := range []string{"revision", "status", "kind", "updated_at", "lease_until", "lease_token", "attempts", "run_at", "memory_reference_fence", "run_call_fence"} {
+	keys := []string{"memory_reference_fence", "run_call_fence"}
+	if !fenceOnly {
+		keys = append(keys, "revision", "status", "kind", "updated_at", "lease_until", "lease_token", "attempts", "run_at")
+	}
+	for _, key := range keys {
 		if value, ok := values[key]; ok {
 			fields[key] = value
 		} else {
@@ -511,7 +515,16 @@ func (p *Postgres) writePayload(ctx context.Context, c string, r Record) error {
 		return ErrInvalid
 	}
 	j := json.RawMessage(b)
-	res, e := p.q().Exec(ctx, `UPDATE memory_records SET revision=$9,status=$11,kind=$12,updated_at=$13,lease_until=$14,lease_token=$15,attempts=$16,run_at=$17,payload=$1,doc=$2 WHERE collection=$3 AND id=$4 AND workspace_id=$5 AND project_id=$6 AND user_id=$7 AND agent_id=$8 AND revision IN ($9,$10)`, b, j, c, r.ID, r.Scope.WorkspaceID, r.Scope.ProjectID, r.Scope.UserID, r.Scope.AgentID, r.Revision, r.Revision-1, r.Status, r.Kind, r.UpdatedAt, r.LeaseUntil, r.LeaseToken, r.Attempts, r.RunAt)
+	var res pgconn.CommandTag
+	if fenceOnly {
+		// A logical read writes its counters to serialize with mutations, but
+		// must preserve indexed state. Decoded storage dates have millisecond
+		// precision; copying them into SQL would change microsecond sort/lease
+		// boundaries even though the record's logical revision is unchanged.
+		res, e = p.q().Exec(ctx, `UPDATE memory_records SET payload=$1,doc=$2 WHERE collection=$3 AND id=$4 AND workspace_id=$5 AND project_id=$6 AND user_id=$7 AND agent_id=$8 AND revision=$9`, b, j, c, r.ID, r.Scope.WorkspaceID, r.Scope.ProjectID, r.Scope.UserID, r.Scope.AgentID, r.Revision)
+	} else {
+		res, e = p.q().Exec(ctx, `UPDATE memory_records SET revision=$9,status=$11,kind=$12,updated_at=$13,lease_until=$14,lease_token=$15,attempts=$16,run_at=$17,payload=$1,doc=$2 WHERE collection=$3 AND id=$4 AND workspace_id=$5 AND project_id=$6 AND user_id=$7 AND agent_id=$8 AND revision IN ($9,$10)`, b, j, c, r.ID, r.Scope.WorkspaceID, r.Scope.ProjectID, r.Scope.UserID, r.Scope.AgentID, r.Revision, r.Revision-1, r.Status, r.Kind, r.UpdatedAt, r.LeaseUntil, r.LeaseToken, r.Attempts, r.RunAt)
+	}
 	if e != nil {
 		return pgErr(e)
 	}
@@ -676,7 +689,7 @@ func (p *Postgres) ClaimJob(ctx context.Context, now time.Time, lease time.Durat
 		out.UpdatedAt = now.UTC()
 		out.Attempts++
 		out.Revision++
-		return pp.writePayload(ctx, "jobs", out)
+		return pp.writePayload(ctx, "jobs", out, false)
 	})
 	if e == nil && quarantined {
 		return Record{}, ErrUnavailable
@@ -710,7 +723,7 @@ func (p *Postgres) FinishJob(ctx context.Context, r Record, success bool) error 
 			x := now.Add(retryDelay(r.Attempts))
 			cur.RunAt = &x
 		}
-		if e = pp.writePayload(ctx, "jobs", cur); e != nil {
+		if e = pp.writePayload(ctx, "jobs", cur, false); e != nil {
 			return e
 		}
 
