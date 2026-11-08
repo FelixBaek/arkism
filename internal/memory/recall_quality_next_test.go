@@ -57,7 +57,7 @@ func TestLocalExpansionOptInPreservesBoundaries(t *testing.T) {
 	f.svc.Repo = isolatedPostgres(t)
 	setCaptureDensity(t, f, captureDensityConversation)
 	conversationTurn(f, "Rowan: the copper pump repair is complete.")
-	q := SearchInput{Scope: scopeA, Query: "What did Rowan say about copper pump repair?", Modes: []string{"fts"}, Include: []string{"sources"}, Explain: true}
+	q := SearchInput{Scope: scopeA, Query: "What did Rowan and Avery say about copper pump repair?", Modes: []string{"fts"}, Include: []string{"sources"}, Explain: true}
 	baseline := f.search(f.agent, q)
 	if baseline.Explain.Expand != "" {
 		t.Fatal("enabled by default", baseline.Explain)
@@ -136,13 +136,16 @@ func TestLocalExpansionNativeKeepsExpandedBaseline(t *testing.T) {
 			if e != nil {
 				t.Fatal(e)
 			}
-			q.Query = "What 설계 방식?" // produces a local query without using model generation
+			q.Query = "What did Rowan and Avery say about the second 설계 candidate?"
+			if len(localRecallQueries(q.Query)) != 2 {
+				t.Fatal("fixture must exercise actual local expansion")
+			}
 			q.IncludeInactive = false
 			now := time.Now().UTC()
 			q.QueryTime = &now
 			baseline, e := f.svc.Search(testCtx, "native", q)
-			if e != nil {
-				t.Fatal(e)
+			if e != nil || len(baseline.Items) == 0 {
+				t.Fatal("expanded baseline must retain real candidates", e, baseline.Items)
 			}
 			f.svc.NativeSearchShadow = runtime
 			out, e := f.svc.Search(testCtx, "native", q)
@@ -159,10 +162,10 @@ func TestLocalExpansionNativeKeepsExpandedBaseline(t *testing.T) {
 
 func TestLocalExpansionKeepsBothAnchorsAndSharedPredicate(t *testing.T) {
 	queries := localRecallQueries("What hobbies do Rowan and Avery share?")
-	if !slices.Contains(queries, "rowan hobbies share") || !slices.Contains(queries, "avery hobbies share") || slices.Contains(queries, "hobbies share") {
+	if !slices.Equal(queries, []string{"What hobbies do Rowan share?", "What hobbies do Avery share?"}) {
 		t.Fatal(queries)
 	}
-	if got := localRecallQueries("What did Rowan repair?"); len(got) != 1 || got[0] != "rowan repair" {
+	if got := localRecallQueries("What did Rowan repair?"); len(got) != 0 {
 		t.Fatal(got)
 	}
 }

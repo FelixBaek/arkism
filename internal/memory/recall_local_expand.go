@@ -12,54 +12,56 @@ import (
 // Three ordinary lanes can contribute at most 150 distinct original candidates.
 const localRecallCandidateLimit = 50
 
-// Local expansion only removes question scaffolding or separates explicit
-// conjunctions. It never invents facts, synonyms, names or dates. It is opt-in
+// Local expansion only separates an explicit adjacent "Name and Name" pair.
+// Question words, conditions, negation, tense and punctuation remain intact:
+// removing scaffolding from a vector query would change its retrieval intent.
+// It never invents facts, synonyms, names or dates. It is opt-in
 // independently of model expansion and reuses the ordinary authorization gates.
 func localRecallQueries(query string) []string {
 	var out []string
-	add := func(words []string) {
-		q := strings.Join(words, " ")
-		if len(words) < 2 || utf8.RuneCountInString(q) > recallExpandRunes || strings.EqualFold(q, strings.TrimSpace(query)) || slices.Contains(out, q) {
+	add := func(q string) {
+		if len(strings.Fields(q)) < 2 || utf8.RuneCountInString(q) > recallExpandRunes || strings.EqualFold(q, strings.TrimSpace(query)) || slices.Contains(out, q) {
 			return
 		}
 		out = append(out, q)
 	}
-	terms := searchQueryTerms(query)
-	add(terms)
-	// For an explicit "Name and Name" pair, preserve the common predicate
-	// with each anchor. Removing all names would mix other people's facts;
-	// splitting at "and" alone would drop the predicate from one side.
+	// Track original byte positions rather than reconstructing normalized terms.
+	// Each result removes only the conjunction and the other name. In particular,
+	// a comma or question mark following the right name stays in both results.
 	words := strings.Fields(query)
+	starts := make([]int, len(words))
+	cursor := 0
+	for i, word := range words {
+		starts[i] = cursor + strings.Index(query[cursor:], word)
+		cursor = starts[i] + len(word)
+	}
 	for i := 1; i+1 < len(words); i++ {
 		if !strings.EqualFold(words[i], "and") {
 			continue
 		}
-		left, right := words[i-1], words[i+1]
+		left := words[i-1]
+		right := strings.TrimRightFunc(words[i+1], unicode.IsPunct)
 		lr, _ := utf8.DecodeRuneInString(left)
 		rr, _ := utf8.DecodeRuneInString(right)
-		if i <= 1 || !unicode.IsUpper(lr) || !unicode.IsUpper(rr) {
+		if !unicode.IsUpper(lr) || !unicode.IsUpper(rr) || strings.TrimRightFunc(left, unicode.IsPunct) != left {
+			continue
+		}
+		// Only unambiguous single-word names here. Possessives or punctuation
+		// inside a name need a parser; leave such questions unchanged instead
+		// of accidentally dropping their grammatical meaning.
+		nameBreak := func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsMark(r) }
+		if strings.ContainsFunc(left, nameBreak) || strings.ContainsFunc(right, nameBreak) {
 			continue
 		}
 		a, b := searchQueryTerms(left), searchQueryTerms(right)
 		if len(a) != 1 || len(b) != 1 {
 			continue
 		}
-		var predicate []string
-		for _, term := range terms {
-			if term != a[0] && term != b[0] {
-				predicate = append(predicate, term)
-			}
-		}
-		if len(predicate) == 0 {
-			continue
-		}
-		add(append([]string{a[0]}, predicate...))
-		if len(out) < recallExpandMax {
-			add(append([]string{b[0]}, predicate...))
-		}
+		add(query[:starts[i-1]+len(left)] + query[starts[i+1]+len(right):])
+		add(query[:starts[i-1]] + query[starts[i+1]:])
 		break // One explicit pair; never combinatorial expansion.
 	}
-	return out[:min(len(out), recallExpandMax)]
+	return out
 }
 
 func localExpandOn(in SearchInput, collection string) bool {

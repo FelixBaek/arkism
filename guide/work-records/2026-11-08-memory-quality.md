@@ -20,7 +20,7 @@ claim. Only the previously authorized isolated offline recall harness is compile
 한계: 90%는 고정 질문의 근거 회수율 목표이며 답변 정확도나 모든 실제 업무의 성공률이 아니다.
 연구: 해당 없음
 
-## Final measured status / 최종 측정 상태
+## Earlier completed comparison / 이전 완료 비교
 
 **전체 요청 미완료: MQ3/MQ4/MQ5는 구현·기능 검증했고, MQ1/MQ2의 분야별90% 검색 품질 목표는 달성하지 못했다.**
 새 검색 옵션은 기본값 `false`이며 생산 환경에 적용하지 않았다. 자료 부족으로
@@ -84,9 +84,8 @@ The server's vector-distance cap is unset, so relative vector pruning is not the
 cause of this run's failures. Pure vector ranking also regressed stronger lexical
 cases and was not adopted.
 
-Verification in progress: a candidate-width-only906-search comparison and a
-separate combined candidate-width/conversation-selection comparison use the
-unchanged evaluator. Focused Go checks passed (0.104s); neither those checks nor
+The candidate-width-only and combined candidate-width/conversation-selection
+comparisons use the unchanged evaluator. Focused Go checks passed (0.104s); neither those checks nor
 partial development scores establish the90% acceptance target. The first new
 PostgreSQL check failed during schema initialization on a temporary SQL_ASCII
 cluster; it is retained as an environment failure. The same focused selection
@@ -99,6 +98,62 @@ checks that its unscored tail cannot displace the evaluated head; the combined
 reranker-boundary selection passed (0.351s). Existing partial-rerank policies
 were not redesigned or represented as newly validated full-pool reranking.
 No production enablement or90% claim is made.
+
+The candidate-width-only comparison has now completed normally:453 questions,
+906 successful HTTP searches, zero degraded results, zero generation-trap hits
+and zero final non-embedding usage. Its fixed category gate failed: multi-hop
+61.53%, temporal87.84%, open-domain63.02%, single-hop97.07%. The first and third
+categories improved over the original baseline and single-hop tied it, but
+the temporal regression prevents adoption. Observed concurrent-run latency was
+p50 6.686s and p95 11.289s; these are development-host observations, not a
+production performance claim. Its owned services were stopped after postchecks.
+
+The combined width/conversation-selection run also completed normally with all
+906 searches, no degraded results and no generation/non-embedding calls. Results
+were60.97% multi-hop,87.84% temporal,63.02% open-domain and97.07% single-hop; its
+strict gate failed. The selection change lost one additional fraction of a
+multi-hop evidence set relative to width alone and was not accepted as a quality
+gain. Its observed concurrent-run p50/p95 were7.025s/11.094s. The owned runtime
+was cleaned up after the runner's normal postchecks and an independent log check.
+
+The next isolated comparison changes query expansion only: ordinary questions
+no longer generate a second vector query by deleting question scaffolding.
+FTS already normalizes those words; deleting them from a vector input can lose
+answer type, conditions or negation. Only an explicit adjacent name conjunction
+is separated, with the original question words, conditions, tense, negation,
+punctuation and remaining whitespace preserved. This is an intent-preservation
+hypothesis, not a measured quality gain yet. Original queries still run, and
+all candidate/output/character budgets remain unchanged. Regression checks
+verify one original embedding for ordinary/default-off searches and two extra
+embeddings only for an explicit pair. The new PostgreSQL/related selection
+passed61 top-level tests without skips (1.345s). Full906-search evaluation is
+in progress on a freshly restored isolated server.
+
+A separate local FP32 cross-encoder shadow experiment scored all453 questions
+against fixed vector-only pools of50 memories and50 conversation sources:
+45,300 pairs, no input truncation or fallback,949.56s, about1.14GiB peak RSS.
+Final10+5 and existing character budgets were retained. Compared with the same
+vector-only selection, multi-hop moved60.24% to62.52%, temporal91.48% to92.62%,
+open-domain60.42% to55.73%, and single-hop95.82% to97.49%. The open-domain loss
+rejects this model as a solution; its86.38% overall development average is not
+an acceptance result. This diagnostic did not execute the service's HTTP
+authorization and provenance-revalidation path and does not replace that test.
+
+A second cached local cross-encoder runtime was tested with external networking
+disabled. Its first configuration rejected an invalid token budget; the next
+8192-token warmup exceeded the container's4GiB limit. A bounded512-token runtime
+then started, with client preflight ensuring no actual input needed truncation.
+The pilot was stopped for runtime cost after58 completed pairs across15 requests
+(one additional request was in flight): the early32-pair throughput projected
+roughly24 hours for the full comparison, beyond the one-hour diagnostic budget.
+No full questions or gold-quality evaluation completed for this pilot. This is
+a runtime-speed rejection in this environment, not evidence of model quality.
+The owned container and isolated network were removed; existing caches remain.
+
+Post-review validation of the committed candidate and partial-rerank guard passed
+58 top-level PostgreSQL/related checks with no skips (4.128s), scoped vet and work
+record validation. Further retrieval work is continuing; none of these passed
+engineering checks establishes the still-unmet category target.
 
 ## Frozen acceptance / 고정 완료 기준
 
