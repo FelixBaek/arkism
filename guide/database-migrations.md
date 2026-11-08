@@ -45,6 +45,16 @@ status, revision checks, resume, hold and restricted cancellation. Initializatio
 refuses to proceed during active maintenance; use the matching maintenance CLI
 to complete it first. Installing the migration does not start maintenance.
 
+Version ten (`0010_job_queue_indexes`) adds three job indexes: ordered waiting
+jobs by kind, ordered running jobs by kind, and update-order polling by kind.
+The matching worker preserves `run_at ASC NULLS LAST,id` priority, expired-lease
+recovery, token isolation and maintenance gating. No canonical job payload is
+rewritten by this migration. The indexes are created in the ordinary migration
+transaction, so job writes can wait during construction; the indexes also add
+storage and write-maintenance cost. The existing general job index is retained.
+See the [queue integration record](work-records/2026-11-08-memory-quality-queue-integration.md)
+for the measured improvements and remaining workload-dependent limits.
+
 ## Upgrade
 
 1. Keep a tested backup and its matching binary. Stop the API, worker, timers and
