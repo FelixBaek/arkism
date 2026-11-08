@@ -1010,7 +1010,7 @@ excerpt being returned. The final memory,
 conversation and character limits are unchanged. This extra database/auth work
 requires both quality and latency validation before enabling the option.
 With it off, prefix selection and existing side-lane/model-expansion weighting
-remain in use. In this mode,
+remain in use. When local expansion is enabled,
 partial exact-keyword matches to a compound question receive proportionate
 weight; intentional whole-keyword and one-concept lookups keep their full weight. If model `expand`
 is also requested, that existing model expansion takes precedence. Frozen views,

@@ -116,18 +116,26 @@ multi-hop evidence set relative to width alone and was not accepted as a quality
 gain. Its observed concurrent-run p50/p95 were7.025s/11.094s. The owned runtime
 was cleaned up after the runner's normal postchecks and an independent log check.
 
-The next isolated comparison changes query expansion only: ordinary questions
+The next isolated comparison changed query expansion only: ordinary questions
 no longer generate a second vector query by deleting question scaffolding.
 FTS already normalizes those words; deleting them from a vector input can lose
 answer type, conditions or negation. Only an explicit adjacent name conjunction
 is separated, with the original question words, conditions, tense, negation,
 punctuation and remaining whitespace preserved. This is an intent-preservation
-hypothesis, not a measured quality gain yet. Original queries still run, and
+change; its measured result below does not meet acceptance. Original queries still run, and
 all candidate/output/character budgets remain unchanged. Regression checks
 verify one original embedding for ordinary/default-off searches and two extra
 embeddings only for an explicit pair. The new PostgreSQL/related selection
-passed61 top-level tests without skips (1.345s). Full906-search evaluation is
-in progress on a freshly restored isolated server.
+passed61 top-level tests without skips (1.345s). The full comparison completed
+normally on a freshly restored isolated server:453 questions,906 successful
+searches, zero degraded results, zero generation-trap hits and zero non-embedding
+usage before/after. Source hashes match the committed implementation. Results
+were60.38% multi-hop,90.33% temporal,63.28% open-domain and97.49% single-hop
+(overall86.03%). The strict gate still fails: multi-hop and open-domain remain
+below90%, and temporal remains below its91.09% baseline. Observed concurrent-run
+p50/p95 were4.937s/8.238s. The owned runtime was stopped and its four ports
+confirmed closed after independent log/source/row checks. These development-host
+latencies are not a controlled production performance comparison.
 
 A separate local FP32 cross-encoder shadow experiment scored all453 questions
 against fixed vector-only pools of50 memories and50 conversation sources:
@@ -149,6 +157,18 @@ roughly24 hours for the full comparison, beyond the one-hour diagnostic budget.
 No full questions or gold-quality evaluation completed for this pilot. This is
 a runtime-speed rejection in this environment, not evidence of model quality.
 The owned container and isolated network were removed; existing caches remain.
+
+The second model was also checked through its pinned, inspected local CPU
+implementation with the existing cached weights. No model weights or private
+text were transmitted. An FP32 eager batch-one pilot completed300 pairs without
+errors:15.37–17.77s per100-pair question, projecting2.04 hours before reserve.
+A one-off batch-eight/four-thread pilot preserved all lane rankings (maximum
+raw-score difference0.0000012) but slowed to32.89–37.75s per question, so that
+variant was rejected. Neither pilot was evaluated against gold evidence.
+A separate three-shard full comparison is running with the original batch-one
+path, a shared6GiB memory limit, a600% CPU quota and a bounded lifetime. Its
+first300 pairs match the original pilot exactly. Results will not be scored
+until all453 questions complete and hashes/order/uniqueness are verified.
 
 Post-review validation of the committed candidate and partial-rerank guard passed
 58 top-level PostgreSQL/related checks with no skips (4.128s), scoped vet and work
