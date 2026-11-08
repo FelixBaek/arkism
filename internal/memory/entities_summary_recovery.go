@@ -71,9 +71,11 @@ func recoverSummarySchedule(ctx context.Context, tx Tx, store namedEntityStore, 
 	return tx.Insert(ctx, colJobs, Record{ID: receiptID, Scope: r.Scope, Kind: "approved_summary_receipt", Status: JobStatusDone, Revision: 1, Target: &Ref{Collection: colMemories, ID: r.ID, Revision: r.Revision}, CreatedBy: actor, CreatedAt: now, UpdatedAt: now})
 }
 
-// A busy scheduler is ordinary contention, not a failed recovery attempt.
-// The exact claimed lease must still be ours before refunding that claim.
-func (s *Service) deferApprovedSummary(ctx context.Context, job Record) error {
+// deferClaimedJob puts a claimed job back to pending after delay and refunds
+// its attempt: used when the cause is outside the job (a busy scheduler, an
+// unreachable dependency), not a failed attempt. The exact claimed lease must
+// still be ours before refunding that claim.
+func (s *Service) deferClaimedJob(ctx context.Context, job Record, delay time.Duration) error {
 	return s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		cur, e := tx.Get(ctx, colJobs, job.Scope, job.ID)
 		if e != nil {
@@ -83,7 +85,7 @@ func (s *Service) deferApprovedSummary(ctx context.Context, job Record) error {
 			return ErrConflict
 		}
 		now := time.Now().UTC()
-		next := now.Add(30 * time.Second)
+		next := now.Add(delay)
 		cur.Status, cur.RunAt, cur.LeaseToken, cur.LeaseUntil, cur.UpdatedAt = JobStatusPending, &next, "", time.Time{}, now
 		cur.Attempts = max(0, cur.Attempts-1)
 		cur.Revision++

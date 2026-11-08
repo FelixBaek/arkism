@@ -95,6 +95,9 @@ var (
 // candidates, runs and audit rows stay out of retrieval.
 var searchableCollections = []string{colMemories, colSkillVersions, colReflections, colObservations}
 
+// embeddableCollections are every collection the embedding worker accepts.
+var embeddableCollections = append(slices.Clone(searchableCollections), colWikiPages, "memory_candidates", "sources")
+
 // searchableLive is the decision made on the live document. skillParent is only
 // set for skill_versions, and a non-empty space additionally requires the live
 // embedding metadata to still describe the space that was searched.
@@ -189,6 +192,14 @@ func checkScope(scope Scope) error {
 
 	return nil
 }
+
+// An embedding job that fails because the embedder is unreachable is put back
+// without spending an attempt for this long after it was queued; after that it
+// fails normally so a dependency that never comes back cannot loop forever.
+var (
+	embedOutageWindow = 24 * time.Hour
+	embedOutageDelay  = time.Minute
+)
 
 // retryDelay backs off exponentially and stops at a ceiling, so a failing
 // dependency cannot turn into a hot loop across workers.

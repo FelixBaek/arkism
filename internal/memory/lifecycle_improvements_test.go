@@ -400,6 +400,17 @@ func TestPostgresReindexPreservesApprovedEntityOutbox(t *testing.T) {
 			if job.ID == "" {
 				t.Fatal("approval outbox missing")
 			}
+			// One active embedding job per target: finish the approval's own
+			// embedding so the reindex below has to queue a new one.
+			for _, r := range pgCollection(t, p, colJobs) {
+				if r.Kind == "embedding" && r.Target != nil && r.Target.ID == m.ID && r.Status != JobStatusDone {
+					r.Status = JobStatusDone
+					r.Revision++
+					if e := p.Replace(testCtx, colJobs, r, r.Revision-1); e != nil {
+						t.Fatal(e)
+					}
+				}
+			}
 			if status == JobStatusDone {
 				job.Status = status
 				job.Revision++

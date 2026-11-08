@@ -938,7 +938,7 @@ func (s *Service) WorkOnce(ctx context.Context, workerToken string) (result erro
 	if job.Kind == approvedEntitiesJobKind {
 		e = s.runApprovedEntities(ctx, workerToken, job)
 		if errors.Is(e, errSummaryScheduleBusy) {
-			e = s.deferApprovedSummary(ctx, job)
+			e = s.deferClaimedJob(ctx, job, 30*time.Second)
 			handled = e == nil
 			return e
 		}
@@ -954,6 +954,13 @@ func (s *Service) WorkOnce(ctx context.Context, workerToken string) (result erro
 		return ErrInvalid
 	}
 	success, e = s.embedJob(ctx, workerToken, &job)
+	if !success && errors.Is(e, ErrUnavailable) && time.Since(job.CreatedAt) < embedOutageWindow {
+		// An embedder outage is not a bad input: wait it out without spending
+		// attempts, so a restart of the embedder does not lose vectors for good.
+		if e = s.deferClaimedJob(ctx, job, embedOutageDelay); e == nil {
+			handled = true
+		}
+	}
 	return e
 }
 
@@ -978,7 +985,7 @@ func sourceErasureJob(kind string) bool {
 // embedJob runs one embedding job. The bool reports whether the attempt
 // counts as finished; a successful write also advances job.Revision.
 func (s *Service) embedJob(ctx context.Context, workerToken string, job *Record) (bool, error) {
-	if job.Target == nil || !slices.Contains(searchableCollections, job.Target.Collection) && job.Target.Collection != colWikiPages && job.Target.Collection != "memory_candidates" && job.Target.Collection != "sources" {
+	if job.Target == nil || !slices.Contains(embeddableCollections, job.Target.Collection) {
 		return true, ErrInvalid
 	}
 	r, e := s.Repo.Get(ctx, job.Target.Collection, job.Scope, job.Target.ID)
