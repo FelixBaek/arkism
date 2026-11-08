@@ -14,6 +14,8 @@ One scoped race run passed **79 top-level tests and 56 subtests in 44.514 second
 - Both public caller transaction wrappers retain their isolation and sort preference after a claim. Maintenance waits for each already-admitted claim transaction to finish; the test observes the actual blocking backend and verifies the claimed job commits once. New claims then fail while maintenance is active.
 - A claim arriving while the actual maintenance operation owns the gate row waits for its commit and subsequently observes the active gate. The test uses a controlled database barrier and observed lock dependencies, and verifies that no job was mutated.
 
+Post-integration scoped `go vet ./internal/memory` also passed on the final code.
+
 The initial focused integration run also passed four top-level tests and two subtests in 0.673 seconds. Clean initialization, the populated 9→10 upgrade and repeated initialization pass. The existing actual-connection tests cover restricted token/RLS access, forced-generic-plan prewarming, restored on/off settings, unchanged caller isolation, cancellations, eligibility and concurrent rescheduling. Independent review found no blocking correctness issue.
 
 Integrated race-run server execution measurements (milliseconds):

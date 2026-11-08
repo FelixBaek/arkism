@@ -34,8 +34,13 @@ MQ3/MQ4/MQ5는 구현·기능 검증을 마쳤다. MQ1/MQ2의 모든 분야90% �
 | 개방형 |61.46%|63.28%|90% 미달|
 | 단일 기억 |97.07%|97.49%|통과|
 
-추가 로컬 모델의 전체 비교는 진행 중이다. 기본값은 계속 `false`이며,
-이 결과로 생산 적용·전체 완료를 선언하지 않는다. 아래에는 실패한 과거 결과도 보존한다.
+추가 로컬 모델도453문항 전체 검산을 마쳤다. 개방형 성적이 같은 후보의
+벡터 기준60.42%에서58.33%로 하락해 채택하지 않았다. 이 수치는 오프라인
+순위 진단이며 위 실제 검색 표를 대체하지 않는다. 기본값은 계속 `false`이고,
+전체90% 목표는 미달이다. 아래에는 실패한 과거 결과도 보존한다.
+
+별도 요청한 GOAL5 큐 개선은 [유지보수 게이트와 통합 검증](2026-11-08-memory-quality-queue-integration.md)을 마쳤다.
+통합 race79개와 하위56개, 최종 정적 검사가 통과했고 제품 빌드·push는 하지 않았다.
 
 ## Earlier completed comparison / 이전 완료 비교
 
@@ -182,10 +187,34 @@ errors:15.37–17.77s per100-pair question, projecting2.04 hours before reserve.
 A one-off batch-eight/four-thread pilot preserved all lane rankings (maximum
 raw-score difference0.0000012) but slowed to32.89–37.75s per question, so that
 variant was rejected. Neither pilot was evaluated against gold evidence.
-A separate three-shard full comparison is running with the original batch-one
-path, a shared6GiB memory limit, a600% CPU quota and a bounded lifetime. Its
-first300 pairs match the original pilot exactly. Results will not be scored
-until all453 questions complete and hashes/order/uniqueness are verified.
+The three-shard comparison completed all453 questions using the original
+batch-one path, a shared6GiB memory limit and a600% CPU quota. The first attempt
+stopped at its original deadline after3852.98s with277 complete questions and
+143 additional logged pairs from incomplete questions. Its timeout failure
+records were preserved. A continuation completed only the remaining176 questions
+in2220.69s. A separate preparation failure created no workers and performed zero
+inference; its record is also preserved. The combined result retains the first
+completed result for every question and verifies all input/result hashes, order,
+uniqueness and complete100-pair journals before gold evaluation.
+
+There are45,300 unique scored pairs and45,443 logged forwards including the143
+discarded partial pairs. All906 final lanes were scored without fallback or
+truncation; no OOM or memory-limit event occurred. The original300 identity pairs
+match the pilot exactly. Continuation processes verify pinned files and dependency
+versions and inherit that original validation; they did not repeat raw-score
+identity inference. Both inference scopes exited and their owned processes were
+removed. The two scoring attempts used101.23 minutes of wall time in total,
+excluding preparation and the gap between attempts. Observed per-question scoring
+latency was39.05s p50 and57.74s p95 on the shared host, not service HTTP latency.
+
+The fixed offline result was64.88% multi-hop,98.18% temporal,58.33% open-domain,
+97.49% single-hop and88.12% overall. The same vector-only baseline matches the
+previous shadow experiment exactly. Its open-domain60.42% falls to58.33%, so
+this model was rejected despite temporal gains. Every category stays within the
+independently computed50+50 candidate-inclusion bound. This remains a development
+diagnostic: it did not execute the actual service's authorization/provenance path,
+does not replace the full HTTP comparison, and does not meet the all-category90%
+target. No model adoption or category-specific policy tuning was performed.
 
 A read-only candidate-ceiling audit independently rebuilt the vector rankings
 from existing cached query and candidate vectors, without model, embedding,
@@ -198,7 +227,7 @@ open-domain and99.5816% single-hop. The existing50+50 open-domain ceiling is
 With100+100, fully covered open-domain questions increase25 to28 and covered
 references58/68 to63/68. These are oracle candidate-inclusion bounds under the frozen harness mapping,
 including its approximate memory-provenance mapping, not achieved ranking quality: final10+5 selection and the6000-character memory budget remain
-required. The running model experiment's candidates, protocol and scores were
+required. The then-running model experiment's candidates, protocol and scores were
 not changed or evaluated by this audit. Its50+50 pool remains a ranking diagnostic,
 not a viable all-category acceptance candidate on its own.
 
@@ -215,11 +244,11 @@ no-refill sensitivity check; this is not a measured replacement-selection policy
 Referenced source originals are absent from the export, and original returned
 response bodies were not retained, so complete provenance and returned-text
 redundancy could not be established. No suppression change was adopted; the
-running model scores and protocol were not read or changed by this diagnostic.
+then-running model scores and protocol were not read or changed by this diagnostic.
 
 Post-review validation of the committed candidate and partial-rerank guard passed
 58 top-level PostgreSQL/related checks with no skips (4.128s), scoped vet and work
-record validation. Further retrieval work is continuing; none of these passed
+record validation. Further retrieval work remains; none of these passed
 engineering checks establishes the still-unmet category target.
 
 ## Frozen acceptance / 고정 완료 기준
