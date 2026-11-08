@@ -202,6 +202,21 @@ required. The running model experiment's candidates, protocol and scores were
 not changed or evaluated by this audit. Its50+50 pool remains a ranking diagnostic,
 not a viable all-category acceptance candidate on its own.
 
+A separate cross-lane audit did not justify broad duplicate suppression.
+Only66 of2,265 baseline conversation entries (2.91%) had all their mapped turns
+already represented in selected memories; no question had all five entries in
+that condition. Mapped-turn overlap is not proof of repeated facts because the
+harness uses an approximate token-overlap memory mapping and one turn can contain
+additional information. Stored-body equality, direct source-ID equality and
+cross-lane cosine similarity at least0.92 were all absent. Conversation entries
+provided additional gold evidence for70 questions. Removing entries from sessions
+already represented by memories lost evidence for50 questions in a deletion-only,
+no-refill sensitivity check; this is not a measured replacement-selection policy.
+Referenced source originals are absent from the export, and original returned
+response bodies were not retained, so complete provenance and returned-text
+redundancy could not be established. No suppression change was adopted; the
+running model scores and protocol were not read or changed by this diagnostic.
+
 Post-review validation of the committed candidate and partial-rerank guard passed
 58 top-level PostgreSQL/related checks with no skips (4.128s), scoped vet and work
 record validation. Further retrieval work is continuing; none of these passed
