@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"math"
+	"slices"
 	"sort"
 	"time"
 )
@@ -86,10 +87,14 @@ func (s *Service) fuseRecallHits(ctx context.Context, token string, lists [][]Hi
 	if recall {
 		now, weights := s.recallClock(in), s.policyOutcomeWeights(ctx, in, rows)
 		trace.noteBoosts(rows, now, weights)
-		if in.space.recallQuality().diversityOn() {
-			return selectDiverse(decayByRecency(rows, now, weights, len(rows)), in.Limit), nil
+		rows = decayByRecency(rows, now, weights, len(rows))
+		if s.evidenceSelectionStatus(in, collection) == "ready" {
+			trace.evidenceCandidates = slices.Clone(rows)
 		}
-		return decayByRecency(rows, now, weights, in.Limit), nil
+		if in.space.recallQuality().diversityOn() {
+			return selectDiverse(rows, in.Limit), nil
+		}
+		return rows[:min(in.Limit, len(rows))], nil
 	}
 	return rows[:min(in.Limit, len(rows))], nil
 }

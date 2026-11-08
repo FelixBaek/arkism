@@ -64,7 +64,7 @@ func (x fakeTx) SourceMetadata(ctx context.Context, scope Scope, ids []string, i
 		if e != nil {
 			return nil, e
 		}
-		meta := Record{TrustLevel: r.TrustLevel, ID: r.ID, Scope: r.Scope, Status: r.Status, ExpiresAt: r.ExpiresAt, Sensitivity: r.Sensitivity}
+		meta := Record{TrustLevel: r.TrustLevel, ID: r.ID, Scope: r.Scope, Status: r.Status, ExpiresAt: r.ExpiresAt, Sensitivity: r.Sensitivity, ContentErased: r.ContentErased}
 		if includeText {
 			meta.Text = r.Text
 		}

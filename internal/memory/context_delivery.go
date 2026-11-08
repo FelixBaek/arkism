@@ -83,6 +83,11 @@ func verifyConversationContext(ctx context.Context, tx Tx, scope Scope, out Cont
 		if current.Scope != scope || !live(current) || current.ContentErased || current.PrivacyQuarantined || current.Sensitivity == "restricted" || structuredText(current) != structuredText(original) {
 			return ErrConflict
 		}
+		if out.evidenceSelectionFenced && len(current.Sources) > 0 {
+			if err := checkSources(ctx, searchReadTx{Tx: tx}, current); err != nil {
+				return err
+			}
+		}
 		if err := tx.FenceSource(ctx, scope, ref.ID); err != nil {
 			return err
 		}

@@ -1014,6 +1014,50 @@ More candidates increase database, authorization and selection work. Compare
 quality and latency before enabling a nonzero budget. Candidate inclusion is not
 final recall quality, and this option does not establish a 90% quality result.
 
+### Experimental evidence-set selection
+
+`recall_quality.evidence_selection` defaults to `false`. When enabled with
+`candidate_pool: 100`, ordinary internal memory recall can ask the configured
+server model to choose complementary memories and conversation excerpts together.
+It uses up to 100 authorized candidates of each kind and returns at most the
+requested memory limit (1–10) plus five conversation entries. It does not generate
+or store new facts. Only validated candidate numbers can affect the result.
+
+This narrow experimental path requires the conversation source lane. Explicit
+`rerank: false` disables it. Existing cross-encoder/model reranking or prune/dedup,
+active native ranking/shadow mode, history, related-record searches, frozen views,
+`whole_items`, `conversation_context`, `prefer_observations: true`, `source_facts`
+and token budgets retain their existing path without calling this selector.
+
+Every query and candidate must pass model-transfer authorization, including source
+liveness and content checks. A private, restricted, unsafe or denied candidate
+keeps the complete original result; candidates are not silently removed to make
+an outbound request possible. A loopback endpoint does not waive these rules.
+Cross-scope shared/reach candidates conservatively retain the baseline.
+Calls use the configured server model and the normal usage ledger, with a separate
+200-call daily project cap, a ten-second child deadline, a 64,000-character total
+prompt cap and 512 output tokens. Prompts exceeding the cap are not shortened.
+The existing audit trace links at most 64 transmitted memory IDs and one source
+document ID; it does not record complete lineage for all 200 candidates. Existing
+trace-content and retention settings still apply.
+
+The model sees numbered candidate text and summaries, plus the query and budgets.
+Unknown fields, duplicate keys or numbers, missing arrays, invalid numbers and
+output beyond the item limits are rejected. The selected memory texts **and
+summaries** must fit the request's `max_chars` in full. Conversation text and
+summaries must fit 600 characters per selected entry (at most 3,000 total), including any ordinary
+adjacent-turn completion. An over-budget set falls back; it is never clipped and
+reported as applied. Existing final source and memory fences reject stale content
+if it changes during the call.
+
+Use `explain: true` to read `explain.evidence_selection`: `applied`, a specific
+unsupported/disabled reason, `candidate_denied`, `prompt_too_large`,
+`budget_exceeded`, `timeout`, `invalid_response`, `character_budget`, or a failure
+status. Model failure preserves the original result; an ordinary final
+permission/provenance fence failure remains a search error. This is an opt-in
+implementation for future evaluation, not evidence of improved recall or a 90%
+quality result. It may add substantial latency and model cost.
+
 ### Local recall query expansion
 
 `recall_quality.local_expand` is an optional space setting (default `false`). It

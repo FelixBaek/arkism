@@ -500,16 +500,18 @@ type Hit struct {
 	keywordQueryKey string
 }
 type ContextBundle struct {
-	conversationRecords map[Ref]Record
-	History             []HistoricalHit `json:"history,omitempty"`
-	ContextData         string          `json:"context_data,omitempty"`
-	TokensUsed          int             `json:"tokens_used,omitempty"`
-	TokenEncoding       string          `json:"token_encoding,omitempty"`
-	ContextID           string          `json:"context_id,omitempty"`
-	Authority           string          `json:"authority"`
-	Items               []Hit           `json:"items"`
-	Degraded            []string        `json:"degraded,omitempty"`
-	Explain             *RecallExplain  `json:"explain,omitempty"`
+	// Joint selection also fences source snapshots across its model call.
+	evidenceSelectionFenced bool
+	conversationRecords     map[Ref]Record
+	History                 []HistoricalHit `json:"history,omitempty"`
+	ContextData             string          `json:"context_data,omitempty"`
+	TokensUsed              int             `json:"tokens_used,omitempty"`
+	TokenEncoding           string          `json:"token_encoding,omitempty"`
+	ContextID               string          `json:"context_id,omitempty"`
+	Authority               string          `json:"authority"`
+	Items                   []Hit           `json:"items"`
+	Degraded                []string        `json:"degraded,omitempty"`
+	Explain                 *RecallExplain  `json:"explain,omitempty"`
 	// EmptyReason says why a recall that found hits returned none (recall_quality.go).
 	EmptyReason string `json:"empty_reason,omitempty"`
 	// Provisional are pending candidates a space opted in to show, never mixed into Items.

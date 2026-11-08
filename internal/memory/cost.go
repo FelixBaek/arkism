@@ -146,6 +146,8 @@ func operationCap(operation string) callCap {
 		return callCap{prefix: "wiki_", limit: wikiDailyCallLimit}
 	case operation == reflectOperation:
 		return callCap{prefix: reflectOperation, limit: reflectDailyCallLimit}
+	case operation == evidenceSelectionOperation:
+		return callCap{prefix: evidenceSelectionOperation, limit: evidenceSelectionDailyCalls}
 	case operation == modelRerankOperation:
 		return callCap{prefix: modelRerankOperation, limit: modelRerankDailyCalls}
 	case operation == recallExpandOperation:

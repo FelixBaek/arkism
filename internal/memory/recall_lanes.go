@@ -48,10 +48,12 @@ type HitExplain struct {
 
 // RecallExplain is the search-level debug trace returned with explain=true.
 type RecallExplain struct {
-	Lanes       []string           `json:"lanes"`
-	TimeWindow  *RecallTimeWindow  `json:"time_window,omitempty"`
-	TimeWindows []RecallTimeWindow `json:"time_windows,omitempty"`
-	Reranked    bool               `json:"reranked"`
+	// EvidenceSelection reports the opt-in joint selector outcome; empty when disabled.
+	EvidenceSelection string             `json:"evidence_selection,omitempty"`
+	Lanes             []string           `json:"lanes"`
+	TimeWindow        *RecallTimeWindow  `json:"time_window,omitempty"`
+	TimeWindows       []RecallTimeWindow `json:"time_windows,omitempty"`
+	Reranked          bool               `json:"reranked"`
 	// ModelRerank is set when the model rerank was asked for: applied, or why the fused order was kept.
 	ModelRerank string `json:"model_rerank,omitempty"`
 	// Expand is set when query expansion was on: applied, or why plain recall ran (recall_expand.go);
@@ -92,15 +94,16 @@ type RecallTimeWindow struct {
 
 // recallTrace follows one search through fusion; the maps are filled only for explain.
 type recallTrace struct {
-	degraded []string
-	explain  bool
-	lanes    []string
-	window   *timeWindow
-	windows  []timeWindow
-	fused    map[string]float64
-	rerank   map[string]float64
-	reranked bool
-	chain    []RerankStage
+	evidenceCandidates []ScoredHit
+	degraded           []string
+	explain            bool
+	lanes              []string
+	window             *timeWindow
+	windows            []timeWindow
+	fused              map[string]float64
+	rerank             map[string]float64
+	reranked           bool
+	chain              []RerankStage
 	// modelRerank is the model rerank outcome (recall_model_rerank.go); modelRank its 1-based order.
 	modelRerank string
 	modelRank   map[string]int
@@ -311,8 +314,24 @@ func (s *Service) recallItems(ctx context.Context, token string, in SearchInput,
 	if err := s.pendingRecall(ctx, token, in, collection, out); err != nil {
 		return err
 	}
-	s.conversationTurns(ctx, token, in, collection, out)
-	return s.collectSourceFacts(ctx, in, out, clean)
+	status := s.evidenceSelectionStatus(in, collection)
+	// Keep a complete baseline before attempting the model. Extra source reads
+	// are needed only for an eligible joint-selection request.
+	out.evidenceSelectionFenced = status == "ready"
+	pool := s.conversationTurnsWithCandidates(ctx, token, in, collection, out, status == "ready")
+	if err := s.collectSourceFacts(ctx, in, out, clean); err != nil {
+		return err
+	}
+	if status == "ready" {
+		status = s.selectRecallEvidence(ctx, token, in, d, trace.evidenceCandidates, pool, out)
+		if status == "applied" {
+			trace.annotate(out, lists)
+		}
+	}
+	if out.Explain != nil {
+		out.Explain.EvidenceSelection = status
+	}
+	return nil
 }
 
 // preferObservations drops the memories an approved observation among items was written from.

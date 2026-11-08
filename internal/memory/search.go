@@ -409,7 +409,7 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 				return err
 			}
 		}
-		if in.ConversationContext {
+		if in.ConversationContext || out.evidenceSelectionFenced {
 			if err := verifyConversationContext(ctx, tx, in.Scope, out); err != nil {
 				return err
 			}

@@ -36,25 +36,31 @@ func conversationLaneOn(in SearchInput, collection string) bool {
 // frozen context views; a lexical match must hold the query's topic.
 // A lane search failure marks the recall degraded instead of failing it.
 func (s *Service) conversationTurns(ctx context.Context, token string, in SearchInput, collection string, out *ContextBundle) {
+	s.conversationTurnsWithCandidates(ctx, token, in, collection, out, false)
+}
+
+type conversationCandidatePool struct {
+	rows    []ScoredHit
+	records map[string]Record
+}
+
+// Collection and materialization stay separate so joint selection can reuse the
+// exact authorized excerpts while preserving the ordinary baseline selection.
+func (s *Service) collectConversationCandidates(ctx context.Context, token string, in SearchInput, collection string, out *ContextBundle, all bool) *conversationCandidatePool {
 	if !conversationLaneOn(in, collection) || !s.probeAllowed(ctx, token, "read:sources", in.Scope) {
-		return
+		return nil
 	}
 	in.optionalFailures = &out.Degraded
 	rows, err := s.sideLane(ctx, "sources", in, SearchCriteria{Kinds: []string{conversationSourceKind}})
 	if err != nil {
 		out.Degraded = append(out.Degraded, "conversation")
-		return
-	}
-	if in.ConversationContext {
-		out.conversationRecords = map[Ref]Record{}
+		return nil
 	}
 	terms := searchQueryTerms(in.Query)
-	selected := map[string]Record{}
 	localSelection := localExpandOn(in, collection)
-	var candidates []ScoredHit
-	records := map[string]Record{}
+	pool := &conversationCandidatePool{records: map[string]Record{}}
 	for _, row := range rows {
-		if !localSelection && len(out.Conversation) == conversationLaneHits {
+		if !all && !localSelection && len(pool.rows)+len(out.Conversation) == conversationLaneHits {
 			break
 		}
 		r, err := s.Repo.Get(ctx, "sources", in.Scope, row.Hit.ID)
@@ -77,29 +83,42 @@ func (s *Service) conversationTurns(ctx context.Context, token string, in Search
 			lexicalHit = Hit{Text: text} // omitted batch metadata is not returned evidence
 		}
 		if slices.Contains(row.Hit.Reasons, reasonVector) || lexicallyRelevant(terms, lexicalHit) {
-			if localSelection {
-				// Rank the authorized, redacted text that will actually be returned,
-				// rather than stopping at five matches of the unabridged batches.
-				candidates = append(candidates, ScoredHit{Hit: h, Score: row.Score})
-				records[r.ID] = r
-				continue
-			}
-			out.Conversation = append(out.Conversation, h)
-			selected[r.ID] = r
-			if in.ConversationContext {
-				out.conversationRecords[Ref{Collection: "sources", ID: r.ID, Revision: r.Revision}] = r
-			}
+			pool.rows = append(pool.rows, ScoredHit{Hit: h, Score: row.Score})
+			pool.records[r.ID] = r
 		}
 	}
-	if localSelection {
-		chosen := selectConversationCandidates(in.Query, candidates, out.Items, out.Conversation, conversationLaneHits-len(out.Conversation))
-		out.Conversation = append(out.Conversation, chosen...)
-		for _, h := range chosen {
-			r := records[h.ID]
-			selected[r.ID] = r
-			if in.ConversationContext {
-				out.conversationRecords[Ref{Collection: "sources", ID: r.ID, Revision: r.Revision}] = r
-			}
+	return pool
+}
+
+func (s *Service) conversationTurnsWithCandidates(ctx context.Context, token string, in SearchInput, collection string, out *ContextBundle, all bool) *conversationCandidatePool {
+	pool := s.collectConversationCandidates(ctx, token, in, collection, out, all)
+	if pool == nil {
+		return nil
+	}
+	limit := conversationLaneHits - len(out.Conversation)
+	var chosen []Hit
+	if localExpandOn(in, collection) {
+		chosen = selectConversationCandidates(in.Query, pool.rows, out.Items, out.Conversation, limit)
+	} else {
+		for _, row := range pool.rows[:min(max(limit, 0), len(pool.rows))] {
+			chosen = append(chosen, row.Hit)
+		}
+	}
+	s.materializeConversationCandidates(ctx, token, in, out, pool, chosen)
+	return pool
+}
+
+func (s *Service) materializeConversationCandidates(ctx context.Context, token string, in SearchInput, out *ContextBundle, pool *conversationCandidatePool, chosen []Hit) {
+	if in.ConversationContext || out.evidenceSelectionFenced {
+		out.conversationRecords = map[Ref]Record{}
+	}
+	selected := map[string]Record{}
+	for _, h := range chosen {
+		r := pool.records[h.ID]
+		out.Conversation = append(out.Conversation, h)
+		selected[r.ID] = r
+		if in.ConversationContext || out.evidenceSelectionFenced {
+			out.conversationRecords[Ref{Collection: "sources", ID: r.ID, Revision: r.Revision}] = r
 		}
 	}
 	spare := len(out.Conversation) * sessionLaneRunes

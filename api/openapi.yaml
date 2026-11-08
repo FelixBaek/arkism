@@ -53424,6 +53424,7 @@
             "properties": {
               "lanes": {"type": "array", "items": {"type": "string"}},
               "reranked": {"type": "boolean"},
+              "evidence_selection": {"type": "string", "enum": ["applied", "rerank_disabled", "unsupported_context", "unsupported_delivery", "unsupported_native", "unsupported_reranker", "unsupported_pool", "model_not_configured", "candidates_unavailable", "invalid_pool", "denied", "candidate_denied", "nothing_to_select", "prompt_too_large", "budget_exceeded", "timeout", "failed", "invalid_response", "character_budget"], "description": "Outcome of the opt-in joint evidence selector; omitted when disabled. Anything except applied retains the original selection. Existing final fences can still reject changed records."},
               "model_rerank": {"type": "string", "enum": ["applied", "failed", "denied", "nothing_to_send", "budget_exceeded", "model_not_configured"], "description": "Outcome of the model rerank; omitted when it did not run. Anything but applied kept the order."},
               "expand": {"type": "string", "enum": ["applied", "failed", "denied", "budget_exceeded", "model_not_configured"], "description": "Outcome of query expansion; omitted when it was off. Anything but applied ran plain recall."},
               "expand_queries": {"type": "array", "items": {"type": "string"}, "description": "The model's sub-queries that were searched (expand applied)."},
@@ -54501,6 +54502,7 @@
             "properties": {
               "lanes": {"type": "array", "items": {"type": "string"}},
               "reranked": {"type": "boolean"},
+              "evidence_selection": {"type": "string", "enum": ["applied", "rerank_disabled", "unsupported_context", "unsupported_delivery", "unsupported_native", "unsupported_reranker", "unsupported_pool", "model_not_configured", "candidates_unavailable", "invalid_pool", "denied", "candidate_denied", "nothing_to_select", "prompt_too_large", "budget_exceeded", "timeout", "failed", "invalid_response", "character_budget"], "description": "Outcome of the opt-in joint evidence selector; omitted when disabled. Anything except applied retains the original selection. Existing final fences can still reject changed records."},
               "model_rerank": {"type": "string", "enum": ["applied", "failed", "denied", "nothing_to_send", "budget_exceeded", "model_not_configured"], "description": "Outcome of the model rerank; omitted when it did not run. Anything but applied kept the order."},
               "expand": {"type": "string", "enum": ["applied", "failed", "denied", "budget_exceeded", "model_not_configured"], "description": "Outcome of query expansion; omitted when it was off. Anything but applied ran plain recall."},
               "expand_queries": {"type": "array", "items": {"type": "string"}, "description": "The model's sub-queries that were searched (expand applied)."},
@@ -78714,6 +78716,11 @@
             ],
             "default": 0,
             "description": "Internal candidate budget for active memory recall: 0 preserves existing behavior; 50 or 100 sets each ordinary memory lane and the fused memory pool, and the conversation-source lane and fused pool. Independent of local_expand; does not change final result or character limits. Partial rerankers and prune/dedup decisions retain their existing fused memory head. History, related-record, frozen-view and non-memory searches keep their existing bounds. The recall_quality block is inherited whole."
+          },
+          "evidence_selection": {
+            "type": "boolean",
+            "default": false,
+            "description": "Experimental joint memory/conversation selection by the configured server model; default false. Requires candidate_pool=100, internal active-memory recall with conversation sources and final limit at most 10. Every input candidate must pass model-transfer authorization; any private or denied candidate preserves the complete baseline. Rerank false, partial rerank/prune/dedup, active native ranking, history, related records, frozen views, whole_items, conversation_context, prefer_observations, source_facts and token budgets skip this selector. Whole selected text and summary must fit the existing separate character budgets. Errors, timeout, daily cap or invalid candidate-number output preserve the baseline. Explain.evidence_selection reports the outcome."
           }
         },
         "additionalProperties": false,
@@ -79887,6 +79894,11 @@
             ],
             "default": 0,
             "description": "Internal candidate budget for active memory recall: 0 preserves existing behavior; 50 or 100 sets each ordinary memory lane and the fused memory pool, and the conversation-source lane and fused pool. Independent of local_expand; does not change final result or character limits. Partial rerankers and prune/dedup decisions retain their existing fused memory head. History, related-record, frozen-view and non-memory searches keep their existing bounds. The recall_quality block is inherited whole."
+          },
+          "evidence_selection": {
+            "type": "boolean",
+            "default": false,
+            "description": "Experimental joint memory/conversation selection by the configured server model; default false. Requires candidate_pool=100, internal active-memory recall with conversation sources and final limit at most 10. Every input candidate must pass model-transfer authorization; any private or denied candidate preserves the complete baseline. Rerank false, partial rerank/prune/dedup, active native ranking, history, related records, frozen views, whole_items, conversation_context, prefer_observations, source_facts and token budgets skip this selector. Whole selected text and summary must fit the existing separate character budgets. Errors, timeout, daily cap or invalid candidate-number output preserve the baseline. Explain.evidence_selection reports the outcome."
           }
         },
         "additionalProperties": false,

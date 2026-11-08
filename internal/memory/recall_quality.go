@@ -56,6 +56,7 @@ const (
 
 // SpaceRecallQuality is the recall_quality block; the block is inherited whole.
 type SpaceRecallQuality struct {
+	EvidenceSelection     bool          `json:"evidence_selection,omitempty" bson:"evidence_selection,omitempty"`
 	CandidatePool         int           `json:"candidate_pool,omitempty" bson:"candidate_pool,omitempty"`
 	LocalExpand           bool          `json:"local_expand,omitempty" bson:"local_expand,omitempty"`
 	SignalPolicy          *SignalPolicy `json:"signal_policy,omitempty" bson:"signal_policy,omitempty"`

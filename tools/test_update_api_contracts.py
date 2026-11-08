@@ -16,6 +16,8 @@ class RecallCandidateContractTest(unittest.TestCase):
             "type": {"kind": "struct", "fields": [
                 {"name": "candidate_pool", "optional": True, "comment": "",
                  "type": {"kind": "name", "name": "int"}},
+                {"name": "evidence_selection", "optional": True, "comment": "",
+                 "type": {"kind": "name", "name": "bool"}},
                 {"name": "local_expand", "optional": True, "comment": "",
                  "type": {"kind": "name", "name": "bool"}},
             ]},
@@ -34,6 +36,14 @@ class RecallCandidateContractTest(unittest.TestCase):
                 self.assertEqual(pool["default"], 0)
                 self.assertNotIn("candidate_pool", shape.get("required", []))
                 self.assertFalse(shape["additionalProperties"])
+
+    def test_evidence_selection_is_an_optional_disabled_boolean(self):
+        for mode in ("Request", "Response"):
+            shape = self.schema(mode)
+            flag = shape["properties"]["evidence_selection"]
+            self.assertEqual(flag["type"], "boolean")
+            self.assertIs(flag["default"], False)
+            self.assertNotIn("evidence_selection", shape.get("required", []))
 
     def test_pool_constraint_does_not_change_local_expansion(self):
         for mode in ("Request", "Response"):

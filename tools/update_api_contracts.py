@@ -53,6 +53,10 @@ class Schemas:
                     "default": 0,
                     "description": "Internal candidate budget for active memory recall: 0 preserves existing behavior; 50 or 100 sets each ordinary memory lane and the fused memory pool, and the conversation-source lane and fused pool. Independent of local_expand; does not change final result or character limits. Partial rerankers and prune/dedup decisions retain their existing fused memory head. History, related-record, frozen-view and non-memory searches keep their existing bounds. The recall_quality block is inherited whole.",
                 })
+                shape["properties"]["evidence_selection"].update({
+                    "default": False,
+                    "description": "Experimental joint memory/conversation selection by the configured server model; default false. Requires candidate_pool=100, internal active-memory recall with conversation sources and final limit at most 10. Every input candidate must pass model-transfer authorization; any private or denied candidate preserves the complete baseline. Rerank false, partial rerank/prune/dedup, active native ranking, history, related records, frozen views, whole_items, conversation_context, prefer_observations, source_facts and token budgets skip this selector. Whole selected text and summary must fit the existing separate character budgets. Errors, timeout, daily cap or invalid candidate-number output preserve the baseline. Explain.evidence_selection reports the outcome.",
+                })
             shape["x-go-type"] = name
             shape["x-go-source"] = dto["source"]
             if dto["comment"]:
