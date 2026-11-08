@@ -435,6 +435,9 @@ func (s *Service) provisionalHits(ctx context.Context, token string, in SearchIn
 // vector) over another collection and fuses them, best first. The caller rechecks each row.
 func (s *Service) sideLane(ctx context.Context, collection string, in SearchInput, criteria SearchCriteria) ([]ScoredHit, error) {
 	lane := SearchInput{Scope: in.Scope, Query: in.Query, Modes: in.Modes, Limit: provisionalLaneLimit, SearchCriteria: criteria, space: in.space}
+	if collection == "sources" && localExpandOn(in, colMemories) {
+		lane.Limit = localRecallCandidateLimit
+	}
 	lists, err := s.Repo.SearchCollection(ctx, collection, lane, in.queryVector, in.querySpace)
 	if err != nil {
 		return nil, err
@@ -452,12 +455,12 @@ func (s *Service) sideLane(ctx context.Context, collection string, in SearchInpu
 				if in.optionalFailures != nil {
 					*in.optionalFailures = append(*in.optionalFailures, "local_expansion")
 				}
-				return fuseWeighted(original, provisionalLaneLimit, nil), nil
+				return fuseWeighted(original, lane.Limit, nil), nil
 			}
 			lists = append(lists, weighKeywordCoverage(sub, extra)...)
 		}
 	}
-	return fuseWeighted(lists, provisionalLaneLimit, nil), nil
+	return fuseWeighted(lists, lane.Limit, nil), nil
 }
 
 // closeCorrectedFact runs when a person approves a correction and keeps the old memory:

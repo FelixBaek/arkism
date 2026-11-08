@@ -50,8 +50,11 @@ func (s *Service) conversationTurns(ctx context.Context, token string, in Search
 	}
 	terms := searchQueryTerms(in.Query)
 	selected := map[string]Record{}
+	localSelection := localExpandOn(in, collection)
+	var candidates []ScoredHit
+	records := map[string]Record{}
 	for _, row := range rows {
-		if len(out.Conversation) == conversationLaneHits {
+		if !localSelection && len(out.Conversation) == conversationLaneHits {
 			break
 		}
 		r, err := s.Repo.Get(ctx, "sources", in.Scope, row.Hit.ID)
@@ -63,14 +66,36 @@ func (s *Service) conversationTurns(ctx context.Context, token string, in Search
 		}
 		h := HitFromRecord("sources", r)
 		var text string
-		if in.space.recallQuality().LocalExpand {
+		if localSelection {
 			text = conversationQueryExcerpt(in.Query, h.Text, sessionLaneRunes)
 		} else {
 			text = runeCutString(redactSessionPrivate(h.Text), sessionLaneRunes)
 		}
 		h.Origin, h.Text, h.Reasons, h.Authority, h.CollectedAt = conversationSourceKind, text, []string{conversationSourceKind}, AuthorityDataOnly, r.CollectedAt
-		if slices.Contains(row.Hit.Reasons, reasonVector) || lexicallyRelevant(terms, h) {
+		lexicalHit := h
+		if localSelection {
+			lexicalHit = Hit{Text: text} // omitted batch metadata is not returned evidence
+		}
+		if slices.Contains(row.Hit.Reasons, reasonVector) || lexicallyRelevant(terms, lexicalHit) {
+			if localSelection {
+				// Rank the authorized, redacted text that will actually be returned,
+				// rather than stopping at five matches of the unabridged batches.
+				candidates = append(candidates, ScoredHit{Hit: h, Score: row.Score})
+				records[r.ID] = r
+				continue
+			}
 			out.Conversation = append(out.Conversation, h)
+			selected[r.ID] = r
+			if in.ConversationContext {
+				out.conversationRecords[Ref{Collection: "sources", ID: r.ID, Revision: r.Revision}] = r
+			}
+		}
+	}
+	if localSelection {
+		chosen := selectConversationCandidates(in.Query, candidates, out.Items, out.Conversation, conversationLaneHits-len(out.Conversation))
+		out.Conversation = append(out.Conversation, chosen...)
+		for _, h := range chosen {
+			r := records[h.ID]
 			selected[r.ID] = r
 			if in.ConversationContext {
 				out.conversationRecords[Ref{Collection: "sources", ID: r.ID, Revision: r.Revision}] = r

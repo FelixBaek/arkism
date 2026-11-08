@@ -8,6 +8,10 @@ import (
 	"unicode/utf8"
 )
 
+// Internal candidate budgets, independent of the caller's final output budget.
+// Three ordinary lanes can contribute at most 150 distinct original candidates.
+const localRecallCandidateLimit = 50
+
 // Local expansion only removes question scaffolding or separates explicit
 // conjunctions. It never invents facts, synonyms, names or dates. It is opt-in
 // independently of model expansion and reuses the ordinary authorization gates.

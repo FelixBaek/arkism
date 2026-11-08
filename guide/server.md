@@ -998,6 +998,14 @@ the configured query embedder only when the caller may use it. It makes no
 language-model generation calls. It may increase query embedding and database
 work; enable only after a representative retrieval comparison. The new side-lane
 weights and query-focused conversation excerpts also require this setting.
+The opt-in path retrieves up to fifty candidates per ordinary memory lane before
+the final limit, retaining up to150 fused rows when no partial reranker or
+prune/dedup decision filter is active. Those filters retain their original fusion
+budget so an enlarged unscored tail cannot outrank their evaluated head.
+Conversation selection considers up to fifty candidates, rechecks access and
+scores only the authorized, redacted excerpt being returned. The final memory,
+conversation and character limits are unchanged. This extra database/auth work
+requires both quality and latency validation before enabling the option.
 With it off, prefix selection and existing side-lane/model-expansion weighting
 remain in use. In this mode,
 partial exact-keyword matches to a compound question receive proportionate

@@ -69,6 +69,9 @@ func (s *Service) fuseRecallHits(ctx context.Context, token string, lists [][]Hi
 	if recall || s.Reranker != nil {
 		n = in.Limit * 3
 	}
+	if localExpandOn(in, collection) && !s.partialRecallEvaluationOn(in) {
+		n = localRecallCandidateLimit * 3
+	}
 	rows := fuseWeighted(lists, n, trace.weights)
 	trace.noteFused(rows)
 	rows, err := s.rerankRows(ctx, in, d, rows, trace)
@@ -86,4 +89,14 @@ func (s *Service) fuseRecallHits(ctx context.Context, token string, lists [][]Hi
 		return decayByRecency(rows, now, weights, in.Limit), nil
 	}
 	return rows[:min(in.Limit, len(rows))], nil
+}
+
+// Existing rerankers evaluate a bounded head, not the complete fused pool.
+// Enlarging their unscored tail would mix incomparable scores and let that tail
+// displace evaluated hits. Preserve their original fusion budget until a
+// separately validated full-pool reranking contract is available.
+func (s *Service) partialRecallEvaluationOn(in SearchInput) bool {
+	crossEncoder := s.Reranker != nil && in.Rerank != rerankOff && spaceRerankOn(in.space)
+	decision := in.RerankOptions != nil && (in.RerankOptions.Prune || in.RerankOptions.Dedup)
+	return crossEncoder || modelRerankOn(in) || decision
 }

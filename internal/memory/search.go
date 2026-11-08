@@ -279,7 +279,12 @@ func (in SearchInput) retrieval(collection string) SearchInput {
 	if in.retrievalQuery != "" {
 		in.Query = in.retrievalQuery
 	}
-	if collection == colMemories && !in.IncludeInactive && in.space.recallQuality().diversityOn() {
+	if localExpandOn(in, collection) {
+		// The requested output size must not decide which candidates may
+		// compete for a slot. Keep this bounded pool identical at limits 10
+		// and 50; all authorization and relevance gates still run on it.
+		in.Limit = localRecallCandidateLimit
+	} else if collection == colMemories && !in.IncludeInactive && in.space.recallQuality().diversityOn() {
 		in.Limit = min(2*in.Limit, 50)
 	}
 	return in

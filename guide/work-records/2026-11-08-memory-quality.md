@@ -56,6 +56,50 @@ merge or issue closure are made. Temporary test clusters, completed worker trees
 and the owned benchmark services/binaries were removed; result rows and logs
 remain for review.
 
+## Continued retrieval work / 검색 개선 계속 진행
+
+The failed comparison above is not task completion. A new development iteration
+separates candidate retrieval from final selection. In the opt-in path, ordinary
+memory lanes now retrieve a fixed50 candidates and retain up to150 fused rows
+before recency/diversity selection when no partial reranker/decision filter is
+active. Conversation retrieval retains50 candidates
+before selecting five authorized, redacted excerpts. The caller's ten-memory,
+five-conversation and character budgets are unchanged; default-off, history,
+relationship and frozen-context contracts remain unchanged.
+
+The conversation selector compares the text actually returned to the question,
+with the original fusion score as the primary signal. Exact repeated passages
+of at least six words receive a small penalty. Negation, numbers and qualifications
+are preserved when deciding whether passages repeat. Vector-only matches are not
+discarded for lacking a lexical match. All sources are re-read and authorized
+before selection; this increases opt-in read/auth work.
+
+Read-only diagnostics found all80 evidence references missing from the previous
+limit50 run in active, embedded conversation sources. None was missing solely
+because a returned source's excerpt was cut. All624 conversation sources in this
+fixture already fit600 characters, so it cannot demonstrate the benefit of long
+source windowing. Separately, ordinary semantic-diversity selection penalized
+distinct activities and worsened all four categories; that approach was rejected.
+The server's vector-distance cap is unset, so relative vector pruning is not the
+cause of this run's failures. Pure vector ranking also regressed stronger lexical
+cases and was not adopted.
+
+Verification in progress: a candidate-width-only906-search comparison and a
+separate combined candidate-width/conversation-selection comparison use the
+unchanged evaluator. Focused Go checks passed (0.104s); neither those checks nor
+partial development scores establish the90% acceptance target. The first new
+PostgreSQL check failed during schema initialization on a temporary SQL_ASCII
+cluster; it is retained as an environment failure. The same focused selection
+then passed on a new UTF8 cluster:53 top-level tests, zero skips,1.996s.
+Independent review found that enlarging the fused tail while an existing reranker
+only scores its head can promote unscored results above evaluated ones. Those
+reranker/prune/dedup combinations now retain their original fusion budget.
+A regression actually runs the local reranker against fifty candidates and
+checks that its unscored tail cannot displace the evaluated head; the combined
+reranker-boundary selection passed (0.351s). Existing partial-rerank policies
+were not redesigned or represented as newly validated full-pool reranking.
+No production enablement or90% claim is made.
+
 ## Frozen acceptance / 고정 완료 기준
 
 The existing frozen harness asks 453 questions with 451 scorable evidence sets;
