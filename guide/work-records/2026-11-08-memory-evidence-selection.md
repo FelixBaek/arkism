@@ -76,9 +76,49 @@ seconds. The generated contracts match 102 management operations and their DTOs;
 OpenAPI structural validation covers 435 operations. These are structural counts,
 not 435 live HTTP requests. Generated SDK and diff checks passed.
 
-All service cases use constructed fixtures and fake model responses. The HTTP
-case exercises the real search handler through an in-process recorder, not a
-deployed server or a live model.
+The unit service cases use constructed fixtures and fake model responses. Their
+HTTP case exercises the real search handler through an in-process recorder.
+A separate acceptance run subsequently exercised five real HTTP requests against
+an isolated PostgreSQL database with bearer authorization and forced RLS. All five
+passed under the race detector (test time 3.35 seconds; including compilation
+48.08 seconds): disabled behavior returned ten memories and five conversations;
+the synthetic selector chose one memory and one conversation beyond the old
+output heads; an invalid number retained the exact baseline; a private candidate
+prevented an additional provider call; and erasing a source dependency during
+selection returned exactly HTTP 403 with `access_denied` and no result.
+
+This acceptance used an in-process synthetic provider, not semantic inference.
+It made three synthetic calls and recorded three usage-ledger rows, with zero
+embedding calls, actual model inference or external provider connections. Five
+response hashes and all 973 source-file hashes were independently rechecked.
+Including unsuccessful fixture/setup attempts, eight HTTP requests and four
+synthetic calls were preserved separately; unsuccessful attempts are not passes.
+The temporary child database, role and connections were removed. The executed
+private-overlay command was:
+
+```sh
+go test -p 2 -race -v -overlay "$MQ_R2_PRIVATE_OVERLAY" -run '^TestPrivateEvidenceSelectionPostgresHTTP$' -count=1 -timeout=5m ./internal/memory
+```
+
+The overlay, full command environment, response bodies, failed attempts and
+source hashes remain in private diagnostics; no private fixtures are added here.
+
+After the separately documented [read-fence timestamp repair](2026-11-08-fence-timestamp-stability.md),
+the identical synthetic overlay was run against the integrated tree again. All
+five HTTP cases passed under the race detector (3.70 seconds; including compilation
+45.36 seconds), with the same four200 responses and final403/access_denied. Five
+response hashes and all974 source-file hashes were checked. This second run used
+three synthetic provider calls, zero embedding calls and zero real inference.
+The earlier successful run and unsuccessful setup attempts remain separate.
+After all database checks finished, zero remaining child databases, test roles
+and other client connections were verified. The owned temporary PostgreSQL
+instance was stopped and its938,285,647-byte data copy removed; original inputs,
+logs and diagnostic artifacts remain. The clean, integrated selector worktree
+was removed after its source hashes had been retained.
+
+한국어: 별도 실제 PostgreSQL·HTTP·권한 검사 5개가 race 검사와 함께 통과했다.
+기존 동작, 후보 밖 선택, 잘못된 응답 복귀, 비공개 후보 차단, 선택 도중 원문
+삭제 차단을 확인했다. 합성 모델을 사용했으므로 검색 정확도 검증은 아니다.
 
 Executed commands used the already installed matching Go toolchain on PATH,
 with `GOTOOLCHAIN=local`, `GOPROXY=off` and `GOMAXPROCS=2`. No tool was downloaded.
@@ -118,14 +158,14 @@ Failed runs are not counted as passes.
 
 ## Limits / 남은 한계
 
-No actual model inference, external request, database acceptance test, production
-build, deployment or publication was performed. This change is an experimental
+No actual model inference, external provider request, production build, deployment
+or publication was performed. This change is an experimental
 selector integration, **not evidence that any category reaches 90%**. Fixed-input
 quality comparison and regression acceptance remain required before adoption.
 The input cap counts characters, not a provider tokenizer's exact context window;
 a provider context refusal retains the baseline. Broad/private candidate sets may
-legitimately refuse selection. Added authorization reads and model latency have
-not been measured against a live database. No UI was changed.
+legitimately refuse selection. The synthetic database acceptance does not establish real-model latency or
+representative authorization-read performance. No UI was changed.
 
 한국어: 최종 10개 기억·5개 대화와 기존 문자 예산을 유지하면서, 허용된 전체
 후보에서 보완적인 근거를 고르는 기본 비활성 실험 옵션이다. 모델이 쓴 사실을
