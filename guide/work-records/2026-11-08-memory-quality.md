@@ -9,8 +9,9 @@ Verified: integrated PostgreSQL memory suite passed with2029 top-level tests and
 explicit skips (726.896s); later retrieval corrections passed their combined
 selection (4.405s). Eleven additional real HTTP host/receipt tests passed (19.986s).
 API contract validation covered284 real HTTP cases; SDK tests and scoped vet passed.
-Both completed frozen quality comparisons failed acceptance. The final corrected
-comparison completed all906 searches; results are below. MQ1/MQ2 remain incomplete.
+Completed frozen quality comparisons failed acceptance. The latest intent-preserving
+comparison completed all906 searches normally; results are below. MQ1/MQ2 remain
+incomplete. Its focused checks passed61 tests without skips; updated scoped vet passed.
 Limits: no publication, production deployment, paid model calls or answer-quality
 claim. Only the previously authorized isolated offline recall harness is compiled.
 
@@ -19,6 +20,22 @@ claim. Only the previously authorized isolated offline recall harness is compile
 검증: 실제 DB 검색 집중 검사와 분야별 품질 판정기 검사를 실행했다. 통합 결과는 아래에 갱신한다.
 한계: 90%는 고정 질문의 근거 회수율 목표이며 답변 정확도나 모든 실제 업무의 성공률이 아니다.
 연구: 해당 없음
+
+## Latest completed comparison / 최근 완료 비교
+
+MQ3/MQ4/MQ5는 구현·기능 검증을 마쳤다. MQ1/MQ2의 모든 분야90% 목표는 미달이다.
+최근 질문 의도 보존 비교는453문항·906회 실제 검색을 정상 완료했다.
+검색 오류·`degraded` 표시·생성 모델 호출은 모두0이다.
+
+| 질문 분야 | 기존 근거 회수율 | 최근 후보 | 판정 |
+| --- | ---: | ---: | --- |
+| 여러 기억 연결 |59.55%|60.38%|90% 미달|
+| 날짜·시간 |91.09%|90.33%|기존 대비 하락|
+| 개방형 |61.46%|63.28%|90% 미달|
+| 단일 기억 |97.07%|97.49%|통과|
+
+추가 로컬 모델의 전체 비교는 진행 중이다. 기본값은 계속 `false`이며,
+이 결과로 생산 적용·전체 완료를 선언하지 않는다. 아래에는 실패한 과거 결과도 보존한다.
 
 ## Earlier completed comparison / 이전 완료 비교
 
