@@ -187,6 +187,21 @@ path, a shared6GiB memory limit, a600% CPU quota and a bounded lifetime. Its
 first300 pairs match the original pilot exactly. Results will not be scored
 until all453 questions complete and hashes/order/uniqueness are verified.
 
+A read-only candidate-ceiling audit independently rebuilt the vector rankings
+from existing cached query and candidate vectors, without model, embedding,
+database or external calls. It reproduced all453 questions,906 lane orders and
+45,300 candidate ID/text hashes in1.584s with one CPU thread and about290MiB RSS.
+The100+100 candidate lists were frozen from vectors before reading gold evidence.
+Their union-coverage ceilings are98.7455% multi-hop,100% temporal,95.3125%
+open-domain and99.5816% single-hop. The existing50+50 open-domain ceiling is
+88.28125% across32 scored questions, so reranking that pool alone cannot meet90%.
+With100+100, fully covered open-domain questions increase25 to28 and covered
+references58/68 to63/68. These are oracle candidate-inclusion bounds under the frozen harness mapping,
+including its approximate memory-provenance mapping, not achieved ranking quality: final10+5 selection and the6000-character memory budget remain
+required. The running model experiment's candidates, protocol and scores were
+not changed or evaluated by this audit. Its50+50 pool remains a ranking diagnostic,
+not a viable all-category acceptance candidate on its own.
+
 Post-review validation of the committed candidate and partial-rerank guard passed
 58 top-level PostgreSQL/related checks with no skips (4.128s), scoped vet and work
 record validation. Further retrieval work is continuing; none of these passed
