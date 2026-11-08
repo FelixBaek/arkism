@@ -3,6 +3,8 @@ name = "arkism-client"
 version = "0.2.0"
 description = "Thin client for the Arkism memory server API (generated from api/openapi.yaml)"
 license = "MIT"
+license-files = ["LICENSE"]
+readme = "README.md"
 requires-python = ">=3.9"
 dependencies = []
 keywords = ["arkism", "memory", "agents", "api-client"]

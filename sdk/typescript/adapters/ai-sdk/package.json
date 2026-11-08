@@ -8,6 +8,7 @@
     "url": "git+https://github.com/FelixBaek/arkism.git",
     "directory": "sdk/typescript/adapters/ai-sdk"
   },
+  "homepage": "https://github.com/FelixBaek/arkism/blob/main/guide/development.md#framework-adapters",
   "keywords": ["arkism", "memory", "agents", "ai-sdk"],
   "type": "module",
   "main": "dist/index.js",
@@ -25,7 +26,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "test": "node --experimental-strip-types --test test/*.test.ts"
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "prepublishOnly": "tsc -p ../../tsconfig.build.json && npm run build && npm test"
   },
   "peerDependencies": {
     "ai": ">=5",
@@ -36,5 +38,8 @@
     "arkism-client": "file:../..",
     "typescript": "6.0.3",
     "zod": "4.6.7"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

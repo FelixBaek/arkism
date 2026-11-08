@@ -313,6 +313,36 @@ for d in sdk/python/adapters/*/tests; do python3 -m unittest discover -s "$d"; d
 node --experimental-strip-types --test sdk/typescript/adapters/*/test/*.test.ts
 ```
 
+### Publishing the client packages
+
+The four packages (`arkism-client` and `arkism-ai-sdk` on npm, `arkism-client`
+and `arkism-langchain` on PyPI) share one version and are published together by
+`.github/workflows/sdk-publish.yml`. Its check job refuses to run unless the
+workflow runs on tag `sdk-vX.Y.Z` and every manifest says `X.Y.Z`; it then runs
+the offline tests, builds each package once and checks the files (`npm pack`,
+`twine check --strict`, with build tools pinned by hash in
+`tools/requirements-sdk-publish.txt`). The publish jobs upload exactly those
+files: npm with provenance, client before adapter; PyPI through trusted
+publishing.
+
+One-time setup, done by the repository owner:
+
+1. On PyPI, add a trusted publisher for each project (`arkism-client`,
+   `arkism-langchain`): this repository, workflow `sdk-publish.yml`,
+   environment `pypi`. Create the `pypi` environment in the repository settings.
+2. On npm, create a granular token that can publish only `arkism-client` and
+   `arkism-ai-sdk`, and store it as the repository secret `NPM_TOKEN`.
+
+Each release:
+
+1. Set the same version in `sdk/typescript/package.json`,
+   `sdk/typescript/adapters/ai-sdk/package.json` (and its `arkism-client` peer
+   range), `sdk/python/pyproject.toml` and
+   `sdk/python/adapters/langchain/pyproject.toml` (and its `arkism-client`
+   range), then merge.
+2. Tag the merged commit `sdk-vX.Y.Z` and push the tag.
+3. Run the `SDK publish` workflow on that tag with version `X.Y.Z`.
+
 ### Extension hooks
 
 A program that embeds `internal/memory` can add its own rules through

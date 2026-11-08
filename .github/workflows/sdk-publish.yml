@@ -1,0 +1,136 @@
+name: SDK publish
+
+# Publishes the four client packages (arkism-client and arkism-ai-sdk on npm,
+# arkism-client and arkism-langchain on PyPI) from one tag. A person creates the
+# tag sdk-vX.Y.Z and runs this workflow on it; every package version must equal
+# X.Y.Z. The check job builds each package once; the publish jobs only upload
+# those exact files.
+#
+# npm: secret NPM_TOKEN (granular automation token limited to the two packages).
+# PyPI: trusted publishing from environment "pypi"; no stored token.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (X.Y.Z); run on tag sdk-vX.Y.Z"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sdk-publish
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Tag and package versions agree
+        env:
+          VERSION: ${{ inputs.version }}
+          REF: ${{ github.ref }}
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "version must be X.Y.Z"; exit 1; }
+          [ "$REF" = "refs/tags/sdk-v$VERSION" ] || { echo "run this workflow on tag sdk-v$VERSION (got $REF)"; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Package manifests carry the requested version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          for f in sdk/typescript/package.json sdk/typescript/adapters/ai-sdk/package.json; do
+            v=$(node -p "require('./$f').version"); [ "$v" = "$VERSION" ] || { echo "$f is $v"; exit 1; }
+          done
+          for f in sdk/python/pyproject.toml sdk/python/adapters/langchain/pyproject.toml; do
+            v=$(python3 -c "import sys,tomllib; print(tomllib.load(open(sys.argv[1],'rb'))['project']['version'])" "$f")
+            [ "$v" = "$VERSION" ] || { echo "$f is $v"; exit 1; }
+          done
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - name: Install pinned TypeScript and adapter dependencies
+        run: npm ci --prefix sdk/typescript/adapters/ai-sdk --ignore-scripts --no-audit --no-fund
+      - name: Build and test the TypeScript packages
+        run: |
+          tsc=sdk/typescript/adapters/ai-sdk/node_modules/.bin/tsc
+          "$tsc" -p sdk/typescript/tsconfig.build.json
+          "$tsc" -p sdk/typescript/adapters/ai-sdk/tsconfig.build.json
+          node --experimental-strip-types --test sdk/typescript/test/*.test.ts
+          node --experimental-strip-types --test sdk/typescript/adapters/ai-sdk/test/*.test.ts
+      - name: Pack the npm tarballs
+        run: |
+          mkdir -p "$RUNNER_TEMP/npm"
+          npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP/npm" ./sdk/typescript ./sdk/typescript/adapters/ai-sdk
+          ls -l "$RUNNER_TEMP/npm"
+      - name: Python client and adapter tests (offline)
+        run: |
+          python3 -m unittest discover -s sdk/python/tests
+          python3 -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --target "$RUNNER_TEMP/adapter-deps" -r sdk/python/adapters/langchain/requirements-test.txt
+          PYTHONPATH="$RUNNER_TEMP/adapter-deps" python3 -m unittest discover -s sdk/python/adapters/langchain/tests
+      - name: Build and check the Python distributions
+        run: |
+          python3 -m venv "$RUNNER_TEMP/publish-tools"
+          "$RUNNER_TEMP/publish-tools/bin/pip" install --disable-pip-version-check --require-hashes --only-binary=:all: -r tools/requirements-sdk-publish.txt
+          for d in sdk/python sdk/python/adapters/langchain; do
+            "$RUNNER_TEMP/publish-tools/bin/python" -m build --no-isolation --outdir "$RUNNER_TEMP/pypi" "$d"
+          done
+          "$RUNNER_TEMP/publish-tools/bin/twine" check --strict "$RUNNER_TEMP"/pypi/*
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-packages
+          path: ${{ runner.temp }}/npm/*.tgz
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: python-distributions
+          path: ${{ runner.temp }}/pypi/*
+          if-no-files-found: error
+
+  npm:
+    needs: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: npm-packages
+          path: npm
+      - name: Publish the client before the adapter that depends on it
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          npm publish --provenance --access public --ignore-scripts "npm/arkism-client-$VERSION.tgz"
+          npm publish --provenance --access public --ignore-scripts "npm/arkism-ai-sdk-$VERSION.tgz"
+
+  pypi:
+    needs: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: python-distributions
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          packages-dir: dist

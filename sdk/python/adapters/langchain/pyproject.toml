@@ -3,8 +3,10 @@ name = "arkism-langchain"
 version = "0.2.0"
 description = "Arkism memory adapter for langchain-core: retriever, recall message, conversation capture and memory tools"
 license = "MIT"
+license-files = ["LICENSE"]
+readme = "README.md"
 requires-python = ">=3.9"
-dependencies = ["arkism-client>=0.2.0", "langchain-core>=0.3"]
+dependencies = ["arkism-client>=0.2.0,<0.3", "langchain-core>=0.3"]
 keywords = ["arkism", "memory", "agents", "langchain"]
 classifiers = [
     "Programming Language :: Python :: 3",
