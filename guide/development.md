@@ -302,11 +302,13 @@ review queue.
 Offline tests use fake server answers. CI installs each framework at a pinned
 version (`sdk/python/adapters/langchain/requirements-test.txt` with hashes,
 `sdk/typescript/adapters/ai-sdk/package-lock.json`) and runs them; without the
-framework installed, an adapter's tests skip with the reason. To run them locally:
+framework installed, an adapter's tests skip with the reason. The TypeScript
+adapter's lockfile links the in-repo `arkism-client` (`file:../..`), so it
+installs from a checkout without a registry copy. To run them locally:
 
 ```bash
 python3 -m pip install --require-hashes -r sdk/python/adapters/langchain/requirements-test.txt
-npm ci --prefix sdk/typescript/adapters/ai-sdk --legacy-peer-deps --ignore-scripts
+npm ci --prefix sdk/typescript/adapters/ai-sdk --ignore-scripts
 for d in sdk/python/adapters/*/tests; do python3 -m unittest discover -s "$d"; done
 node --experimental-strip-types --test sdk/typescript/adapters/*/test/*.test.ts
 ```

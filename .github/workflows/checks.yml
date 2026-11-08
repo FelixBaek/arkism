@@ -278,7 +278,7 @@ jobs:
           desktop/frontend/node_modules/.bin/tsc -p sdk/typescript
           node --experimental-strip-types --test sdk/typescript/test/*.test.ts
       - name: Install pinned framework for the adapter tests
-        run: npm ci --prefix sdk/typescript/adapters/ai-sdk --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+        run: npm ci --prefix sdk/typescript/adapters/ai-sdk --ignore-scripts --no-audit --no-fund
       - name: Framework adapter tests (offline)
         run: node --experimental-strip-types --test sdk/typescript/adapters/*/test/*.test.ts
 
