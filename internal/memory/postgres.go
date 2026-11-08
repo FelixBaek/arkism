@@ -606,14 +606,28 @@ func (p *Postgres) ClaimJob(ctx context.Context, now time.Time, lease time.Durat
 	}
 	var out Record
 	quarantined := false
-	e := p.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+	// A claim changes one locked row, so serializable predicate conflicts add
+	// retries without strengthening the lease fence. Existing caller-owned
+	// transactions retain their isolation through transactionWithIsolation.
+	e := p.transactionWithIsolation(ctx, pgx.ReadCommitted, func(ctx context.Context, tx Tx) (claimErr error) {
 		quarantined = false
 		pp := tx.(*Postgres)
+		restorePlan, err := pp.preferOrderedJobClaim(ctx)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			if err := restorePlan(); claimErr == nil {
+				claimErr = err
+			}
+		}()
 		kinds := append([]string{"embedding", webhookDeliveryKind, autoDeriveJobKind, deriveScheduleKind, captureMergeGateKind, approvedEntitiesJobKind}, erasureJobKinds...)
 		if pp.erasureOnly {
 			kinds = erasureJobKinds
 		}
-		rows, e := pp.q().Query(ctx, `SELECT id,workspace_id,project_id,user_id,agent_id,revision,kind,status,attempts,payload FROM memory_records WHERE collection='jobs' AND kind=ANY($1) AND ((status=ANY($2) AND (run_at IS NULL OR run_at<=$3)) OR (status='running' AND lease_until<=$3)) ORDER BY run_at,id LIMIT 1 FOR UPDATE SKIP LOCKED`, kinds, []string{JobStatusPending, JobStatusRetry}, now.UTC())
+		// An unnamed execution plans under this claim's local preference even if
+		// the connection already cached a different generic plan for this SQL.
+		rows, e := pp.q().Query(ctx, claimJobSelectSQL(len(kinds)), pgx.QueryExecModeExec, kinds, now.UTC())
 		if e != nil {
 			return pgErr(e)
 		}
@@ -631,11 +645,18 @@ func (p *Postgres) ClaimJob(ctx context.Context, now time.Time, lease time.Durat
 		var revision int64
 		var kind, status string
 		var attempts int
-		if e = rows.Scan(&id, &scope.WorkspaceID, &scope.ProjectID, &scope.UserID, &scope.AgentID, &revision, &kind, &status, &attempts, &b); e != nil {
+		var currentRunAt, snapshotRunAt *time.Time
+		if e = rows.Scan(&id, &scope.WorkspaceID, &scope.ProjectID, &scope.UserID, &scope.AgentID, &revision, &kind, &status, &attempts, &b, &currentRunAt, &snapshotRunAt); e != nil {
 			rows.Close()
 			return ErrUnavailable
 		}
 		rows.Close()
+		if e = restorePlan(); e != nil {
+			return e
+		}
+		if e = checkJobClaimPriority(currentRunAt, snapshotRunAt); e != nil {
+			return e
+		}
 		out, e = pgDecode(b)
 		if e != nil || out.ID != id || out.Scope != scope || out.Revision != revision || out.Kind != kind || out.Status != status || out.Attempts != attempts {
 			// Quarantine in the same committed transaction, preserving the exact

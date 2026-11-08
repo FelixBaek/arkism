@@ -46,6 +46,9 @@ var schemaSearchTokensNFCSQL string
 //go:embed migrations/0009_maintenance_gate.sql
 var schemaMaintenanceGateSQL string
 
+//go:embed migrations/0010_job_queue_indexes.sql
+var schemaJobQueueIndexesSQL string
+
 type schemaMigration struct {
 	version int
 	name    string
@@ -53,7 +56,7 @@ type schemaMigration struct {
 }
 
 func schemaMigrations() []schemaMigration {
-	return []schemaMigration{{1, "baseline", schemaBaselineSQL}, {2, "memory_context_search", schemaMemoryContextSearchSQL}, {3, "principal_token_lifecycle", schemaPrincipalTokenLifecycleSQL}, {4, "memory_graph_vector_index", schemaMemoryGraphVectorIndexSQL}, {5, "decision_daily_counts", schemaDecisionDailyCountsSQL}, {6, "named_entities", schemaNamedEntitiesSQL}, {7, "conversation_neighbors", schemaConversationNeighborsSQL}, {8, "search_tokens_nfc", schemaSearchTokensNFCSQL}, {9, "maintenance_gate", schemaMaintenanceGateSQL}}
+	return []schemaMigration{{1, "baseline", schemaBaselineSQL}, {2, "memory_context_search", schemaMemoryContextSearchSQL}, {3, "principal_token_lifecycle", schemaPrincipalTokenLifecycleSQL}, {4, "memory_graph_vector_index", schemaMemoryGraphVectorIndexSQL}, {5, "decision_daily_counts", schemaDecisionDailyCountsSQL}, {6, "named_entities", schemaNamedEntitiesSQL}, {7, "conversation_neighbors", schemaConversationNeighborsSQL}, {8, "search_tokens_nfc", schemaSearchTokensNFCSQL}, {9, "maintenance_gate", schemaMaintenanceGateSQL}, {10, "job_queue_indexes", schemaJobQueueIndexesSQL}}
 }
 
 func (m schemaMigration) checksum() string {
