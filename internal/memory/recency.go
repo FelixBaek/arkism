@@ -72,6 +72,9 @@ func (s *Service) fuseRecallHits(ctx context.Context, token string, lists [][]Hi
 	if localExpandOn(in, collection) && !s.partialRecallEvaluationOn(in) {
 		n = localRecallCandidateLimit * 3
 	}
+	if pool := in.candidatePool(collection); pool > 0 && !s.partialRecallEvaluationOn(in) {
+		n = pool
+	}
 	rows := fuseWeighted(lists, n, trace.weights)
 	trace.noteFused(rows)
 	rows, err := s.rerankRows(ctx, in, d, rows, trace)

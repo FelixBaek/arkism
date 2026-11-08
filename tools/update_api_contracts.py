@@ -45,6 +45,14 @@ class Schemas:
                     shape["properties"][field]["maxLength"] = 255
                 for field in ["workspace_id", "project_id"]:
                     shape["properties"][field]["minLength"] = 1
+            if name == "memory.SpaceRecallQuality":
+                # The Go DTO supplies the field/type; its valid method restricts
+                # this experimental budget to two explicit comparisons.
+                shape["properties"]["candidate_pool"].update({
+                    "enum": [0, 50, 100],
+                    "default": 0,
+                    "description": "Internal candidate budget for active memory recall: 0 preserves existing behavior; 50 or 100 sets each ordinary memory lane and the fused memory pool, and the conversation-source lane and fused pool. Independent of local_expand; does not change final result or character limits. Partial rerankers and prune/dedup decisions retain their existing fused memory head. History, related-record, frozen-view and non-memory searches keep their existing bounds. The recall_quality block is inherited whole.",
+                })
             shape["x-go-type"] = name
             shape["x-go-source"] = dto["source"]
             if dto["comment"]:

@@ -56,6 +56,7 @@ const (
 
 // SpaceRecallQuality is the recall_quality block; the block is inherited whole.
 type SpaceRecallQuality struct {
+	CandidatePool         int           `json:"candidate_pool,omitempty" bson:"candidate_pool,omitempty"`
 	LocalExpand           bool          `json:"local_expand,omitempty" bson:"local_expand,omitempty"`
 	SignalPolicy          *SignalPolicy `json:"signal_policy,omitempty" bson:"signal_policy,omitempty"`
 	RelevanceGate         *bool         `json:"relevance_gate,omitempty" bson:"relevance_gate,omitempty"`
@@ -74,7 +75,19 @@ type SpaceRecallQuality struct {
 
 func (q *SpaceRecallQuality) valid() bool {
 	return q == nil || (q.ConflictPending == "" || q.ConflictPending == conflictPendingAttach || q.ConflictPending == conflictPendingExclude) &&
-		q.SignalPolicy.valid() && q.ChunksMaxTokens >= 0 && q.ChunksMaxTokens <= includeTokensMax
+		q.SignalPolicy.valid() && q.ChunksMaxTokens >= 0 && q.ChunksMaxTokens <= includeTokensMax &&
+		(q.CandidatePool == 0 || q.CandidatePool == 50 || q.CandidatePool == 100)
+}
+
+// candidatePool is independent of query expansion and scoring so candidate
+// coverage can be compared without changing either. Zero preserves the existing
+// retrieval contracts, including the local expansion pool when it is enabled.
+// Historical, relationship, frozen and non-memory searches keep their own bounds.
+func (in SearchInput) candidatePool(collection string) int {
+	if collection != colMemories || in.IncludeInactive || in.RelatedTo != nil || in.contextView != nil {
+		return 0
+	}
+	return in.space.recallQuality().CandidatePool
 }
 
 // applyRecallDefaults fills the recall options the request left unset from the space.
@@ -437,6 +450,9 @@ func (s *Service) sideLane(ctx context.Context, collection string, in SearchInpu
 	lane := SearchInput{Scope: in.Scope, Query: in.Query, Modes: in.Modes, Limit: provisionalLaneLimit, SearchCriteria: criteria, space: in.space}
 	if collection == "sources" && localExpandOn(in, colMemories) {
 		lane.Limit = localRecallCandidateLimit
+	}
+	if collection == "sources" && in.candidatePool(colMemories) > 0 {
+		lane.Limit = in.candidatePool(colMemories)
 	}
 	lists, err := s.Repo.SearchCollection(ctx, collection, lane, in.queryVector, in.querySpace)
 	if err != nil {

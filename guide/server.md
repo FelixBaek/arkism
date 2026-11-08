@@ -990,6 +990,30 @@ To keep these running, write a systemd unit for each long-running command (`memo
 
 Backups for a server: [backup-restore.md](backup-restore.md). Discord bots: [discord.md](discord.md).
 
+### Recall candidate budget
+
+`recall_quality.candidate_pool` is an optional space setting accepting only `0`,
+`50` or `100`. Omitted or `0` preserves existing behavior, including the existing
+local-expansion budget when that option is enabled. A nonzero value sets the
+candidate read limit for each ordinary memory lane and the fused memory pool,
+and the conversation-source lane and its fused pool. It applies to active memory
+recall; history, related-record searches, frozen context views and searches of
+other collections retain their existing limits. Conversation sources still require
+the existing capture, include, destination and read-permission checks.
+
+This setting is independent of `local_expand`: changing only `candidate_pool`
+does not generate subqueries or enable different weighting, excerpts or selection
+rules. Partial rerankers and prune/dedup decision filters retain their existing
+fused memory head, so this setting alone does not make those filters score the
+entire larger pool. Disable those optional filters for a comparison of the full
+configured pools. The caller's final result and character limits remain unchanged.
+The `recall_quality` block is inherited and replaced as a whole; preserve its other
+settings when updating this field.
+
+More candidates increase database, authorization and selection work. Compare
+quality and latency before enabling a nonzero budget. Candidate inclusion is not
+final recall quality, and this option does not establish a 90% quality result.
+
 ### Local recall query expansion
 
 `recall_quality.local_expand` is an optional space setting (default `false`). It
@@ -1000,7 +1024,7 @@ work; enable only after a representative retrieval comparison.
 Question words, conditions, negation, tense and punctuation stay in each variant;
 ordinary questions do not generate an extra query by deleting these words.
 The new side-lane weights and query-focused conversation excerpts also require this setting.
-The opt-in path retrieves up to fifty candidates per ordinary memory lane before
+With `candidate_pool` omitted or `0`, the opt-in path retrieves up to fifty candidates per ordinary memory lane before
 the final limit, retaining up to150 fused rows when no partial reranker or
 prune/dedup decision filter is active. Those filters retain their original fusion
 budget so an enlarged unscored tail cannot outrank their evaluated head.

@@ -279,7 +279,9 @@ func (in SearchInput) retrieval(collection string) SearchInput {
 	if in.retrievalQuery != "" {
 		in.Query = in.retrievalQuery
 	}
-	if localExpandOn(in, collection) {
+	if pool := in.candidatePool(collection); pool > 0 {
+		in.Limit = pool
+	} else if localExpandOn(in, collection) {
 		// The requested output size must not decide which candidates may
 		// compete for a slot. Keep this bounded pool identical at limits 10
 		// and 50; all authorization and relevance gates still run on it.

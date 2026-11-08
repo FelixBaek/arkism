@@ -41,7 +41,7 @@ class GenerateSDKTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="arkism-sdk-types-") as tmp:
             root = Path(tmp)
             (root / "client.ts").write_text(ts)
-            (root / "acceptance.ts").write_text("""import type { SearchInput, ContextBuildInput } from './client';
+            (root / "acceptance.ts").write_text("""import type { SearchInput, ContextBuildInput, WireRequestSpaceRecallQuality, WireResponseSpaceRecallQuality } from './client';
 const scope = { workspace_id: 'w', project_id: 'p' };
 const search: SearchInput = {scope, query:'valve', conversation_context:true, budget_tokens:1000, token_encoding:'cl100k_base'};
 const context: ContextBuildInput = {scope, task:'valve', token_encoding:'cl100k_base', whole_items:true, best_effort_lanes:true};
@@ -51,7 +51,15 @@ const noScope: SearchInput = {query:'valve'};
 const badBudget: ContextBuildInput = {scope, task:'valve', token_encoding:'cl100k_base', budget_tokens:'many'};
 // @ts-expect-error option must be boolean
 const badOption: SearchInput = {scope, query:'valve', whole_items:'yes'};
-void [search,context,noScope,badBudget,badOption];
+const legacyPool: WireRequestSpaceRecallQuality = {};
+const explicitLegacy: WireRequestSpaceRecallQuality = {candidate_pool:0};
+const pool50: WireRequestSpaceRecallQuality = {candidate_pool:50, local_expand:false};
+const pool100: WireResponseSpaceRecallQuality = {candidate_pool:100};
+// @ts-expect-error only the explicit comparison budgets are accepted
+const arbitraryPool: WireRequestSpaceRecallQuality = {candidate_pool:51};
+// @ts-expect-error response budgets follow the same contract
+const oversizedPool: WireResponseSpaceRecallQuality = {candidate_pool:101};
+void [search,context,noScope,badBudget,badOption,legacyPool,explicitLegacy,pool50,pool100,arbitraryPool,oversizedPool];
 """)
             command = [compiler, "--noEmit", "--strict", "--skipLibCheck", "--target", "ES2022", "--module", "ESNext", "--moduleResolution", "bundler", str(root / "acceptance.ts")]
             result = subprocess.run(command, capture_output=True, text=True, timeout=120)
