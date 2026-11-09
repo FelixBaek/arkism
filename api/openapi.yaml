@@ -8975,7 +8975,7 @@
             }
           }},
         "operationId": "postV1MaintenanceProposalsByIdDecide"}},
-    "/v1/dream_runs": {"get": {"summary": "What dreaming did: the newest automatic consolidation runs of a scope (read:maintenance_proposals, human principals only)", "description": "Query scope fields and limit=1-50 (default 20). mode is auto (the worker applies the AI's judgements while the scope is idle, MEMORY_DREAM=auto, the default) or manual (every item waits for a person). Each item is {id, run}; run holds trigger idle|schedule, started_at, finished_at, outcome ok|item_limit|time_limit|model_limit|denied:<action>, model (the dream model, empty without one), model_calls, changes [{op approve|edit_approve|reject|supersede|expire|resolve|merge|insight|promote_skill, target, reason, confidence, before, after (statuses; reports hold no memory text), undone_at, undone_by}], skipped [{target, reason, confidence}] (up to MEMORY_DREAM_ITEMS; an item already reported at the same revision is not listed again) and skipped_more (new skips past those). The newest 50 runs per space are kept.", "parameters": [{"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 50}}], "responses": {"200": {"description": "Dream runs, newest first"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"},
+    "/v1/dream_runs": {"get": {"summary": "What dreaming did: the newest automatic consolidation runs of a scope (read:maintenance_proposals, human principals only)", "description": "Query scope fields and limit=1-50 (default 20). mode is auto (the worker applies the AI's judgements while the scope is idle, MEMORY_DREAM=auto, the default) or manual (every item waits for a person). Each item is {id, run}; run holds trigger idle|schedule, started_at, finished_at, outcome ok|item_limit|time_limit|model_limit|denied:<action>, model (the dream model, empty without one), model_calls, changes [{op approve|edit_approve|reject|supersede|expire|resolve|merge|insight|promote_skill|demote_skill, target, reason, confidence, before, after (statuses; reports hold no memory text), undone_at, undone_by}], skipped [{target, reason, confidence}] (up to MEMORY_DREAM_ITEMS; an item already reported at the same revision is not listed again) and skipped_more (new skips past those). The newest 50 runs per space are kept.", "parameters": [{"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 50}}], "responses": {"200": {"description": "Dream runs, newest first"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -80554,7 +80554,7 @@
         "properties": {
           "op": {
             "type": "string",
-            "description": "approve | edit_approve | reject | supersede | expire | resolve | merge | insight | promote_skill"
+            "description": "approve | edit_approve | reject | supersede | expire | resolve | merge | insight | promote_skill | demote_skill"
           },
           "target": {
             "type": "string"

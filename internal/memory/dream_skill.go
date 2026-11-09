@@ -4,7 +4,8 @@ package memory
 // type across at least three runs, confidence at least 0.7: promotionReason) becomes a skill. The dream
 // drafts it with its model through the skill generation path, updating the catalog skill the skill
 // search finds for the lesson when there is one, and makes the draft the skill's active version. Undo
-// puts the skill's earlier active version back. Each lesson group is promoted once: a later run neither
+// puts the skill's earlier active version back. A version promoted this way whose recorded uses mostly
+// fail is taken back again (dream_skill_outcome.go). Each lesson group is promoted once: a later run neither
 // drafts it again nor brings back a promotion a person undid.
 
 import (
@@ -18,8 +19,8 @@ import (
 
 // skills promotes the qualifying lesson groups of every task type with a lesson waiting.
 func (d *dreamer) skills(ctx context.Context) error {
-	if !d.modelReady() {
-		return nil
+	if err := d.demoteSkills(ctx); err != nil || !d.modelReady() {
+		return err
 	}
 	subjects, err := d.lessonSubjects(ctx)
 	if err != nil || len(subjects) == 0 {
@@ -179,15 +180,21 @@ func (d *dreamer) receipt(ctx context.Context, eventID string) bool {
 
 // draftRefusal: why a draft is not activated without a person ("" when it may be). It must add no
 // address, command, tool grant or permission that neither the version it replaces nor the lessons
-// carry, and a skill the deployment runs trials for waits for its trial.
+// carry, a revision must not be worse than the file it replaces (revisionWorse), and a skill the
+// deployment runs trials for waits for its trial.
 func (d *dreamer) draftRefusal(ctx context.Context, v Record, baseVersion string, lessons []string) string {
-	allowed := strings.Join(lessons, "\n")
+	allowed, baseFile := strings.Join(lessons, "\n"), ""
 	var base *SkillAnalysis
 	if b, err := d.s.Repo.Get(ctx, colSkillVersions, d.scope, baseVersion); baseVersion != "" && err == nil {
-		allowed, base = allowed+"\n"+d.versionMaterial(ctx, b), b.Analysis
+		baseFile, base = d.versionFile(ctx, b), b.Analysis
+		allowed += "\n" + analysisProse(base) + baseFile
 	}
-	if rule, token := riskyAddition(d.versionMaterial(ctx, v), allowed, v.Analysis, base); rule != "" {
+	file := d.versionFile(ctx, v)
+	if rule, token := riskyAddition(analysisProse(v.Analysis)+file, allowed, v.Analysis, base); rule != "" {
 		return "skill_risky_addition:" + rule + ":" + token
+	}
+	if reason := revisionWorse(baseFile, file, lessons); baseFile != "" && reason != "" {
+		return reason
 	}
 	if slices.ContainsFunc(d.s.SkillAutomationPolicies, func(p SkillAutomationPolicy) bool {
 		return p.Scope == d.scope && slices.Contains(p.SkillIDs, v.SkillID) && p.ExpiresAt.After(time.Now())
@@ -197,12 +204,54 @@ func (d *dreamer) draftRefusal(ctx context.Context, v Record, baseVersion string
 	return ""
 }
 
-// versionMaterial is what a skill version says in prose: its analysis's text fields and its skill file.
-func (d *dreamer) versionMaterial(ctx context.Context, v Record) string {
-	out := analysisProse(v.Analysis)
+// versionFile is the text of a skill version's file, each source after a line break.
+func (d *dreamer) versionFile(ctx context.Context, v Record) string {
+	out := ""
 	for _, ref := range v.Sources {
 		if src, err := d.s.Repo.Get(ctx, "sources", d.scope, ref.SourceID); err == nil && (src.Kind == "skill_file" || src.Kind == proposedSkillSourceKind) {
 			out += "\n" + src.Text
+		}
+	}
+	return out
+}
+
+// dreamRevisionCover is the share of a revision's new lines that must reuse the wording of the lessons
+// or of the file it replaces (character pairs, as faithful counts them).
+const dreamRevisionCover = 0.6
+
+// revisionWorse: why a revised skill file is worse than the one it replaces ("" when it is not). A
+// revision may replace a line or add lines; it may not drop more of the original's lines than it
+// writes, and what it writes must come from the lessons or the original, so a lesson that says little
+// cannot talk the model into steps nobody verified.
+// shortcut: a lesson that only removes a step is left to a person; allow it once lessons name the step they retire.
+func revisionWorse(base, next string, lessons []string) string {
+	old, cur := textLines(base), textLines(next)
+	lost, written := 0, []string{}
+	for _, line := range old {
+		if !slices.Contains(cur, line) {
+			lost++
+		}
+	}
+	for _, line := range cur {
+		if !slices.Contains(old, line) {
+			written = append(written, line)
+		}
+	}
+	if lost > len(written) {
+		return "skill_revision_drops_steps"
+	}
+	if len(written) > 0 && digestCover(digestGrams(strings.Join(written, "\n")), digestGrams(strings.Join(lessons, "\n")+"\n"+base)) < dreamRevisionCover {
+		return "skill_revision_unfaithful"
+	}
+	return ""
+}
+
+// textLines: the non-empty lines of text, trimmed.
+func textLines(text string) []string {
+	out := []string{}
+	for _, line := range strings.Split(text, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			out = append(out, line)
 		}
 	}
 	return out

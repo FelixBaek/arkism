@@ -81,7 +81,7 @@ type DreamRun struct {
 
 // DreamChange is one automatic change. Rows hold what undo needs; the rest is the readable summary.
 type DreamChange struct {
-	Op         string     `json:"op" bson:"op"` // approve | edit_approve | reject | supersede | expire | resolve | merge | insight | promote_skill
+	Op         string     `json:"op" bson:"op"` // approve | edit_approve | reject | supersede | expire | resolve | merge | insight | promote_skill | demote_skill
 	Target     string     `json:"target" bson:"target"`
 	Reason     string     `json:"reason" bson:"reason"`
 	Confidence float64    `json:"confidence" bson:"confidence"`

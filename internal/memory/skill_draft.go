@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -36,7 +37,7 @@ type SkillDrafter interface {
 type ChatSkillDrafter struct{ Config LLMConfig }
 
 func (a *ChatSkillDrafter) Generator() Generator {
-	return Generator{Model: a.Config.Model, PromptVersion: "skill-draft-v4", PipelineVersion: "arkism-skill-draft-v1"}
+	return Generator{Model: a.Config.Model, PromptVersion: "skill-draft-v5", PipelineVersion: "arkism-skill-draft-v1"}
 }
 
 func invalidSkillDraftInput(in SkillDraftInput) bool {
@@ -102,8 +103,16 @@ func normalizeSkillDraft(in SkillDraftInput, out *SkillDraft) error {
 	if !validAnalysis(analysis) || !safeTransfer(structuredText(out)) || !draftCapabilitiesWithin(in.BaselineAnalysis, analysis) {
 		return ErrDenied
 	}
+	// A draft is usable as written: it says when not to use the skill, and a new skill lists its steps
+	// (an existing skill keeps the form its owner gave it).
+	if len(analysis.AvoidWhen) == 0 || in.BaselineContent == "" && len(skillStepLine.FindAllString(out.Content, 2)) < 2 {
+		return ErrDenied
+	}
 	return nil
 }
+
+// skillStepLine is a numbered or bulleted line of a skill file.
+var skillStepLine = regexp.MustCompile(`(?m)^[ \t]*(\d+[.)]|[-*])[ \t]+\S`)
 
 // This bounds declared capabilities, not arbitrary natural-language behavior.
 // Independent evaluation and human approval remain mandatory.

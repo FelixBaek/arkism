@@ -14,10 +14,22 @@ type SkillTrialRecovery struct {
 	Evidence        []SkillTrialObservation `json:"evidence"`
 }
 
+// skillUseFailedSQL: a recorded use (source_events s) that failed, by its own status or counters or by an
+// independent failing evaluation in the use's own scope. $1..$3 are the workspace, project and user.
+const skillUseFailedSQL = `(s.payload->>'status' IN ('failure','validation_failed') OR (s.payload->>'tool_failures')::integer>0 OR (s.payload->>'runtime_errors')::integer>0 OR EXISTS (SELECT 1 FROM memory_records e WHERE e.collection='evaluations' AND e.workspace_id=$1 AND e.project_id=$2 AND e.user_id=$3 AND e.agent_id=s.agent_id AND e.status='active' AND e.doc->'target'->>'collection'='sources' AND e.doc->'target'->>'id'=s.id AND e.doc->'evaluation'->>'eval_type'<>'model_self' AND e.doc->'evaluation'->>'passed'='false'))`
+
+// SkillVersionOutcomes counts the recorded uses of one skill version and how many of them failed. Runs
+// are recorded under an agent while the skill usually lives in the user's agent-less scope, so a skill
+// of that scope counts the uses of every agent of the user.
+func (p *Postgres) SkillVersionOutcomes(ctx context.Context, scope Scope, version string) (uses, failed int, err error) {
+	err = p.q().QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE `+skillUseFailedSQL+`) FROM source_events s WHERE s.organization_id=$1 AND s.project_id=$2 AND s.user_id=$3 AND ($4='' OR s.agent_id=$4) AND s.kind=$5 AND s.payload->>'version_id'=$6`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, skillUsageEventKind, version).Scan(&uses, &failed)
+	return uses, failed, pgErr(err)
+}
+
 // Only potential regressions are selected; every returned canonical event and
 // independent evaluation is revalidated before disabling a selected version.
 func (p *Postgres) SkillRegressionSourceIDs(ctx context.Context, scope Scope, version string, since time.Time) ([]string, error) {
-	rows, e := p.q().Query(ctx, `SELECT s.id FROM source_events s WHERE s.organization_id=$1 AND s.project_id=$2 AND s.user_id=$3 AND s.agent_id=$4 AND s.kind=$5 AND s.payload->>'version_id'=$6 AND (s.payload->>'started_at')::timestamptz >= $7 AND (s.payload->>'status' IN ('failure','validation_failed') OR (s.payload->>'tool_failures')::integer>0 OR (s.payload->>'runtime_errors')::integer>0 OR EXISTS (SELECT 1 FROM memory_records e WHERE e.collection='evaluations' AND e.workspace_id=$1 AND e.project_id=$2 AND e.user_id=$3 AND e.agent_id=$4 AND e.status='active' AND e.doc->'target'->>'collection'='sources' AND e.doc->'target'->>'id'=s.id AND e.doc->'evaluation'->>'eval_type'<>'model_self' AND e.doc->'evaluation'->>'passed'='false')) ORDER BY s.id LIMIT 32`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, skillUsageEventKind, version, since)
+	rows, e := p.q().Query(ctx, `SELECT s.id FROM source_events s WHERE s.organization_id=$1 AND s.project_id=$2 AND s.user_id=$3 AND s.agent_id=$4 AND s.kind=$5 AND s.payload->>'version_id'=$6 AND (s.payload->>'started_at')::timestamptz >= $7 AND `+skillUseFailedSQL+` ORDER BY s.id LIMIT 32`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, skillUsageEventKind, version, since)
 	if e != nil {
 		return nil, pgErr(e)
 	}

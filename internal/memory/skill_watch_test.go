@@ -59,13 +59,16 @@ func unevaluated(t *testing.T, f *fixture, v Record) {
 	}
 }
 
-func failedUses(t *testing.T, f *fixture, v Record, n int) {
+func failedUses(t *testing.T, f *fixture, v Record, n int) { recordedUses(t, f, v, "failure", n) }
+
+// recordedUses stores n use events of the version that ended with status.
+func recordedUses(t *testing.T, f *fixture, v Record, status string, n int) {
 	t.Helper()
 	time.Sleep(2 * time.Millisecond)
 	for i := 0; i < n; i++ {
 		at := time.Now().UTC()
-		u := SkillUsage{SkillID: v.SkillID, Version: 2, VersionID: v.ID, ContentHash: v.Analysis.ContentHash, Runtime: "codex", Status: "failure", StartedAt: at, CompletedAt: at}
-		if e := f.repo.Insert(testCtx, "sources", Record{ID: fmt.Sprintf("use-%s-%d", v.ID, i), Scope: scopeA, Kind: skillUsageEventKind, Status: "active", Revision: 1, Text: structuredText(u), CreatedAt: at, UpdatedAt: at}); e != nil {
+		u := SkillUsage{SkillID: v.SkillID, Version: 2, VersionID: v.ID, ContentHash: v.Analysis.ContentHash, Runtime: "codex", Status: status, StartedAt: at, CompletedAt: at}
+		if e := f.repo.Insert(testCtx, "sources", Record{ID: fmt.Sprintf("use-%s-%s-%d", v.ID, status, i), Scope: scopeA, Kind: skillUsageEventKind, Status: "active", Revision: 1, Text: structuredText(u), CreatedAt: at, UpdatedAt: at}); e != nil {
 			t.Fatal(e)
 		}
 	}

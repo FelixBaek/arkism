@@ -18,7 +18,8 @@ func draftFixture() (SkillDraftInput, SkillDraft) {
 	a := *detailedSkillAnalysis()
 	a.Tools, a.APIs, a.Permissions, a.SecretNames, a.Dependencies, a.IrreversibleActions = nil, nil, nil, nil, nil, nil
 	a.Reads, a.Writes, a.ExternalTransfer = false, false, false
-	return in, SkillDraft{Content: "# 결과 확인\n제공된 검사 결과로 완료 여부를 판단한다. 실패하면 변경 제안을 철회한다.", Analysis: a}
+	a.AvoidWhen = []string{"검사 결과가 없을 때"}
+	return in, SkillDraft{Content: "# 결과 확인\n1. 제공된 검사 결과로 완료 여부를 판단한다.\n2. 실패하면 변경 제안을 철회한다.", Analysis: a}
 }
 
 func draftResponse(content string) map[string]any {
@@ -77,7 +78,7 @@ func TestChatSkillDraft(t *testing.T) {
 			t.Fatal("baseline identity/stats leaked or caller mutated")
 		}
 	}
-	if g := drafter.Generator(); !validGenerator(&g) || g.PromptVersion != "skill-draft-v4" {
+	if g := drafter.Generator(); !validGenerator(&g) || g.PromptVersion != "skill-draft-v5" {
 		t.Fatal("provenance")
 	}
 }

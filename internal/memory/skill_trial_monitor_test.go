@@ -22,6 +22,21 @@ func (x fakeTx) SkillRegressionSourceIDs(_ context.Context, scope Scope, version
 	}
 	return out, nil
 }
+func (f *fakeRepo) SkillVersionOutcomes(_ context.Context, scope Scope, version string) (uses, failed int, err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, r := range f.view().store["sources"] {
+		var u SkillUsage
+		if r.Scope != scope || r.Kind != skillUsageEventKind || json.Unmarshal([]byte(r.Text), &u) != nil || u.VersionID != version {
+			continue
+		}
+		uses++
+		if u.Status == "failure" || u.Status == "validation_failed" || u.ToolFailures > 0 || u.RuntimeErrors > 0 {
+			failed++
+		}
+	}
+	return uses, failed, nil
+}
 func TestSkillTrialMonitorDisablesFailedPromotionWithoutInventingBaseline(t *testing.T) {
 	f, candidate, trial, in := skillAutomationFixture(t)
 	if _, e := f.svc.ApplySkill(testCtx, testPrincipalToken("learner"), candidate.SkillID, in, false); e != nil {
