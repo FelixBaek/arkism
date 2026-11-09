@@ -183,7 +183,7 @@ func TestJevTypedContract(t *testing.T) {
 			t.Error("payload allowlist")
 		}
 		answers := map[string]any{
-			"selection":   map[string]any{"type": "choice", "choice": "a", "confidence": .95, "probabilities": map[string]float64{"a": 1}},
+			"selection":   map[string]any{"type": "choice", "choice": "a", "confidence": .95, "probabilities": map[string]float64{"a": 1, noneOfThem: 0}},
 			"c0_fit":      map[string]any{"type": "score", "score": 3, "confidence": .95, "probabilities": map[string]float64{"0": 0, "1": 0, "2": 0, "3": 1}},
 			"c0_conflict": map[string]any{"type": "noul", "noul": .01},
 			"c0_verify":   map[string]any{"type": "noul", "noul": .9},
@@ -254,7 +254,7 @@ func TestClefFlashJudgeAndJevFallback(t *testing.T) {
 	jevCalls := 0
 	jev := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		jevCalls++
-		_ = json.NewEncoder(w).Encode(map[string]any{"model": "jev-1.13.0", "answers": answers("a", map[string]float64{"a": 1})})
+		_ = json.NewEncoder(w).Encode(map[string]any{"model": "jev-1.13.0", "answers": answers("a", map[string]float64{"a": 1, noneOfThem: 0})})
 	}))
 	defer jev.Close()
 	down := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) }))
@@ -277,7 +277,7 @@ func TestClefFlashJudgeAndJevFallback(t *testing.T) {
 // candidates; neither is an outage (production fell back to rules ~1 in 5).
 func TestJevRoundedAndUnsureAnswersAreKept(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		answers := map[string]any{"selection": map[string]any{"type": "choice", "choice": "a", "confidence": .45, "probabilities": map[string]float64{"a": .45, "b": .54}}}
+		answers := map[string]any{"selection": map[string]any{"type": "choice", "choice": "a", "confidence": .45, "probabilities": map[string]float64{"a": .45, "b": .54, noneOfThem: 0}}}
 		for _, c := range []string{"c0", "c1"} {
 			answers[c+"_fit"] = map[string]any{"type": "score", "score": 1.34, "confidence": .63, "probabilities": map[string]float64{"0": .01, "1": .67, "2": .27, "3": .04}}
 			for _, s := range []string{"_conflict", "_verify", "_review"} {

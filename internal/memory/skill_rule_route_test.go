@@ -5,8 +5,10 @@ import "testing"
 func TestRuleRouteNeedsMeaningMatch(t *testing.T) {
 	c := []SkillCandidate{{ID: "a", Kind: "skill"}, {ID: "b", Kind: "skill"}}
 	embedded := map[string]Record{"a": {Embedding: &Embedding{}}}
-	keyword := ContextBundle{Items: []Hit{{ID: "a", Lanes: []string{"keyword"}}, {ID: "b", Lanes: []string{"vector"}}}}
-	both := ContextBundle{Items: []Hit{{ID: "a", Lanes: []string{"keyword", "vector"}}}}
+	keyword := ContextBundle{Items: []Hit{{ID: "a", laneRanks: map[string]int{"keyword": 1}}, {ID: "b", laneRanks: map[string]int{"vector": 1}}}}
+	both := ContextBundle{Items: []Hit{{ID: "a", laneRanks: map[string]int{"keyword": 3, "vector": 1}}}}
+	meaningOnly := ContextBundle{Items: []Hit{{ID: "a", laneRanks: map[string]int{"vector": 1}}}}
+	second := ContextBundle{Items: []Hit{{ID: "a", laneRanks: map[string]int{"keyword": 1, "vector": 2}}}}
 	noVector := ContextBundle{Items: keyword.Items, Degraded: []string{"memory_vector_unavailable"}}
 	for _, tc := range []struct {
 		name   string
@@ -16,7 +18,9 @@ func TestRuleRouteNeedsMeaningMatch(t *testing.T) {
 		want   string
 	}{
 		{"keyword-only top hit is offered, not applied", keyword, nil, embedded, ""},
-		{"meaning lane agrees", both, nil, embedded, "a"},
+		{"meaning-only top hit is offered, not applied", meaningOnly, nil, embedded, ""},
+		{"meaning lane's second choice is offered, not applied", second, nil, embedded, ""},
+		{"both lanes name it", both, nil, embedded, "a"},
 		{"meaning lane down keeps the keyword pick", noVector, nil, embedded, "a"},
 		{"meaning lane not asked keeps the keyword pick", keyword, []string{"exact", "fts"}, embedded, "a"},
 		{"skill not embedded yet keeps the keyword pick", keyword, nil, nil, "a"},
@@ -26,7 +30,27 @@ func TestRuleRouteNeedsMeaningMatch(t *testing.T) {
 			t.Fatalf("%s: selected %q judgments %d", tc.name, out.SelectedID, len(out.Judgments))
 		}
 	}
+	if _, criteria, ids := jevQuestions(c); len(criteria) != 3 || ids[2] != noneOfThem {
+		t.Fatal("the judge must always be able to refuse every candidate", ids)
+	}
 	if ruleRouteConfident(nil, embedded, both, nil) {
 		t.Fatal("no candidates cannot be confident")
+	}
+}
+
+func TestFusionKeepsLaneRanksAndRouteOrdersByMeaning(t *testing.T) {
+	hit := func(id, reason string) Hit {
+		return Hit{ID: id, Origin: "memory", Collection: colSkillVersions, Reasons: []string{reason}}
+	}
+	fused := fuseWeighted([][]Hit{{hit("a", reasonTextSearch), hit("b", reasonTextSearch)}, {hit("c", reasonVector), hit("b", reasonVector)}}, 3, nil)
+	ranks := map[string]map[string]int{}
+	for _, h := range fused {
+		ranks[h.ID] = h.laneRanks
+	}
+	if ranks["b"]["keyword"] != 2 || ranks["b"]["vector"] != 2 || ranks["c"]["vector"] != 1 || len(ranks["a"]) != 1 {
+		t.Fatal(ranks)
+	}
+	if meaningRank(Hit{}) <= meaningRank(Hit{laneRanks: map[string]int{"vector": 8}}) {
+		t.Fatal("a hit the meaning lane missed must come after one it found")
 	}
 }

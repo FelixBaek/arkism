@@ -3,6 +3,7 @@
 package memory
 
 import (
+	"errors"
 	"math"
 	"testing"
 	"time"
@@ -24,11 +25,17 @@ func TestIntegrationVectorCutDropsWeakNeighbours(t *testing.T) {
 		if err := p.Insert(testCtx, colMemories, r); err != nil {
 			t.Fatal(err)
 		}
+		parent := r
+		parent.ID, parent.ActiveVersion, parent.Embedding, r.SkillID = "skill-"+id, id, nil, "skill-"+id
+		if err := errors.Join(p.Insert(testCtx, colSkills, parent), p.Insert(testCtx, colSkillVersions, r)); err != nil {
+			t.Fatal(err)
+		}
 	}
 	query := unit(1)
+	collection := colMemories
 	ids := func(maxDist float64) []string {
 		p.SetVectorMaxDistance(maxDist)
-		lanes, err := p.SearchCollection(testCtx, colMemories, SearchInput{Scope: scopeA, Limit: 8, Modes: []string{"vector"}}, query, "test:1:1024d")
+		lanes, err := p.SearchCollection(testCtx, collection, SearchInput{Scope: scopeA, Limit: 8, Modes: []string{"vector"}}, query, "test:1:1024d")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -52,5 +59,10 @@ func TestIntegrationVectorCutDropsWeakNeighbours(t *testing.T) {
 	// Nothing is near an unrelated question.
 	if got := ids(0.15); len(got) != 0 {
 		t.Fatal("far neighbours returned", got)
+	}
+	// Skills keep their three nearest past the ceiling: the router, not the lane, decides whether any fits.
+	collection = colSkillVersions
+	if got := ids(0.15); len(got) != 3 || got[0] != "near" || got[2] != "third" {
+		t.Fatal("skill lane must keep the nearest", got)
 	}
 }

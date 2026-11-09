@@ -487,6 +487,8 @@ type Hit struct {
 	Relations   []Ref       `json:"relations,omitempty" bson:"relations"`
 	Reasons     []string    `json:"reasons" bson:"reasons"`
 	Authority   string      `json:"authority" bson:"authority"`
+	// laneRanks is the hit's best 1-based position in each lane that found it (fusion fills it).
+	laneRanks map[string]int
 	// Repository-only evidence that its configured vector distance gate ran.
 	// Service rehydrates, authorizes and recomputes before exposing VectorMatch.
 	vectorDistanceLimit float64

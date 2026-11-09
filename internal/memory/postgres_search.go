@@ -300,12 +300,18 @@ const vectorKeepNearest = 3
 // within vectorRelativeCut of the best visible match, or among the vectorKeepNearest closest.
 // The nearest are taken over the same tenant and lane predicate, so filters and RLS bound
 // them exactly like the rows themselves.
-func pgVectorCut(where string, vectorParam int, maxDistance float64) string {
+// keepNearest lets the vectorKeepNearest closest pass maxDistance too: a request that needs a
+// skill seldom reads like the skill's text, so a small catalog's nearest few stay candidates
+// and only the service's VectorMatch says which are close.
+func pgVectorCut(where string, vectorParam int, maxDistance float64, keepNearest bool) string {
 	distance := fmt.Sprintf("embedding <=> $%d::vector", vectorParam)
 	nearest := fmt.Sprintf("(SELECT %s AS d FROM memory_records WHERE collection=$1 AND workspace_id=$2 AND project_id=$3 AND user_id=$4 AND agent_id=$5 AND (%s) ORDER BY 1 LIMIT %d) nearest",
 		distance, where, vectorKeepNearest)
-	cut := fmt.Sprintf("(SELECT GREATEST(1-%g*(1-min(d)), max(d)) FROM %s)", vectorRelativeCut, nearest)
-	return where + fmt.Sprintf(" AND %s <= LEAST(%g, %s)", distance, maxDistance, cut)
+	bound := fmt.Sprintf("LEAST(%g, (SELECT GREATEST(1-%g*(1-min(d)), max(d)) FROM %s))", maxDistance, vectorRelativeCut, nearest)
+	if keepNearest {
+		bound = fmt.Sprintf("(SELECT GREATEST(LEAST(%g, 1-%g*(1-min(d))), max(d)) FROM %s)", maxDistance, vectorRelativeCut, nearest)
+	}
+	return where + fmt.Sprintf(" AND %s <= %s", distance, bound)
 }
 
 func vectorSQL(vector []float64) string {
@@ -361,7 +367,7 @@ func (p *Postgres) pgLane(ctx context.Context, collection string, scope Scope, c
 	where, params := pgSearchWhere(criteria, collection, now, extra, args)
 	if lane == "vector" && p.vectorMaxDistance > 0 {
 		_, stateArgs := pgSearchState(criteria, now, 6)
-		where = pgVectorCut(where, 6+len(stateArgs)+1, p.vectorMaxDistance)
+		where = pgVectorCut(where, 6+len(stateArgs)+1, p.vectorMaxDistance, collection == colSkillVersions)
 	}
 	order := "updated_at DESC, id ASC"
 	_, stateParams := pgSearchState(criteria, now, 6)

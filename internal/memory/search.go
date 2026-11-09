@@ -196,10 +196,19 @@ func mergeFusionLane(merged map[string]*fusedEntry, lane int, list []Hit, weight
 		entry := merged[key]
 		if entry == nil {
 			hit.Reasons = slices.Clone(hit.Reasons)
+			hit.laneRanks = map[string]int{}
 			entry = &fusedEntry{ScoredHit: ScoredHit{Hit: hit}, key: key}
 			merged[key] = entry
 		}
 		entry.Lanes = append(entry.Lanes, lane)
+		for _, reason := range hit.Reasons {
+			if name, ok := laneByReason[reason]; ok {
+				if best := entry.laneRanks[name]; best == 0 || position+1 < best {
+					entry.laneRanks[name] = position + 1
+				}
+				break
+			}
+		}
 		if entry.VectorMatch == nil && hit.VectorMatch != nil {
 			entry.VectorMatch = hit.VectorMatch
 		}
