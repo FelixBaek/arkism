@@ -8975,7 +8975,7 @@
             }
           }},
         "operationId": "postV1MaintenanceProposalsByIdDecide"}},
-    "/v1/dream_runs": {"get": {"summary": "What dreaming did: the newest automatic consolidation runs of a scope (read:maintenance_proposals, human principals only)", "description": "Query scope fields and limit=1-50 (default 20). mode is auto (the worker applies the AI's judgements while the scope is idle, MEMORY_DREAM=auto, the default) or manual (every item waits for a person). Each item is {id, run}; run holds trigger idle|schedule, started_at, finished_at, outcome ok|item_limit|time_limit|denied:<action>, changes [{op approve|edit_approve|reject|supersede|expire, target, reason, confidence, before, after, undone_at, undone_by}] and skipped [{target, reason, confidence}].", "parameters": [{"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 50}}], "responses": {"200": {"description": "Dream runs, newest first"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"},
+    "/v1/dream_runs": {"get": {"summary": "What dreaming did: the newest automatic consolidation runs of a scope (read:maintenance_proposals, human principals only)", "description": "Query scope fields and limit=1-50 (default 20). mode is auto (the worker applies the AI's judgements while the scope is idle, MEMORY_DREAM=auto, the default) or manual (every item waits for a person). Each item is {id, run}; run holds trigger idle|schedule, started_at, finished_at, outcome ok|item_limit|time_limit|denied:<action>, changes [{op approve|edit_approve|reject|supersede|expire, target, reason, confidence, before, after (statuses; reports hold no memory text), undone_at, undone_by}], skipped [{target, reason, confidence}] (up to MEMORY_DREAM_ITEMS; an item already reported at the same revision is not listed again) and skipped_more (new skips past those). The newest 50 runs per space are kept.", "parameters": [{"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 50}}], "responses": {"200": {"description": "Dream runs, newest first"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -8998,7 +8998,7 @@
             }
           }},
         "operationId": "getV1DreamRuns"}},
-    "/v1/dream_runs/{id}/undo": {"post": {"summary": "Undo one change of a dream run, or the whole run (human principals only)", "description": "Body {scope, change}. change is the index of one change in run.changes; without it every change of the run is undone, newest first. Each row the change wrote is put back as it was, only while nobody changed it since: an approval is withdrawn (the memory becomes rejected), a merged pair proposal is dismissed, a superseded, expired or rejected row gets its earlier state. Undone rows are tagged dream-undone so a later dream leaves them alone. Needs write:maintenance_proposals and transition:memories. undone lists the changes undone now; conflicts the ones a later write blocks (left as they are).", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "{undone, conflicts, run}"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "404": {"description": "No such dream run"},
+    "/v1/dream_runs/{id}/undo": {"post": {"summary": "Undo one change of a dream run, or the whole run (human principals only)", "description": "Body {scope, change}. change is the index of one change in run.changes; without it every change of the run is undone, newest first. Each row the change wrote gets its earlier status back, only while nobody changed or deleted it since: an approval is withdrawn (the memory becomes rejected), a merged pair proposal is dismissed, a superseded, expired or rejected row gets its earlier status (a review entry also loses the dream's review). Undone rows are tagged dream-undone so a later dream leaves them alone. Needs write:maintenance_proposals and transition:memories. undone lists the changes undone now; conflicts the ones a later write blocks (left as they are).", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "{undone, conflicts, run}"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "404": {"description": "No such dream run"},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -80525,6 +80525,9 @@
                 "type": "null"
               }
             ]
+          },
+          "skipped_more": {
+            "type": "integer"
           }
         },
         "additionalProperties": false,
@@ -80557,10 +80560,11 @@
           },
           "before": {
             "type": "string",
-            "description": "status and text before"
+            "description": "status before (\"\" when the change created the row)"
           },
           "after": {
-            "type": "string"
+            "type": "string",
+            "description": "status after"
           },
           "undone_at": {
             "type": "string",

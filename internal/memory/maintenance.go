@@ -420,20 +420,25 @@ func forgetRefs(p MaintenanceProposal, decision string) []Ref {
 func (s *Service) decideTx(ctx context.Context, scope Scope, seen Record, mark *ConflictInput, forget []Ref, removal *Removal, status, decision, principal, role string) (Record, error) {
 	var out Record
 	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		if forget != nil {
-			for _, ref := range forget {
-				if err := forgetMemoryTx(ctx, tx, scope, ref, *removal, principal); err != nil {
-					return err
-				}
-			}
-		} else if err := changeMemories(ctx, tx, scope, seen, mark, principal, role); err != nil {
-			return err
-		}
 		var err error
-		out, err = closeMaintenanceTx(ctx, tx, scope, seen, status, decision, principal)
+		out, err = decideInTx(ctx, tx, scope, seen, mark, forget, removal, status, decision, principal, role)
 		return err
 	})
 	return out, err
+}
+
+// decideInTx is decideTx in the caller's transaction (the dream reads the revisions it left there).
+func decideInTx(ctx context.Context, tx Tx, scope Scope, seen Record, mark *ConflictInput, forget []Ref, removal *Removal, status, decision, principal, role string) (Record, error) {
+	if forget != nil {
+		for _, ref := range forget {
+			if err := forgetMemoryTx(ctx, tx, scope, ref, *removal, principal); err != nil {
+				return Record{}, err
+			}
+		}
+	} else if err := changeMemories(ctx, tx, scope, seen, mark, principal, role); err != nil {
+		return Record{}, err
+	}
+	return closeMaintenanceTx(ctx, tx, scope, seen, status, decision, principal)
 }
 
 // changeMemories supersedes one memory (mark set) or, for dismiss, only checks

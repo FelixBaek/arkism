@@ -1,9 +1,9 @@
 package memory
 
 // What dreaming did, and undoing it: a person lists the runs (each change with
-// before and after, reason and confidence, and what was skipped) and undoes one
-// change or a whole run. Undo puts each row the change wrote back as it was,
-// only while no one has changed the row since; an approval the dream made is
+// the status before and after, reason and confidence, and what was skipped) and
+// undoes one change or a whole run. Undo puts each row's status back, only while
+// no one has changed the row since (a deleted row counts as changed); an approval the dream made is
 // withdrawn (the memory moves to rejected) and a pair it merged is dismissed, so
 // the next dream leaves both alone. Every row undo touches is tagged so the
 // dream never redoes it.
@@ -144,6 +144,9 @@ func undoDreamChange(ctx context.Context, tx Tx, scope Scope, runID string, i in
 // undoDreamRow puts one row back, only at the revision the dream left it.
 func undoDreamRow(ctx context.Context, tx Tx, scope Scope, row dreamRow, principal string, now time.Time) error {
 	cur, err := tx.Get(ctx, row.Collection, scope, row.ID)
+	if errors.Is(err, ErrNotFound) {
+		return ErrConflict // deleted since: nothing to put back, the rest of the run still undoes
+	}
 	if err != nil {
 		return err
 	}
@@ -156,11 +159,15 @@ func undoDreamRow(ctx context.Context, tx Tx, scope Scope, row dreamRow, princip
 		p := *cur.Maintenance // the merged pair stays two: the person's dismiss
 		p.Decision, p.DecidedBy, p.DecidedAt = "dismiss", principal, &now
 		next.Maintenance, next.Status = &p, maintenanceDecisions["dismiss"]
-	case row.Before == nil:
+	case row.BeforeStatus == "":
 		next.Status = "rejected" // an approval the dream made is withdrawn
 	default:
-		next = *row.Before
-		next.Embedding = cur.Embedding
+		// The dream changed only the status (and a conflict id it cleared again); a candidate also got
+		// the dream's review, which goes with it.
+		next.Status, next.ConflictID = row.BeforeStatus, ""
+		if row.Collection == "memory_candidates" {
+			next.Review = nil
+		}
 	}
 	if !slices.Contains(next.Tags, dreamUndoneTag) {
 		next.Tags = append(slices.Clone(next.Tags), dreamUndoneTag)

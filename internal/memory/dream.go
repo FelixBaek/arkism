@@ -52,6 +52,9 @@ type DreamJob struct {
 	LastActivity  *time.Time `json:"last_activity,omitempty" bson:"last_activity,omitempty"`
 	LastRun       *time.Time `json:"last_run,omitempty" bson:"last_run,omitempty"`
 	Outcome       string     `json:"outcome,omitempty" bson:"outcome,omitempty"`
+	// Skipped remembers what earlier runs left for a person, by target and revision, so a run does not
+	// log it again until the item itself changes.
+	Skipped map[string]int64 `json:"-" bson:"skipped,omitempty"`
 }
 
 // DreamRun is one run's report: what it changed, what it skipped and why.
@@ -62,6 +65,9 @@ type DreamRun struct {
 	Outcome    string        `json:"outcome" bson:"outcome"` // running | ok | item_limit | time_limit | denied:<action>
 	Changes    []DreamChange `json:"changes" bson:"changes"`
 	Skipped    []DreamSkip   `json:"skipped" bson:"skipped"`
+	// SkippedMore counts new skips past the logged ones (MEMORY_DREAM_ITEMS of them).
+	SkippedMore int `json:"skipped_more,omitempty" bson:"skipped_more,omitempty"`
+	seen        map[string]int64
 }
 
 // DreamChange is one automatic change. Rows hold what undo needs; the rest is the readable summary.
@@ -70,19 +76,20 @@ type DreamChange struct {
 	Target     string     `json:"target" bson:"target"`
 	Reason     string     `json:"reason" bson:"reason"`
 	Confidence float64    `json:"confidence" bson:"confidence"`
-	Before     string     `json:"before" bson:"before"` // status and text before
-	After      string     `json:"after" bson:"after"`
+	Before     string     `json:"before" bson:"before"` // status before ("" when the change created the row)
+	After      string     `json:"after" bson:"after"`   // status after
 	UndoneAt   *time.Time `json:"undone_at,omitempty" bson:"undone_at,omitempty"`
 	UndoneBy   string     `json:"undone_by,omitempty" bson:"undone_by,omitempty"`
 	Rows       []dreamRow `json:"-" bson:"rows"`
 }
 
-// dreamRow is one row a change wrote: its earlier state (nil when the change created it) and the revision it left.
+// dreamRow is one row a change wrote: its status before ("" when the change created it) and the revision
+// the change left, read in the changing transaction. No text: reports live in jobs, which erasure skips.
 type dreamRow struct {
-	Collection    string  `bson:"collection"`
-	ID            string  `bson:"id"`
-	Before        *Record `bson:"before,omitempty"`
-	AfterRevision int64   `bson:"after_revision"`
+	Collection    string `bson:"collection"`
+	ID            string `bson:"id"`
+	BeforeStatus  string `bson:"before_status,omitempty"`
+	AfterRevision int64  `bson:"after_revision"`
 }
 
 // DreamSkip is an item the run left for a person, with why.
@@ -196,7 +203,8 @@ func queueDream(ctx context.Context, tx Tx, scope Scope, set dreamSettings, now 
 }
 
 // runDream runs one dream with the worker's credentials and stores the job: pending again after the
-// next idle window when work remains or new work arrived, after every when it skipped items, else done.
+// next idle window when a stage hit its limit or new work arrived, after every when it left new items
+// for a person, else done.
 func (s *Service) runDream(ctx context.Context, workerToken string, job Record) error {
 	set := dreamConfig()
 	state := DreamJob{}
@@ -204,7 +212,7 @@ func (s *Service) runDream(ctx context.Context, workerToken string, job Record) 
 		state = *job.Dream
 	}
 	started := time.Now().UTC()
-	run := &DreamRun{Outcome: "manual", StartedAt: started}
+	run := &DreamRun{Outcome: "manual", StartedAt: started, seen: state.Skipped}
 	if set.auto {
 		run.Trigger = "idle"
 		if state.LastActivity != nil && state.LastActivity.Add(set.idle).After(started) {
@@ -216,7 +224,7 @@ func (s *Service) runDream(ctx context.Context, workerToken string, job Record) 
 		}
 	}
 	now := time.Now().UTC()
-	state.LastRun, state.Outcome, state.FirstActivity = &now, run.Outcome, nil
+	state.LastRun, state.Outcome, state.FirstActivity, state.Skipped = &now, run.Outcome, nil, run.seen
 	next, due := now.Add(set.every), set.auto && len(run.Skipped) > 0
 	if set.auto && (run.Outcome == "item_limit" || run.Outcome == "time_limit" || s.newCandidateSince(ctx, job.Scope, started)) {
 		next, due = now.Add(set.idle), true
@@ -257,13 +265,20 @@ type dreamer struct {
 	principal string
 	runID     string
 	run       *DreamRun
+	known     map[string]int64 // skips earlier runs logged
 	deadline  time.Time
+	stageFrom int       // changes before the current stage
+	stageEnd  time.Time // the current stage's share of the time limit
+	limit     string    // the first limit a stage hit
 }
 
-// dream checks the worker's grants, stores the run report and applies what it may, within the run's limits.
+// dream checks the worker's grants, stores the run report and applies what it may. Each stage (pair
+// proposals, review entries, expiry) gets its own item limit and an even share of the time left, so a
+// full first stage never starves the others.
 func (s *Service) dream(ctx context.Context, token string, scope Scope, set dreamSettings, run *DreamRun) (*DreamRun, error) {
 	run.Outcome, run.Changes, run.Skipped = "running", []DreamChange{}, []DreamSkip{}
-	d := &dreamer{s: s, token: token, scope: scope, set: set, run: run, runID: "dream-run-" + ID(), deadline: run.StartedAt.Add(set.timeLimit)}
+	d := &dreamer{s: s, token: token, scope: scope, set: set, run: run, known: run.seen, runID: "dream-run-" + ID(), deadline: run.StartedAt.Add(set.timeLimit)}
+	run.seen = map[string]int64{}
 	for _, action := range dreamGrants {
 		who, err := s.authorize(ctx, token, action, scope, "", "")
 		if errors.Is(err, ErrDenied) || err == nil && who.Role != roleService {
@@ -279,42 +294,71 @@ func (s *Service) dream(ctx context.Context, token string, scope Scope, set drea
 	if err := d.save(ctx, true); err != nil {
 		return nil, err
 	}
+	// A worker without db:read sees no rows at all and would report an empty ok run.
+	if _, err := s.Repo.Get(ctx, colJobs, scope, d.runID); errors.Is(err, ErrNotFound) {
+		slog.Warn("dream: the worker cannot read the rows it writes; grant its principal db:read (guide/server.md)", "scope", scope.ProjectID)
+		return nil, errors.Join(ErrDenied, errors.New("dream worker lacks db:read"))
+	} else if err != nil {
+		return nil, err
+	}
 	ctx = context.WithValue(ctx, dreamRunKey{}, d.runID)
-	for _, step := range []func(context.Context) error{d.maintenance, d.candidates, d.expire} {
+	steps := []func(context.Context) error{d.maintenance, d.candidates, d.expire}
+	for i, step := range steps {
+		now := time.Now()
+		d.stageFrom, d.stageEnd = len(run.Changes), now.Add(d.deadline.Sub(now)/time.Duration(len(steps)-i))
 		if err := step(ctx); err != nil {
 			return nil, err
 		}
 	}
-	if run.Outcome == "running" {
-		run.Outcome = "ok"
+	run.Outcome = "ok"
+	if d.limit != "" {
+		run.Outcome = d.limit
 	}
 	now := time.Now().UTC()
 	run.FinishedAt = &now
 	return run, d.save(ctx, false)
 }
 
-// stop says whether the run reached a limit, and names it in the outcome.
+// stop says whether the current stage reached its item limit or its time; skips never count.
 func (d *dreamer) stop() bool {
+	limit := ""
 	switch {
-	case d.run.Outcome != "running":
-		return true
-	case len(d.run.Changes) >= d.set.items || len(d.run.Skipped) >= d.set.items:
-		d.run.Outcome = "item_limit"
-	case time.Now().After(d.deadline):
-		d.run.Outcome = "time_limit"
+	case len(d.run.Changes)-d.stageFrom >= d.set.items:
+		limit = "item_limit"
+	case time.Now().After(d.stageEnd):
+		limit = "time_limit"
 	default:
 		return false
+	}
+	if d.limit == "" {
+		d.limit = limit
 	}
 	return true
 }
 
 // save writes the run report; it is written after every change so a crash leaves what was applied logged.
+// The first save also drops the scope's oldest reports past dreamRunsMax.
 func (d *dreamer) save(ctx context.Context, first bool) error {
+	var old []Record
+	if first {
+		runs, err := d.s.Repo.ListRecordsByStatus(ctx, d.scope, colJobs, dreamRunStatus, dreamScanMax)
+		if err != nil {
+			return err
+		}
+		slices.SortFunc(runs, func(a, b Record) int { return b.CreatedAt.Compare(a.CreatedAt) })
+		if len(runs) >= dreamRunsMax {
+			old = runs[dreamRunsMax-1:]
+		}
+	}
 	return d.s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		now := time.Now().UTC()
-		r := Record{ID: d.runID, Scope: d.scope, Kind: dreamJobKind, Status: dreamRunStatus, Revision: 1, CreatedAt: d.run.StartedAt, UpdatedAt: now, CreatedBy: d.principal, CreatedByType: roleService, DreamRun: d.run}
 		if first {
-			return tx.Insert(ctx, colJobs, r)
+			for _, r := range old {
+				if err := tx.Delete(ctx, colJobs, d.scope, r.ID, r.Revision); err != nil && !errors.Is(err, ErrNotFound) {
+					return err
+				}
+			}
+			return tx.Insert(ctx, colJobs, Record{ID: d.runID, Scope: d.scope, Kind: dreamJobKind, Status: dreamRunStatus, Revision: 1, CreatedAt: d.run.StartedAt, UpdatedAt: now, CreatedBy: d.principal, CreatedByType: roleService, DreamRun: d.run})
 		}
 		cur, err := tx.Get(ctx, colJobs, d.scope, d.runID)
 		if err != nil {
@@ -326,13 +370,31 @@ func (d *dreamer) save(ctx context.Context, first bool) error {
 	})
 }
 
-func (d *dreamer) skip(target, reason string, confidence float64) {
+// skipped: an earlier run already left this item, at this revision, for a person. It stays remembered.
+func (d *dreamer) skipped(target string, revision int64) bool {
+	if rev, ok := d.known[target]; ok && rev == revision {
+		d.run.seen[target] = revision
+		return true
+	}
+	return false
+}
+
+// skip leaves an item for a person: logged (up to the item limit, then counted) and remembered.
+func (d *dreamer) skip(target string, revision int64, reason string, confidence float64) {
+	if len(d.run.seen) < 2*dreamScanMax {
+		d.run.seen[target] = revision
+	}
+	if len(d.run.Skipped) >= d.set.items {
+		d.run.SkippedMore++
+		return
+	}
 	d.run.Skipped = append(d.run.Skipped, DreamSkip{Target: target, Reason: reason, Confidence: confidence})
 }
 
-// snapshot reads the rows a change is about to write; a missing row is one the change creates.
-func (d *dreamer) snapshot(ctx context.Context, refs ...Ref) ([]dreamRow, error) {
-	rows := make([]dreamRow, len(refs))
+// snapshot reads the rows a change is about to write: their status for undo ("" for a row the change
+// creates) and the records themselves for the run's checks, which are not stored.
+func (d *dreamer) snapshot(ctx context.Context, refs ...Ref) ([]dreamRow, []*Record, error) {
+	rows, recs := make([]dreamRow, len(refs)), make([]*Record, len(refs))
 	for i, ref := range refs {
 		rows[i] = dreamRow{Collection: ref.Collection, ID: ref.ID}
 		r, err := d.s.Repo.Get(ctx, ref.Collection, d.scope, ref.ID)
@@ -340,28 +402,30 @@ func (d *dreamer) snapshot(ctx context.Context, refs ...Ref) ([]dreamRow, error)
 			continue
 		}
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		r.Embedding = nil // undo keeps the row's current vector
-		rows[i].Before = &r
+		rows[i].BeforeStatus, recs[i] = r.Status, &r
 	}
-	return rows, nil
+	return rows, recs, nil
 }
 
-// record logs an applied change with the revisions it left, and saves the report.
-func (d *dreamer) record(ctx context.Context, c DreamChange, rows []dreamRow) error {
+// afterRevisions reads the revisions a change left, inside the changing transaction, so a later edit
+// is never taken for the dream's own.
+func afterRevisions(ctx context.Context, tx Tx, scope Scope, rows []dreamRow) error {
 	for i := range rows {
-		r, err := d.s.Repo.Get(ctx, rows[i].Collection, d.scope, rows[i].ID)
+		r, err := tx.Get(ctx, rows[i].Collection, scope, rows[i].ID)
 		if err != nil {
 			return err
 		}
 		rows[i].AfterRevision = r.Revision
-		if i == 0 {
-			c.After = r.Status + ": " + cutUTF8(r.Text, 300)
-		}
 	}
-	if rows[0].Before != nil && c.Before == "" {
-		c.Before = rows[0].Before.Status + ": " + cutUTF8(rows[0].Before.Text, 300)
+	return nil
+}
+
+// record logs an applied change (rows carry their after revisions) and saves the report.
+func (d *dreamer) record(ctx context.Context, c DreamChange, rows []dreamRow) error {
+	if c.Before == "" {
+		c.Before = rows[0].BeforeStatus
 	}
 	c.Rows = rows
 	d.run.Changes = append(d.run.Changes, c)
@@ -389,18 +453,18 @@ func (d *dreamer) maintenance(ctx context.Context) error {
 		return err
 	}
 	for _, r := range rows {
+		target := colMaintenance + "/" + r.ID
+		if r.Maintenance == nil || slices.Contains(r.Tags, dreamUndoneTag) || d.skipped(target, r.Revision) {
+			continue
+		}
 		if d.stop() {
 			return nil
 		}
-		p := r.Maintenance
-		if p == nil || slices.Contains(r.Tags, dreamUndoneTag) {
+		if agreementOnly(*r.Maintenance) {
+			d.skip(target, r.Revision, "needs_person:"+r.Maintenance.Type, 0)
 			continue
 		}
-		if agreementOnly(*p) {
-			d.skip(colMaintenance+"/"+r.ID, "needs_person:"+p.Type, 0)
-			continue
-		}
-		if err := d.acceptPair(ctx, r, *p); err != nil {
+		if err := d.acceptPair(ctx, r, *r.Maintenance); err != nil {
 			return err
 		}
 	}
@@ -410,36 +474,42 @@ func (d *dreamer) maintenance(ctx context.Context) error {
 func (d *dreamer) acceptPair(ctx context.Context, r Record, p MaintenanceProposal) error {
 	target, confidence := colMaintenance+"/"+r.ID, maintenanceConfidence[p.Reason]
 	if confidence < d.set.minConfidence {
-		d.skip(target, "low_confidence", confidence)
+		d.skip(target, r.Revision, "low_confidence", confidence)
 		return nil
 	}
-	rows, err := d.snapshot(ctx, p.Retire, p.Keep, Ref{Collection: colMaintenance, ID: r.ID})
+	rows, recs, err := d.snapshot(ctx, p.Retire, p.Keep, Ref{Collection: colMaintenance, ID: r.ID})
 	if err != nil {
 		return err
 	}
-	if rows[0].Before == nil || rows[1].Before == nil {
-		d.skip(target, "memory_missing", confidence)
+	if recs[0] == nil || recs[1] == nil {
+		d.skip(target, r.Revision, "memory_missing", confidence)
 		return nil
 	}
-	if userStated(*rows[0].Before) && !userStated(*rows[1].Before) {
-		d.skip(target, "would_retire_user_statement", confidence)
+	if userStated(*recs[0]) && !userStated(*recs[1]) {
+		d.skip(target, r.Revision, "would_retire_user_statement", confidence)
 		return nil
 	}
 	mark := supersedeInput(d.scope, r, "accept")
-	if _, err = d.s.decideTx(ctx, d.scope, r, &mark, nil, nil, "accepted", "accept", d.principal, roleService); changed(err) {
-		d.skip(target, "changed", confidence)
+	err = d.s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		if _, err := decideInTx(ctx, tx, d.scope, r, &mark, nil, nil, "accepted", "accept", d.principal, roleService); err != nil {
+			return err
+		}
+		return afterRevisions(ctx, tx, d.scope, rows)
+	})
+	if changed(err) {
+		d.skip(target, r.Revision, "changed", confidence)
 		return nil
 	} else if err != nil {
 		return err
 	}
-	return d.record(ctx, DreamChange{Op: "supersede", Target: colMemories + "/" + p.Retire.ID, Reason: p.Type + ":" + p.Reason + " kept " + p.Keep.ID, Confidence: confidence}, rows)
+	return d.record(ctx, DreamChange{Op: "supersede", Target: colMemories + "/" + p.Retire.ID, Reason: p.Type + ":" + p.Reason + " kept " + p.Keep.ID, Confidence: confidence, After: "superseded"}, rows)
 }
 
 // candidateJudgement is what the dream does with one classified candidate.
 type candidateJudgement struct {
 	action     string // approve | edit_approve | reject | supersede | skip
 	content    string
-	reason     string
+	reason     string // a code and ids only: reports keep no memory text
 	confidence float64
 }
 
@@ -471,9 +541,9 @@ func judgeCandidate(c Record, minConfidence float64) candidateJudgement {
 	case cl.Relation == "newer_version":
 		j.action, j.reason = "supersede", "newer version of "+cl.DupHint
 	case verdict == "discard":
-		j.action, j.reason = "reject", "not worth keeping: "+cl.Verdict.Reason
+		j.action, j.reason = "reject", "not_worth_keeping"
 	case verdict == "fix" && cl.Verdict.Text != "":
-		j.action, j.content, j.reason = "edit_approve", cl.Verdict.Text, "reworded: "+cl.Verdict.Reason
+		j.action, j.content, j.reason = "edit_approve", cl.Verdict.Text, "reworded"
 	case verdict == "keep" || verdict == "":
 		j.action, j.reason = "approve", "classified "+cl.Risk+" risk"
 	default:
@@ -492,15 +562,16 @@ func (d *dreamer) candidates(ctx context.Context) error {
 		return err
 	}
 	for _, c := range rows {
+		target := "memory_candidates/" + c.ID
+		if slices.Contains(c.Tags, dreamUndoneTag) || d.skipped(target, c.Revision) {
+			continue
+		}
 		if d.stop() {
 			return nil
 		}
-		if slices.Contains(c.Tags, dreamUndoneTag) {
-			continue
-		}
 		j := judgeCandidate(c, d.set.minConfidence)
 		if j.action == "skip" {
-			d.skip("memory_candidates/"+c.ID, j.reason, j.confidence)
+			d.skip(target, c.Revision, j.reason, j.confidence)
 			continue
 		}
 		if err := d.settle(ctx, c, j); err != nil {
@@ -510,61 +581,68 @@ func (d *dreamer) candidates(ctx context.Context) error {
 	return nil
 }
 
+var dreamAfter = map[string]string{"approve": "active", "edit_approve": "active", "supersede": "active", "reject": "rejected"}
+
 func (d *dreamer) settle(ctx context.Context, c Record, j candidateJudgement) error {
 	target := "memory_candidates/" + c.ID
 	refs := []Ref{{Collection: "memory_candidates", ID: c.ID}}
 	if j.action != "reject" {
 		refs = []Ref{{Collection: colMemories, ID: c.ID}} // the approved memory takes the candidate's id
 	}
-	var old *Record
 	if j.action == "supersede" {
 		refs = append(refs, Ref{Collection: colMemories, ID: c.Classification.DupHint})
 	}
-	rows, err := d.snapshot(ctx, refs...)
+	rows, recs, err := d.snapshot(ctx, refs...)
 	if err != nil {
 		return err
 	}
+	var old *Record
 	if j.action == "supersede" {
-		if old = rows[1].Before; old == nil || old.Status != statusActive {
-			d.skip(target, "replaced_memory_gone", j.confidence)
+		if old = recs[1]; old == nil || old.Status != statusActive {
+			d.skip(target, c.Revision, "replaced_memory_gone", j.confidence)
 			return nil
 		}
 		if userStated(*old) && !userStated(c) {
-			d.skip(target, "would_retire_user_statement", j.confidence)
+			d.skip(target, c.Revision, "would_retire_user_statement", j.confidence)
 			return nil
 		}
 	}
-	in := CandidateReviewInput{Automated: true, Scope: d.scope, ExpectedRevision: c.Revision, Action: j.action, Content: j.content, OperationID: d.runID + "." + strconv.Itoa(len(d.run.Changes)+len(d.run.Skipped))}
+	in := CandidateReviewInput{Automated: true, Scope: d.scope, ExpectedRevision: c.Revision, Action: j.action, Content: j.content, OperationID: d.runID + "." + strconv.Itoa(len(d.run.Changes)+len(d.run.Skipped)+d.run.SkippedMore)}
 	switch j.action {
 	case "reject":
 		in.Reason = "dream: " + j.reason
 	case "supersede":
 		in.Action = "approve"
 	}
-	approved, err := d.s.ReviewCandidate(ctx, d.token, c.ID, in)
+	settled, err := d.s.ReviewCandidate(ctx, d.token, c.ID, in)
 	if changed(err) || errors.Is(err, ErrSecretDetected) {
-		d.skip(target, "review_refused", j.confidence)
+		d.skip(target, c.Revision, "review_refused", j.confidence)
 		return nil
 	} else if err != nil {
 		return err
 	}
+	rows[0].AfterRevision = settled.Revision // the row the review wrote, as its transaction left it
 	if old != nil {
-		if err = d.supersede(ctx, *old, approved, j.reason); changed(err) {
-			d.skip(colMemories+"/"+old.ID, "supersede_refused", j.confidence) // the approval stands and is logged below
+		if err = d.supersede(ctx, *old, settled, j.reason, rows); changed(err) {
+			d.skip(colMemories+"/"+old.ID, old.Revision, "supersede_refused", j.confidence) // the approval stands and is logged below
 			rows = rows[:1]
 		} else if err != nil {
 			return err
 		}
 	}
-	return d.record(ctx, DreamChange{Op: j.action, Target: target, Reason: j.reason, Confidence: j.confidence, Before: c.Status + ": " + cutUTF8(c.Text, 300)}, rows)
+	return d.record(ctx, DreamChange{Op: j.action, Target: target, Reason: j.reason, Confidence: j.confidence, Before: c.Status, After: dreamAfter[j.action]}, rows)
 }
 
-// supersede retires old for next through the conflict path, as a person's accept of a pair does.
-func (d *dreamer) supersede(ctx context.Context, old, next Record, reason string) error {
+// supersede retires old for next through the conflict path, as a person's accept of a pair does, and
+// reads both rows' revisions in that transaction.
+func (d *dreamer) supersede(ctx context.Context, old, next Record, reason string, rows []dreamRow) error {
 	mark := ConflictInput{Scope: d.scope, Memories: []Ref{{Collection: colMemories, ID: old.ID, Revision: old.Revision}, {Collection: colMemories, ID: next.ID, Revision: next.Revision}},
 		Action: "mark", Hold: "both", Reason: "dream: " + reason}
 	return d.s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		return supersedeInTx(ctx, tx, mark, d.principal, roleService)
+		if err := supersedeInTx(ctx, tx, mark, d.principal, roleService); err != nil {
+			return err
+		}
+		return afterRevisions(ctx, tx, d.scope, rows)
 	})
 }
 
@@ -577,11 +655,11 @@ func (d *dreamer) expire(ctx context.Context) error {
 	}
 	now := time.Now().UTC()
 	for _, r := range rows {
-		if d.stop() {
-			return nil
-		}
 		if r.ExpiresAt == nil || r.ExpiresAt.After(now) || r.ConflictID != "" || slices.Contains(r.Tags, dreamUndoneTag) {
 			continue
+		}
+		if d.stop() {
+			return nil
 		}
 		if err := d.expireOne(ctx, r, now); err != nil {
 			return err
@@ -592,11 +670,7 @@ func (d *dreamer) expire(ctx context.Context) error {
 
 // expireOne moves one expired memory to expired and logs it; a memory changed meanwhile is skipped.
 func (d *dreamer) expireOne(ctx context.Context, r Record, now time.Time) error {
-	snap, err := d.snapshot(ctx, Ref{Collection: colMemories, ID: r.ID})
-	if err != nil {
-		return err
-	}
-	err = d.s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+	err := d.s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		cur, err := tx.Get(ctx, colMemories, d.scope, r.ID)
 		if err != nil {
 			return err
@@ -611,10 +685,11 @@ func (d *dreamer) expireOne(ctx context.Context, r Record, now time.Time) error 
 		return audit(ctx, tx, d.scope, d.principal, "dream:expire:memories", r.ID)
 	})
 	if changed(err) {
-		d.skip(colMemories+"/"+r.ID, "changed", 1)
+		d.skip(colMemories+"/"+r.ID, r.Revision, "changed", 1)
 		return nil
 	} else if err != nil {
 		return err
 	}
-	return d.record(ctx, DreamChange{Op: "expire", Target: colMemories + "/" + r.ID, Reason: "expired " + r.ExpiresAt.Format(time.RFC3339), Confidence: 1}, snap)
+	row := dreamRow{Collection: colMemories, ID: r.ID, BeforeStatus: r.Status, AfterRevision: r.Revision + 1}
+	return d.record(ctx, DreamChange{Op: "expire", Target: colMemories + "/" + r.ID, Reason: "expired " + r.ExpiresAt.Format(time.RFC3339), Confidence: 1, After: "expired"}, []dreamRow{row})
 }
