@@ -91,7 +91,8 @@ func (s *Service) collectConversationCandidates(ctx context.Context, token strin
 }
 
 func (s *Service) conversationTurnsWithCandidates(ctx context.Context, token string, in SearchInput, collection string, out *ContextBundle, all bool) *conversationCandidatePool {
-	pool := s.collectConversationCandidates(ctx, token, in, collection, out, all)
+	earlier := earlierStateIntent(in.Query) && !localExpandOn(in, collection)
+	pool := s.collectConversationCandidates(ctx, token, in, collection, out, all || earlier)
 	if pool == nil {
 		return nil
 	}
@@ -100,12 +101,27 @@ func (s *Service) conversationTurnsWithCandidates(ctx context.Context, token str
 	if localExpandOn(in, collection) {
 		chosen = selectConversationCandidates(in.Query, pool.rows, out.Items, out.Conversation, limit)
 	} else {
-		for _, row := range pool.rows[:min(max(limit, 0), len(pool.rows))] {
+		rows := pool.rows
+		if earlier {
+			// The earliest of the twice-the-lane best turns first: a question about an earlier
+			// state is answered by what was said before the newer state, which memories may never have stated.
+			rows = slices.Clone(rows[:min(2*conversationLaneHits, len(rows))])
+			slices.SortStableFunc(rows, func(a, b ScoredHit) int { return conversationTime(a.Hit).Compare(conversationTime(b.Hit)) })
+		}
+		for _, row := range rows[:min(max(limit, 0), len(rows))] {
 			chosen = append(chosen, row.Hit)
 		}
 	}
 	s.materializeConversationCandidates(ctx, token, in, out, pool, chosen)
 	return pool
+}
+
+// conversationTime is when a conversation batch was said; batches without a time sort last.
+func conversationTime(h Hit) time.Time {
+	if h.CollectedAt == nil {
+		return time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC)
+	}
+	return *h.CollectedAt
 }
 
 func (s *Service) materializeConversationCandidates(ctx context.Context, token string, in SearchInput, out *ContextBundle, pool *conversationCandidatePool, chosen []Hit) {

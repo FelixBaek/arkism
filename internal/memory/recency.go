@@ -87,6 +87,9 @@ func (s *Service) fuseRecallHits(ctx context.Context, token string, lists [][]Hi
 	if recall {
 		now, weights := s.recallClock(in), s.policyOutcomeWeights(ctx, in, rows)
 		trace.noteBoosts(rows, now, weights)
+		if earlierStateIntent(in.Query) {
+			now = time.Time{} // no hit is before the zero time, so no age discount: the older state is the answer
+		}
 		rows = decayByRecency(rows, now, weights, len(rows))
 		if s.evidenceSelectionStatus(in, collection) == "ready" {
 			trace.evidenceCandidates = slices.Clone(rows)

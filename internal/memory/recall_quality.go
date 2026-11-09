@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/FelixBaek/arkism/internal/langnote"
 )
@@ -38,7 +39,9 @@ import (
 //     twice the limit (at most 50), and memory recall picks its
 //     limit rows from the fused, reranked and recency-weighted pool greedily, each pick's
 //     score lowered by diversityPenalty times how far its highest embedding similarity to a
-//     row already picked sits into the near-duplicate band (selectDiverse). Near-duplicates of one fact then give way to the next
+//     row already picked sits into the near-duplicate band (selectDiverse). Rows captured in
+//     the same event or session use a wider band (sameSourceSimilarity): one conversation restating one
+//     event (no new figure and more than three quarters of its other words in the pick) gives way sooner. Near-duplicates of one fact then give way to the next
 //     distinct fact instead of filling the result; the count never exceeds the limit.
 //   - expand (opt-in, spends one server model call per recall): the model's sub-queries
 //     search beside the question and join its fusion (recall_expand.go).
@@ -127,6 +130,12 @@ func (q SpaceRecallQuality) provisionalOn() bool { return q.Provisional == nil |
 
 func (q SpaceRecallQuality) diversityOn() bool { return q.Diversity == nil || *q.Diversity }
 
+// sameSourceSimilarity is the near-duplicate bar for two rows captured in one event or session: a
+// conversation restating one event ("ran a 5K", "finished a 5K in 35 minutes") sits below the
+// capture merge bar yet adds nothing a second time. Rows from different captures keep the
+// capture merge bar, so related facts from other conversations keep their order.
+const sameSourceSimilarity = lessonNearDuplicateSimilarity
+
 // diversityPenalty weighs how near-duplicate a candidate is to the rows already picked
 // (nearDuplicateShare) against its score relative to the best row. At 0.5 a row that repeats a
 // picked one (similarity near 1) loses half the best score, while rows on distinct facts keep
@@ -143,12 +152,9 @@ func selectDiverse(rows []ScoredHit, limit int) []ScoredHit {
 	}
 	best, picked := rows[0].Score, make([]ScoredHit, 0, limit)
 	used, closest := make([]bool, len(rows)), make([]float64, len(rows))
-	spans := make([]map[string]bool, len(rows))
+	spans, words := make([]map[string]bool, len(rows)), make([]map[string]bool, len(rows))
 	for i, r := range rows {
-		spans[i] = make(map[string]bool)
-		for _, token := range SearchTokens(r.evidenceSpan) {
-			spans[i][token] = true
-		}
+		spans[i], words[i] = tokenSet(SearchTokens(r.evidenceSpan)), tokenSet(searchQueryTerms(r.Text))
 	}
 	for len(picked) < limit {
 		at, value := -1, math.Inf(-1)
@@ -166,6 +172,9 @@ func selectDiverse(rows []ScoredHit, limit int) []ScoredHit {
 			if len(rows[at].vector) > 0 && len(rows[at].vector) == len(rows[i].vector) {
 				similarity := cosine(rows[at].vector, rows[i].vector)
 				closest[i] = max(closest[i], nearDuplicateShare(similarity))
+				if sameSource(rows[at].Hit, rows[i].Hit) && retells(words[i], words[at]) {
+					closest[i] = max(closest[i], max(0, similarity-sameSourceSimilarity)/(1-sameSourceSimilarity))
+				}
 				if similarity >= defaultCaptureMergeSimilarity && rows[at].Scope == rows[i].Scope && sameSourceSpan(spans[at], spans[i]) {
 					closest[i] = 1
 				}
@@ -173,6 +182,49 @@ func selectDiverse(rows []ScoredHit, limit int) []ScoredHit {
 		}
 	}
 	return picked
+}
+
+func tokenSet(tokens []string) map[string]bool {
+	set := map[string]bool{}
+	for _, token := range tokens {
+		set[token] = true
+	}
+	return set
+}
+
+// sameSource: both rows came from one capture event or one conversation session (the
+// event_id and session tags capture writes) in one scope.
+func sameSource(a, b Hit) bool {
+	if a.Scope != b.Scope {
+		return false
+	}
+	for _, t := range a.Tags {
+		if (strings.HasPrefix(t, "event_id:") || strings.HasPrefix(t, "session:")) && slices.Contains(b.Tags, t) {
+			return true
+		}
+	}
+	return false
+}
+
+// retells: row adds no figure (a time, a date, an amount) to pick and more than three quarters
+// of its other topic words are in pick (a short row's one new word is its new claim), so row restates pick rather than stating another fact
+// of the same conversation. Figures are left out of the share so a shared date cannot make a
+// new place or reason look like a restatement.
+func retells(row, pick map[string]bool) bool {
+	words, shared := 0, 0
+	for t := range row {
+		if strings.ContainsFunc(t, unicode.IsDigit) {
+			if !pick[t] {
+				return false
+			}
+			continue
+		}
+		words++
+		if pick[t] {
+			shared++
+		}
+	}
+	return words > 0 && 4*shared > 3*words
 }
 
 // sameSourceSpan compares precomputed evidence token sets. Short quotes cannot

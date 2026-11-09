@@ -85,6 +85,8 @@ type timeLexicon struct {
 	rel        [relKinds]string
 	// stop holds frequent ordinary words, to tell languages apart (foreignWord).
 	stop string
+	// earlier holds words asking about an earlier state ("initially", "used to"); see earlierStateIntent.
+	earlier string
 
 	monthOf, numOf map[string]int
 	partOf         map[string]string
@@ -376,6 +378,37 @@ func parseTimeIntent(query, locale string, now time.Time) (timeWindow, bool) {
 		}
 	}
 	return cldrTimeIntent(q, now) // other languages, only when no hand-tuned rule matched
+}
+
+// earlierStateRe matches the timeLexicons' earlier-state words with the lexicon's own word
+// boundaries.
+var earlierStateRe = func() *regexp.Regexp {
+	parts := []string{}
+	for _, lex := range timeLexicons {
+		if lex.earlier == "" {
+			continue
+		}
+		words := strings.Split(foldTimeText(lex.earlier), "|")
+		for i, w := range words {
+			words[i] = regexp.QuoteMeta(w)
+		}
+		left, right := `(?:^|[^\pL\pM\pN])`, `(?:$|[^\pL\pM\pN])`
+		if lex.noLeft {
+			left = ""
+		}
+		if lex.noRight {
+			right = ""
+		}
+		parts = append(parts, left+"(?:"+strings.Join(words, "|")+")"+right)
+	}
+	return regexp.MustCompile(strings.Join(parts, "|"))
+}()
+
+// earlierStateIntent: the query asks about an earlier state of something ("where did I
+// initially keep ...", "what did I use to ..."), so a newer state is not the answer and must
+// not push the older evidence out.
+func earlierStateIntent(query string) bool {
+	return earlierStateRe.MatchString(foldTimeText(strings.Join(strings.Fields(query), " ")))
 }
 
 // agoSpan is the day, week, month or year (unit 0..3) n units before now's.
