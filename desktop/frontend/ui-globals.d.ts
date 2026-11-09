@@ -4,7 +4,7 @@ interface Window {
   __TAURI__?: any;
   mountArkismTriangle: (el: Element, opts?: object) => () => void;
   ask: (message: string, okLabel?: string) => Promise<boolean>;
-  askText: (message: string, value?: string) => Promise<string | null>;
+  askText: (message: string, value?: string, opts?: { okLabel?: string; primary?: boolean }) => Promise<string | null>;
   askTyped: (message: string, match: string, okLabel?: string) => Promise<boolean>;
 }
 declare var ask: Window["ask"];

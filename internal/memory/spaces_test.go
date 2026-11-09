@@ -74,7 +74,9 @@ func (f *fakeRepo) SpaceSubScopes(_ context.Context, space Scope, collections []
 
 func waitSpaceJob(t *testing.T, f *fixture, scope Scope, id string) SpaceJobView {
 	t.Helper()
-	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
+	// Hang guard, not a speed check: under -race the fake repo's per-transaction diff makes a
+	// 35-record import take ~10s on a shared CI runner.
+	for deadline := time.Now().Add(2 * time.Minute); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
 		job, err := f.svc.GetSpaceJob(testCtx, f.human, scope, id)
 		if err != nil {
 			t.Fatal(err)

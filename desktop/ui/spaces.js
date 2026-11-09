@@ -54,7 +54,7 @@
 
   function create(ctx) {
     const { state, el, button, request, query, notice, render, go, pickFile, saveFile, spaceJob } = ctx;
-    const ask = (...a) => globalThis.ask(...a), askText = (...a) => globalThis.askText(...a), askTyped = (...a) => globalThis.askTyped(...a);
+    const ask = (m, ok) => globalThis.ask(m, ok), askText = (m, v, o) => globalThis.askText(m, v, o), askTyped = (m, match, ok) => globalThis.askTyped(m, match, ok);
     const human = () => state.caps?.actions?.review_decide !== false; // these writes take people only; an agent token never sees them
     const S = { busy: false, line: "", warn: false, review: false, key: "", view: null, list: null, listErr: "", next: "", preview: null, parts: new Set(["config", "data"]), target: "", find: "", picked: new Set(), newID: "", plan: null,
       docs: null, pickedDocs: new Set(), conflict: "replace" };

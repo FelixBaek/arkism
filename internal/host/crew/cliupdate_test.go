@@ -420,9 +420,15 @@ func TestCLIRunBoundedOutputTimeoutAndFailures(t *testing.T) {
 	}{{[]string{bin, "print-stdout", "1.0.0"}, true, "", "1.0.0"}, {[]string{bin, "print-stdout", "secret"}, false, "", ""},
 		{[]string{bin, "print-many"}, true, "output_limit", ""}, {[]string{bin, "hold-pipe"}, true, "timeout", ""},
 		{[]string{bin, "exit-42"}, true, "command_failed", ""}, {[]string{"/nonexistent/cli", "update"}, true, "spawn_failed", ""}} {
+		// Only the timeout case needs a short limit; the others re-exec this race-built
+		// binary, whose start alone can pass 2s on a loaded CI runner.
+		limit := 30 * time.Second
+		if c.code == "timeout" {
+			limit = 2 * time.Second
+		}
 		start := time.Now()
-		code, out := runBounded(c.argv, 2*time.Second, c.capture)
-		if code != c.code || string(out) != c.out || time.Since(start) > 4*time.Second {
+		code, out := runBounded(c.argv, limit, c.capture)
+		if code != c.code || string(out) != c.out || time.Since(start) > limit+2*time.Second {
 			t.Error(c.argv, code, string(out))
 		}
 	}

@@ -317,3 +317,16 @@ func opsFakeMatch(r Record, q opsRecordQuery) bool {
 		(q.TargetID == "" || target == q.TargetID) && (q.Tag == "" || slices.Contains(r.Tags, q.Tag)) && (q.Transport == "" || r.Audit != nil && r.Audit.Transport == q.Transport) &&
 		(q.From.IsZero() || !r.CreatedAt.Before(q.From)) && (q.To.IsZero() || r.CreatedAt.Before(q.To))
 }
+
+// documentText joins a file's pages into one Markdown text (the static reader chain).
+func documentText(filename string, raw []byte) (string, error) {
+	pages, _, err := documentPages(filename, raw)
+	if err != nil {
+		return "", err
+	}
+	text := strings.TrimSpace(strings.Join(pages, "\n\n"))
+	if text == "" {
+		return "", ErrInvalid
+	}
+	return text, nil
+}

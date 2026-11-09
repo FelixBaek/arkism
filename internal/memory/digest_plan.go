@@ -91,16 +91,23 @@ func diffLines(before, after string) []DigestDiffLine {
 		}
 		return out
 	}
-	lcs := make([][]int, n+1)
+	// lcs[i][j] is the common-subsequence length of a[i:] and b[j:]; past either end it is 0.
+	lcs := make([][]int, n)
 	for i := range lcs {
-		lcs[i] = make([]int, m+1)
+		lcs[i] = make([]int, m)
+	}
+	at := func(i, j int) int {
+		if i >= n || j >= m {
+			return 0
+		}
+		return lcs[i][j]
 	}
 	for i := n - 1; i >= 0; i-- {
 		for j := m - 1; j >= 0; j-- {
 			if a[i] == b[j] {
-				lcs[i][j] = lcs[i+1][j+1] + 1
+				lcs[i][j] = at(i+1, j+1) + 1
 			} else {
-				lcs[i][j] = max(lcs[i+1][j], lcs[i][j+1])
+				lcs[i][j] = max(at(i+1, j), at(i, j+1))
 			}
 		}
 	}
@@ -111,7 +118,7 @@ func diffLines(before, after string) []DigestDiffLine {
 		case i < n && j < m && a[i] == b[j]:
 			out = append(out, DigestDiffLine{"=", a[i]})
 			i, j = i+1, j+1
-		case j < m && (i == n || lcs[i][j+1] >= lcs[i+1][j]):
+		case j < m && (i == n || at(i, j+1) >= at(i+1, j)):
 			out = append(out, DigestDiffLine{"+", b[j]})
 			j++
 		default:

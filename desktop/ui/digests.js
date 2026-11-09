@@ -823,7 +823,7 @@ window.ArkismDigests = (ctx) => {
       request(`${path}?${query()}`).then(got, () => got(false));
     }
     if (!h) { s.append(el("p", "meta", h === false ? "이력을 불러오지 못했어요." : "이력을 불러오는 중…")); return s; }
-    const revs = [...(h.revisions || [])].sort((a, b) => b.version - a.version || new Date(b.at) - new Date(a.at));
+    const revs = [...(h.revisions || [])].sort((a, b) => b.version - a.version || new Date(b.at).getTime() - new Date(a.at).getTime());
     if (!revs.length) { s.append(el("p", "meta", "아직 이력이 없어요.")); return s; }
     for (const [i, v] of revs.slice(0, 20).entries()) {
       const d = el("details", "insight-more dg-rev");
@@ -1031,7 +1031,7 @@ window.ArkismDigests = (ctx) => {
   }
   const runError = (e) => MODEL_CODES[e.message] || (e.message === "access_denied" ? "이 계정은 정리를 실행할 수 없어요." : `처리하지 못했어요: ${e.message}`);
   function startPlan() {
-    const run = side.run = { phase: "plan" };
+    const run = side.run = /** @type {{ phase: string, plan?: any, error?: string }} */ ({ phase: "plan" });
     const show = () => { if (side.run === run && here() && state.selected === "ob:run") detail(); };
     request("/v1/observations/consolidate", { method: "POST", body: JSON.stringify({ scope: state.scope, plan_only: true }) })
       .then((v) => { run.plan = v; run.phase = "planned"; show(); }, (e) => { run.phase = "plan_failed"; run.error = runError(e); show(); });
