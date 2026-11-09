@@ -186,8 +186,8 @@ func (d *dreamer) draftRefusal(ctx context.Context, v Record, baseVersion string
 	if b, err := d.s.Repo.Get(ctx, colSkillVersions, d.scope, baseVersion); baseVersion != "" && err == nil {
 		allowed, base = allowed+"\n"+d.versionMaterial(ctx, b), b.Analysis
 	}
-	if kind := riskyAddition(d.versionMaterial(ctx, v), allowed, v.Analysis, base); kind != "" {
-		return "skill_risky_addition:" + kind
+	if rule, token := riskyAddition(d.versionMaterial(ctx, v), allowed, v.Analysis, base); rule != "" {
+		return "skill_risky_addition:" + rule + ":" + token
 	}
 	if slices.ContainsFunc(d.s.SkillAutomationPolicies, func(p SkillAutomationPolicy) bool {
 		return p.Scope == d.scope && slices.Contains(p.SkillIDs, v.SkillID) && p.ExpiresAt.After(time.Now())

@@ -22,8 +22,14 @@ const (
 	dreamGroupMax      = 6   // memories one merge may replace
 	dreamNeighbourDice = 0.3 // wording overlap that makes a memory a neighbour worth showing
 	dreamModelMinConf  = 0.8 // the model's own confidence floor for a merge or an insight
-	dreamFaithfulDice  = 0.3 // wording a merged text must share with each member it replaces
-	dreamFaithfulCos   = 0.7 // else its meaning must be this close (another language), when an embedder is set
+	// A merged text must be built from its members' wording (share of its character pairs found in them),
+	// and, with an embedder, sit as close to each member as that member sits to its nearest sibling, less
+	// a margin, and never below a floor. Set on half of a KO/EN paraphrase set with injected rewrites and
+	// checked on the other half; without an embedder it must share this much wording with every member.
+	dreamFaithfulCover  = 0.85
+	dreamFaithfulFloor  = 0.6
+	dreamFaithfulMargin = 0.05
+	dreamFaithfulDice   = 0.3
 )
 
 const consolidateSystem = `You tidy a person's long-term memory. Each line is: id, kind, text.
@@ -174,33 +180,56 @@ func (d *dreamer) validGroup(ctx context.Context, batch []Record, g dreamGroup, 
 	return members, ""
 }
 
-// faithful: the merged text says what each member says, by shared wording or, for a member in another
-// language, by meaning when an embedder is set. A text a stored memory talked the model into writing
-// shares neither with the members it would replace, so it never becomes a memory.
+// faithful: the merged text restates its members. It may only reuse their wording, so a clause a stored
+// memory talked the model into adding is refused, and with an embedder its meaning must stay as close to
+// every member, in any language, as the members are to each other. Both sides are embedded with the same
+// query instruction the duplicate search uses, so the comparison is symmetric.
 // shortcut: without an embedder a merge across languages is refused; set one to merge those.
 func (d *dreamer) faithful(ctx context.Context, members []Record, text string) bool {
-	grams, far := digestGrams(text), []string{}
+	grams, pool := digestGrams(text), map[string]int{}
 	for _, m := range members {
-		if digestDice(grams, digestGrams(m.Text)) < dreamFaithfulDice {
-			far = append(far, m.Text)
+		for g, n := range digestGrams(m.Text) {
+			pool[g] = max(pool[g], n)
 		}
 	}
-	if len(far) == 0 {
-		return true
+	if digestCover(grams, pool) < dreamFaithfulCover {
+		return false
 	}
 	if d.s.Embedder == nil {
+		return !slices.ContainsFunc(members, func(m Record) bool { return digestDice(grams, digestGrams(m.Text)) < dreamFaithfulDice })
+	}
+	texts := []string{text}
+	for _, m := range members {
+		texts = append(texts, m.Text)
+	}
+	vecs, err := d.s.embedReviewTexts(ctx, d.scope, texts, embedInputQuery)
+	if err != nil || len(vecs) != len(texts) {
 		return false
 	}
-	vecs, err := d.s.embedReviewTexts(ctx, d.scope, append([]string{text}, far...))
-	if err != nil || len(vecs) != len(far)+1 {
-		return false
-	}
-	for _, v := range vecs[1:] {
-		if cosine(vecs[0].Vector, v.Vector) < dreamFaithfulCos {
+	for i := 1; i < len(vecs); i++ {
+		sibling := -1.0
+		for j := 1; j < len(vecs); j++ {
+			if j != i {
+				sibling = max(sibling, cosine(vecs[i].Vector, vecs[j].Vector))
+			}
+		}
+		if cosine(vecs[0].Vector, vecs[i].Vector) < max(dreamFaithfulFloor, sibling-dreamFaithfulMargin) {
 			return false
 		}
 	}
 	return true
+}
+
+// digestCover is the share of a's character pairs that b holds.
+func digestCover(a, b map[string]int) float64 {
+	total, common := 0, 0
+	for k, v := range a {
+		total, common = total+v, common+min(v, b[k])
+	}
+	if total == 0 {
+		return 0
+	}
+	return float64(common) / float64(total)
 }
 
 // groupTarget names a model group in the report by the batch ids it lists. Anything else the model wrote
