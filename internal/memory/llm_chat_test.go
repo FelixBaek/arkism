@@ -183,3 +183,38 @@ func checkLLMPresetRejects(t *testing.T, serverURL string) {
 		}
 	}
 }
+
+// A route that refuses a tuning field (an output limit it cannot enforce) gets the request again without
+// the optional fields; any other refusal is not retried.
+func TestLLMChatRetriesWithoutRefusedFields(t *testing.T) {
+	var bodies []map[string]any
+	refuse := `{"error":{"code":"unsupported_field"}}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		bodies = append(bodies, body)
+		if _, limited := body["max_tokens"]; limited {
+			http.Error(w, refuse, http.StatusBadRequest)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(draftResponse("ok"))
+	}))
+	defer server.Close()
+	c := LLMConfig{Endpoint: server.URL, APIKey: "k", Model: "m"}
+	reply, err := c.chat(testCtx, chatRequest{op: "t", provider: "skill_llm", system: "sys", user: "hi", maxTokens: 64, jsonOut: true})
+	if err != nil || reply.text != "ok" || len(bodies) != 2 {
+		t.Fatalf("%+v %v %d", reply, err, len(bodies))
+	}
+	for _, k := range optionalLLMFields {
+		if _, ok := bodies[1][k]; ok {
+			t.Errorf("retry kept %s", k)
+		}
+	}
+	if bodies[1]["model"] != "m" || len(bodies[1]["messages"].([]any)) != 2 {
+		t.Errorf("retry lost the prompt: %v", bodies[1])
+	}
+	refuse, bodies = `{"error":{"code":"invalid_request"}}`, nil
+	if _, err = c.chat(testCtx, chatRequest{op: "t", provider: "skill_llm", system: "sys", user: "hi", maxTokens: 64}); err == nil || len(bodies) != 1 {
+		t.Fatalf("other refusal retried: %v %d", err, len(bodies))
+	}
+}
