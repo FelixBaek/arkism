@@ -35,7 +35,7 @@ func embeddingsAPIServer(t *testing.T, got *embeddingsAPIRequest, auth *string) 
 	return srv
 }
 
-func TestEmbeddingsAPIProtocol(t *testing.T) {
+func TestTEIEmbeddingsAPIProtocol(t *testing.T) {
 	var req embeddingsAPIRequest
 	var auth string
 	srv := embeddingsAPIServer(t, &req, &auth)
@@ -63,7 +63,7 @@ func TestEmbeddingsAPIProtocol(t *testing.T) {
 	}
 }
 
-func TestEmbeddingsAPIRejectsBadIndexes(t *testing.T) {
+func TestTEIEmbeddingsAPIRejectsBadIndexes(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{"index": 0, "embedding": teiVector(1)}, {"index": 0, "embedding": teiVector(2)}}})
 	}))

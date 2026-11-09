@@ -11,7 +11,7 @@ import (
 
 // The embed_texts protocol sends the purpose as input_type and reads the float
 // vectors; echoed input text that contains "null" is not mistaken for a null vector.
-func TestEmbedTextsProtocol(t *testing.T) {
+func TestTEIEmbedTextsProtocol(t *testing.T) {
 	var got map[string]any
 	vectors := any([]any{teiVector(1), teiVector(2)})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +48,7 @@ func TestEmbedTextsProtocol(t *testing.T) {
 }
 
 // embed_passage is the embeddings shape with input_type query|passage and truncate END.
-func TestEmbedPassageProtocol(t *testing.T) {
+func TestTEIEmbedPassageProtocol(t *testing.T) {
 	var got map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got = nil

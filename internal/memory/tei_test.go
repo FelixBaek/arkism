@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -217,5 +218,19 @@ func TestTEIBatchConfigValidation(t *testing.T) {
 	embedder := teiForTest(t, "http://127.0.0.1:9/embed", nil)
 	if _, err := embedder.Embed(context.Background(), make([]string, 5), "query"); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("5-text embed call must be refused, got %v", err)
+	}
+}
+
+// JSON cannot carry NaN or Inf, so the vector check is exercised directly.
+func TestTEIRejectsNonFiniteVectorValues(t *testing.T) {
+	for _, bad := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		vector := teiVector(1)
+		vector[7] = bad
+		if err := checkEmbeddingVector(vector); !errors.Is(err, ErrUnavailable) || !strings.Contains(err.Error(), "non-finite") {
+			t.Fatalf("%v: error = %v", bad, err)
+		}
+	}
+	if err := checkEmbeddingVector(teiVector(1)); err != nil {
+		t.Fatalf("finite vector: %v", err)
 	}
 }

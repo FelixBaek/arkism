@@ -131,3 +131,75 @@ func TestContextBudgetWorkBounds(t *testing.T) {
 		t.Fatal("run boundary")
 	}
 }
+
+// Provisional and conversation lanes only use what approved items leave, and
+// the provisional notice survives only while a provisional hit does.
+func TestContextProvisionalAndConversationLanes(t *testing.T) {
+	bundle := func() ContextBundle {
+		return ContextBundle{
+			Items:             []Hit{{ID: "approved", Text: "approved fact"}},
+			Provisional:       []Hit{{ID: "pending", Text: "pending fact"}},
+			ProvisionalNotice: "provisional notice",
+			Conversation:      []Hit{{ID: "turn", Text: "conversation turn"}},
+			Explain:           &RecallExplain{},
+		}
+	}
+	full := bundle()
+	if err := packContext(testCtx, &full, 64000, "cl100k_base", true); err != nil {
+		t.Fatal(err)
+	}
+	if len(full.Provisional) != 1 || full.ProvisionalNotice != "provisional notice" || len(full.Conversation) != 1 ||
+		!strings.Contains(full.ContextData, `"provisional_notice":"provisional notice"`) || !strings.Contains(full.ContextData, "conversation turn") {
+		t.Fatalf("lanes not packed: %+v", full)
+	}
+	itemsOnly := ContextBundle{Items: []Hit{{ID: "approved", Text: "approved fact"}}}
+	if err := packContext(testCtx, &itemsOnly, 64000, "cl100k_base"); err != nil {
+		t.Fatal(err)
+	}
+	tight := bundle()
+	if err := packContext(testCtx, &tight, itemsOnly.TokensUsed, "cl100k_base", true); err != nil {
+		t.Fatal(err)
+	}
+	if len(tight.Items) != 1 || len(tight.Provisional) != 0 || tight.ProvisionalNotice != "" || len(tight.Conversation) != 0 ||
+		strings.Contains(tight.ContextData, "provisional") || tight.TokensUsed != itemsOnly.TokensUsed {
+		t.Fatalf("side lanes exceeded the budget: %+v", tight)
+	}
+	if d := tight.Explain.Dropped; d["provisional_token_budget"] != 1 || d["conversation_token_budget"] != 1 {
+		t.Fatalf("drops = %v", d)
+	}
+	off := bundle()
+	if err := packContext(testCtx, &off, 64000, "cl100k_base"); err != nil || strings.Contains(off.ContextData, "conversation turn") {
+		t.Fatalf("conversation lane packed without opt-in: %v %q", err, off.ContextData)
+	}
+}
+
+// An unmeasurable side-lane hit fails the whole pack instead of being silently dropped.
+func TestContextSideLaneMeasureFailure(t *testing.T) {
+	unbounded := Hit{Text: strings.Repeat("a", 5000)}
+	for name, out := range map[string]ContextBundle{
+		"provisional":  {Provisional: []Hit{unbounded}},
+		"conversation": {Conversation: []Hit{unbounded}},
+	} {
+		if err := packContext(testCtx, &out, 64000, "cl100k_base", true); !errors.Is(err, ErrUnavailable) || out.ContextData != "" {
+			t.Fatalf("%s: error = %v, data = %q", name, err, out.ContextData)
+		}
+	}
+}
+
+func TestContextTokenPacker(t *testing.T) {
+	p, err := newTokenPacker(12, 4)
+	if err != nil || p.used != 4 {
+		t.Fatal(p, err)
+	}
+	one := p.count("one two")
+	if one <= 0 || !p.fits("one two") || p.used != 4+one {
+		t.Fatalf("count %d used %d", one, p.used)
+	}
+	before := p.used
+	if p.fits(strings.Repeat("word ", 20)) || p.used != before {
+		t.Fatalf("overflow accepted or charged: used %d", p.used)
+	}
+	if n := p.count(make(chan int)); n != 0 {
+		t.Fatalf("unmarshalable value counted as %d", n)
+	}
+}
