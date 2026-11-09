@@ -151,10 +151,24 @@ func searchQueryTerms(query string) []string {
 
 // Related backup terminology forms one lexical concept. Count the concept
 // once even when the query or document contains both spellings, so expansion
-// cannot manufacture the two independent matches a long query requires.
+// cannot manufacture the two independent matches a long query requires. A term
+// that is the leading part of an earlier term (a stem after its inflected word)
+// is another spelling of that word and joins its concept for the same reason.
 func searchQueryConcepts(terms []string) []string {
-	concepts := []string{}
+	concepts, _ := searchConceptGroups(terms)
+	return concepts
+}
+
+// searchConceptGroups also returns each concept's first term, the word as the query spelled it.
+func searchConceptGroups(terms []string) (concepts, heads []string) {
+	concepts, heads = []string{}, []string{}
 	for _, term := range terms {
+		if i := slices.IndexFunc(heads, func(head string) bool { return strings.HasPrefix(head, term) }); i >= 0 {
+			if alt := " | " + tsQuote(term); heads[i] != term && !strings.Contains(concepts[i], alt) {
+				concepts[i] = strings.TrimSuffix(concepts[i], ")") + alt + ")"
+			}
+			continue
+		}
 		words := searchConceptWords(term)
 		parts := make([]string, len(words))
 		for i, word := range words {
@@ -162,10 +176,10 @@ func searchQueryConcepts(terms []string) []string {
 		}
 		concept := "(" + strings.Join(parts, " | ") + ")"
 		if !slices.Contains(concepts, concept) {
-			concepts = append(concepts, concept)
+			concepts, heads = append(concepts, concept), append(heads, term)
 		}
 	}
-	return concepts
+	return concepts, heads
 }
 
 // searchConceptWords are the spellings that count as term's one lexical concept.
@@ -200,7 +214,8 @@ var searchQueryFraming = map[string]bool{
 }
 
 func searchQueryTopics(terms []string) []string {
-	if len(searchQueryConcepts(terms)) < 3 {
+	concepts, heads := searchConceptGroups(terms)
+	if len(concepts) < 3 {
 		return nil
 	}
 	// Apply the additional subject gate to procedural framing, where generic
@@ -219,17 +234,14 @@ func searchQueryTopics(terms []string) []string {
 		return nil
 	}
 	topics := []string{}
-	for _, term := range terms {
-		if searchQueryFraming[term] {
-			continue
-		}
+	for i, head := range heads {
 		// A shared date or quantity cannot supply the missing subject. Numeric
 		// terms still participate in the distinct-match threshold and rank.
-		if strings.IndexFunc(term, unicode.IsLetter) >= 0 {
-			topics = append(topics, term)
+		if !searchQueryFraming[head] && strings.IndexFunc(head, unicode.IsLetter) >= 0 {
+			topics = append(topics, concepts[i])
 		}
 	}
-	return searchQueryConcepts(topics)
+	return topics
 }
 
 func tsQuote(token string) string {

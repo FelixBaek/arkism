@@ -77,12 +77,13 @@ func ruleRoute(candidates []SkillCandidate, reason string, confident bool) Route
 	return out
 }
 
-// ruleRouteConfident holds when two independent lanes name the top skill: the meaning
-// (vector) lane ranks it first and a keyword lane found it too. Either lane alone was
-// often the wrong skill, or a skill for a request that needed none, in offline routing
-// checks, so a lone-lane pick is offered unconfirmed. With no meaning lane, or no
-// embedding for that skill yet, the keyword pick stays.
-func ruleRouteConfident(candidates []SkillCandidate, records map[string]Record, bundle ContextBundle, modes []string) bool {
+// ruleRouteConfident holds when two independent signals name the top skill: the meaning
+// (vector) lane ranks it first and a keyword lane found it too, or the request names the
+// skill and the meaning match is a close one rather than merely the nearest kept. Either
+// signal alone was often the wrong skill, or a skill for a request that needed none, in
+// offline routing checks, so a lone pick is offered unconfirmed. With no meaning lane, or
+// no embedding for that skill yet, the keyword pick stays.
+func ruleRouteConfident(candidates []SkillCandidate, records map[string]Record, bundle ContextBundle, modes []string, query string) bool {
 	if len(candidates) == 0 {
 		return false
 	}
@@ -91,7 +92,9 @@ func ruleRouteConfident(candidates []SkillCandidate, records map[string]Record, 
 	}
 	for _, h := range bundle.Items {
 		if h.ID == candidates[0].ID {
-			return h.laneRanks["vector"] == 1 && len(h.laneRanks) > 1
+			asked := SearchTokens(query)
+			named := h.VectorMatch != nil && slices.ContainsFunc(SearchTokens(candidates[0].Name), func(t string) bool { return slices.Contains(asked, t) })
+			return h.laneRanks["vector"] == 1 && (len(h.laneRanks) > 1 || named)
 		}
 	}
 	return false
@@ -212,7 +215,7 @@ func (s *Service) RouteSkills(ctx context.Context, token string, in SearchInput)
 			}
 		}
 	}()
-	confident := ruleRouteConfident(candidates, records, bundle, in.Modes)
+	confident := ruleRouteConfident(candidates, records, bundle, in.Modes, searchInput.retrievalQuery)
 	fallback := ruleRoute(candidates, "jev_unavailable", confident)
 	if len(candidates) == 0 || router == nil {
 		return fallback, nil
