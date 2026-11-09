@@ -490,6 +490,14 @@ class ArkismClient(BaseClient):
         """POST /v1/maintenance_proposals/{id}/decide — A person's answer to a proposal (human principals only)"""
         return self.request("POST", f"/v1/maintenance_proposals/{urllib.parse.quote(id, safe='')}/decide", None, None)
 
+    def get_v1_dream_runs(self, query=None):
+        """GET /v1/dream_runs — What dreaming did: the newest automatic consolidation runs of a scope (read:maintenance_proposals, human principals only)"""
+        return self.request("GET", f"/v1/dream_runs", query, None)
+
+    def post_v1_dream_runs_by_id_undo(self, id):
+        """POST /v1/dream_runs/{id}/undo — Undo one change of a dream run, or the whole run (human principals only)"""
+        return self.request("POST", f"/v1/dream_runs/{urllib.parse.quote(id, safe='')}/undo", None, None)
+
     def get_v1_context_pins(self, query=None):
         """GET /v1/context/pins — Resolved pins of a work agent or team (read:crew, context:read)"""
         return self.request("GET", f"/v1/context/pins", query, None)

@@ -670,7 +670,7 @@ func (s *Service) DecideMergeProposal(ctx context.Context, token, id string, in 
 			}
 			mark := ConflictInput{Scope: in.Scope, Memories: []Ref{t, {Collection: colMemories, ID: keep.ID, Revision: keep.Revision}},
 				Action: "mark", Hold: "both", Reason: "기억 병합 제안 " + seen.ID}
-			if err := supersedeInTx(ctx, tx, mark, d.PrincipalID); err != nil {
+			if err := supersedeInTx(ctx, tx, mark, d.PrincipalID, roleHuman); err != nil {
 				return err
 			}
 		}

@@ -8975,6 +8975,52 @@
             }
           }},
         "operationId": "postV1MaintenanceProposalsByIdDecide"}},
+    "/v1/dream_runs": {"get": {"summary": "What dreaming did: the newest automatic consolidation runs of a scope (read:maintenance_proposals, human principals only)", "description": "Query scope fields and limit=1-50 (default 20). mode is auto (the worker applies the AI's judgements while the scope is idle, MEMORY_DREAM=auto, the default) or manual (every item waits for a person). Each item is {id, run}; run holds trigger idle|schedule, started_at, finished_at, outcome ok|item_limit|time_limit|denied:<action>, changes [{op approve|edit_approve|reject|supersede|expire, target, reason, confidence, before, after, undone_at, undone_by}] and skipped [{target, reason, confidence}].", "parameters": [{"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 50}}], "responses": {"200": {"description": "Dream runs, newest first"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"},
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }},
+        "operationId": "getV1DreamRuns"}},
+    "/v1/dream_runs/{id}/undo": {"post": {"summary": "Undo one change of a dream run, or the whole run (human principals only)", "description": "Body {scope, change}. change is the index of one change in run.changes; without it every change of the run is undone, newest first. Each row the change wrote is put back as it was, only while nobody changed it since: an approval is withdrawn (the memory becomes rejected), a merged pair proposal is dismissed, a superseded, expired or rejected row gets its earlier state. Undone rows are tagged dream-undone so a later dream leaves them alone. Needs write:maintenance_proposals and transition:memories. undone lists the changes undone now; conflicts the ones a later write blocks (left as they are).", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "{undone, conflicts, run}"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "404": {"description": "No such dream run"},
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }},
+        "operationId": "postV1DreamRunsByIdUndo"}},
     "/v1/context/pins": {"get": {"summary": "Resolved pins of a work agent or team (read:crew, context:read)", "description": "agent=@handle of a live agent or team in the scope. Pins come in priority order, each read now: status ok|not_found|not_approved|revision_mismatch|secret_blocked|denied; only ok pins carry item (a data-only hit shaped by injection full|summary|reference). Optional destination external:<name> runs the transfer policy as search does.", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "destination", "in": "query", "required": false, "schema": {"type": "string"}}], "responses": {"200": {"description": "{crew, handle, type, items[{pin, status, item?}], authority, notice}"}, "404": {"description": "not_found"},
           "401": {
             "description": "Missing bearer credentials.",
@@ -61764,6 +61810,9 @@
           "memory_outcome_completed_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "dream_run": {
+            "$ref": "#/components/schemas/WireResponseDreamRun"
           }
         },
         "additionalProperties": false,
@@ -80431,6 +80480,130 @@
           }
         },
         "description": "Opt-in declared disjoint development/holdout manifest. Server validates actual paired outcomes and every declared category; hashes alone do not prove semantic independence or complete development disclosure."
+      },
+      "WireResponseDreamRun": {
+        "type": "object",
+        "properties": {
+          "trigger": {
+            "type": "string",
+            "description": "idle | schedule"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finished_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "outcome": {
+            "type": "string",
+            "description": "running | ok | item_limit | time_limit | denied:<action>"
+          },
+          "changes": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireResponseDreamChange"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "skipped": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireResponseDreamSkip"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "trigger",
+          "started_at",
+          "outcome",
+          "changes",
+          "skipped"
+        ],
+        "x-go-type": "memory.DreamRun",
+        "x-go-source": "internal/memory/dream.go",
+        "description": "DreamRun is one run's report: what it changed, what it skipped and why."
+      },
+      "WireResponseDreamChange": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "description": "approve | edit_approve | reject | supersede | expire"
+          },
+          "target": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number"
+          },
+          "before": {
+            "type": "string",
+            "description": "status and text before"
+          },
+          "after": {
+            "type": "string"
+          },
+          "undone_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "undone_by": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "op",
+          "target",
+          "reason",
+          "confidence",
+          "before",
+          "after"
+        ],
+        "x-go-type": "memory.DreamChange",
+        "x-go-source": "internal/memory/dream.go",
+        "description": "DreamChange is one automatic change. Rows hold what undo needs; the rest is the readable summary."
+      },
+      "WireResponseDreamSkip": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "target",
+          "reason"
+        ],
+        "x-go-type": "memory.DreamSkip",
+        "x-go-source": "internal/memory/dream.go",
+        "description": "DreamSkip is an item the run left for a person, with why."
       }
     },
     "headers": {

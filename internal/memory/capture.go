@@ -279,6 +279,10 @@ func (s *Service) capture(ctx context.Context, token string, in CaptureInput) (C
 	}
 	if capturedAny(out) {
 		s.autoApplySpaceTemplate(ctx, token, actor, in.Scope, false)
+		s.noteDreamActivity(ctx, in.Scope)
+		if in.Scope.AgentID != "" { // a user's own statement lands without the agent (captureClaimScope)
+			s.noteDreamActivity(ctx, Scope{WorkspaceID: in.Scope.WorkspaceID, ProjectID: in.Scope.ProjectID, UserID: in.Scope.UserID})
+		}
 	}
 	return out, nil
 }

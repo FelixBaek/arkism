@@ -266,6 +266,8 @@ type Record struct {
 	MentalModel        *MentalModelData     `json:"mental_model,omitempty" bson:"mental_model,omitempty"`
 	AutoDerive         *AutoDeriveJob       `json:"-" bson:"auto_derive,omitempty"`
 	DeriveSchedule     *DeriveScheduleJob   `json:"-" bson:"derive_schedule,omitempty"`
+	Dream              *DreamJob            `json:"-" bson:"dream,omitempty"`
+	DreamRun           *DreamRun            `json:"dream_run,omitempty" bson:"dream_run,omitempty"`
 	SkillCompatibility map[string]string    `json:"skill_compatibility,omitempty" bson:"skill_compatibility,omitempty"`
 	ApprovedBy         string               `json:"approved_by,omitempty" bson:"approved_by,omitempty"`
 	ValidationID       string               `json:"validation_id,omitempty" bson:"validation_id,omitempty"`

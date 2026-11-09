@@ -68,6 +68,7 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 	registerMemoryCoreHTTP(mux, s, stats)
 	registerMemoryreachsuggestionsCoreHTTP(mux, s, stats)
 	registerMaintenanceProposalsCoreHTTP(mux, s, stats)
+	registerDreamRunsCoreHTTP(mux, s)
 	registerSkillsCoreHTTP(mux, s, stats)
 	registerSkilltrialsCoreHTTP(mux, s, stats)
 	registerSkilltrialoutcomesCoreHTTP(mux, s, stats)

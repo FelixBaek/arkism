@@ -981,6 +981,10 @@ func (s *Service) runClaimedJob(ctx context.Context, workerToken string, job *Re
 		e = s.runDeriveSchedule(ctx, workerToken, *job)
 		return false, e == nil, e
 	}
+	if job.Kind == dreamJobKind {
+		e = s.runDream(ctx, workerToken, *job)
+		return false, e == nil, e
+	}
 	if job.Kind == approvedEntitiesJobKind {
 		e = s.runApprovedEntities(ctx, workerToken, *job)
 		if errors.Is(e, errSummaryScheduleBusy) {

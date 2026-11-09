@@ -571,7 +571,11 @@ func (s *Service) Create(ctx context.Context, token, col string, in CreateInput)
 	if ownRoutesOnly(col) {
 		return Record{}, ErrInvalid
 	}
-	return s.create(ctx, token, col, in, nil)
+	r, err := s.create(ctx, token, col, in, nil)
+	if err == nil && col == "memory_candidates" {
+		s.noteDreamActivity(ctx, r.Scope)
+	}
+	return r, err
 }
 
 func (s *Service) create(ctx context.Context, token, col string, in CreateInput, file *textArtifact) (Record, error) {
@@ -1227,8 +1231,9 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 		return Record{}, e
 	}
 	if review != nil {
-		// Review is an explicit human decision; legacy service policies cannot approve or reject.
-		if review.Automated || d.Role != roleHuman || !d.ContentSafe {
+		// Review is an explicit human decision, or the worker's own dream run (dream.go); legacy service
+		// policies cannot approve or reject, so the reviewer policy check below never applies.
+		if !d.ContentSafe || !reviewerMayDecide(ctx, review, d) {
 			return Record{}, ErrDenied
 		}
 	} else if d.Role != roleHuman {
@@ -1267,9 +1272,6 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 		}
 
 		if review != nil {
-			if !s.memoryReviewerAllowed(d, in.Scope, r.Kind) {
-				return ErrDenied
-			}
 			var replay bool
 			result, replay, e = replayMemoryReview(ctx, tx, id, d.PrincipalID, *review)
 			if e != nil {
@@ -1442,7 +1444,11 @@ func validCandidateTime(col string, in *CreateInput) bool {
 }
 
 func applyReviewDecision(r *Record, review CandidateReviewInput, d Decision) {
-	r.Review = &ReviewDecision{ReceiptID: ID(), ActorRole: d.Role, Channel: "explicit_review_api", Action: review.Action, By: d.PrincipalID, At: r.UpdatedAt, Reason: review.Reason, ReasonCode: review.ReasonCode}
+	channel := "explicit_review_api"
+	if review.Automated { // only a dream run gets an automated review through transition
+		channel = "dream"
+	}
+	r.Review = &ReviewDecision{ReceiptID: ID(), ActorRole: d.Role, Channel: channel, Action: review.Action, By: d.PrincipalID, At: r.UpdatedAt, Reason: review.Reason, ReasonCode: review.ReasonCode}
 	if d.Role == roleHuman {
 		r.Review.Person, r.Review.Overturned = true, overturned(r.Classification, review.Action)
 		if r.Classification != nil {

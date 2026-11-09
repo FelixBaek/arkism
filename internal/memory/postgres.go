@@ -634,7 +634,7 @@ func (p *Postgres) ClaimJob(ctx context.Context, now time.Time, lease time.Durat
 				claimErr = err
 			}
 		}()
-		kinds := append([]string{"embedding", webhookDeliveryKind, autoDeriveJobKind, deriveScheduleKind, captureMergeGateKind, approvedEntitiesJobKind}, erasureJobKinds...)
+		kinds := append([]string{"embedding", webhookDeliveryKind, autoDeriveJobKind, deriveScheduleKind, captureMergeGateKind, approvedEntitiesJobKind, dreamJobKind}, erasureJobKinds...)
 		if pp.erasureOnly {
 			kinds = erasureJobKinds
 		}

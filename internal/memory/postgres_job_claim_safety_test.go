@@ -242,7 +242,7 @@ func TestPostgresJobClaimPlanPreferenceRestoredAndCachedPlanBypassed(t *testing.
 	p := isolatedPostgres(t)
 	ctx := context.Background()
 	now := time.Now().UTC()
-	kinds := append([]string{"embedding", webhookDeliveryKind, autoDeriveJobKind, deriveScheduleKind, captureMergeGateKind, approvedEntitiesJobKind}, erasureJobKinds...)
+	kinds := append([]string{"embedding", webhookDeliveryKind, autoDeriveJobKind, deriveScheduleKind, captureMergeGateKind, approvedEntitiesJobKind, dreamJobKind}, erasureJobKinds...)
 	queueTestJob(t, p, "a", "embedding", JobStatusPending, nil, time.Time{})
 	conn, err := p.pool.Acquire(ctx)
 	if err != nil {
