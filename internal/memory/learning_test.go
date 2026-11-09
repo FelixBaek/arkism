@@ -250,3 +250,43 @@ func TestLearningCandidateQuotaRollsBackBothRecords(t *testing.T) {
 		t.Fatal("quota failure committed partial learning")
 	}
 }
+
+// Reworded lessons of one task type add up across runs and reach the skill dry run with a hint to the
+// matching catalog skill; an unrelated lesson of the same type stays apart, and a person still decides.
+func TestLearningCountsRewordedLessonsAndHintsExistingSkill(t *testing.T) {
+	f := newFixture(t)
+	if _, err := f.svc.ImportSkill(testCtx, f.human, ImportSkillInput{Scope: scopeA, SkillID: "design-review", Path: "/skills/design-review/SKILL.md", Content: "---\nname: design-review\n---\nReview.", Analysis: detailedSkillAnalysis()}); err != nil {
+		t.Fatal(err)
+	}
+	learn := func(taskType, lesson string) LearningResult {
+		t.Helper()
+		src := f.source()
+		run := f.create(f.agent, "agent_runs", completedRunInput(CreateInput{Scope: scopeA, Text: "learning run", Sources: refs(src)}))
+		passed := true
+		target := Ref{Collection: "agent_runs", ID: run.ID, Revision: run.Revision}
+		ev := f.create(f.human, "evaluations", CreateInput{Scope: scopeA, Text: "check", Sources: refs(src), Target: &target, Evaluation: &Evaluation{EvalType: "user_rating", Passed: &passed}})
+		got, err := f.svc.Learn(testCtx, f.agent, LearningInput{Scope: scopeA, Run: target, Evaluation: Ref{Collection: "evaluations", ID: ev.ID, Revision: ev.Revision}, TaskType: taskType, Lesson: lesson, VerificationMethod: "query check"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	learn("ui-check", "Check every screen at phone width before shipping.")
+	if got := learn("ui-check", "Ordered a new keyboard."); got.CompatibleRuns != 1 {
+		t.Fatal("unrelated lesson counted:", got.CompatibleRuns)
+	}
+	learn("ui-check", "Before shipping, check each screen at phone width.")
+	if got := learn("ui-check", "Check all screens at a phone width before you ship."); !got.ReviewSuggested || got.CompatibleRuns != 3 {
+		t.Fatalf("reworded lessons not counted: %+v", got)
+	}
+	for _, lesson := range []string{"Review a product interface before release.", "review a product interface before release", "Review a product interface before release!"} {
+		learn("ui-gate", lesson)
+	}
+	dec, err := f.svc.Improve(testCtx, f.human, ImprovementInput{Scope: scopeA, Target: improvementSkillVersio, ID: "ui-gate", DryRun: true})
+	if err != nil || !dec.Promotable || dec.DistinctRuns != 3 || dec.ExistingSkill != "design-review" || dec.Promoted {
+		t.Fatalf("dry run = %+v, %v", dec, err)
+	}
+	if len(f.repo.rows("memories")) != 0 {
+		t.Fatal("learning auto-promoted a candidate")
+	}
+}

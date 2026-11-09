@@ -102,7 +102,7 @@ func skillLessons(ctx context.Context, tx Tx, scope Scope, lessons []Ref) (skill
 		if taskType == "" {
 			taskType, text = reflection.Reflection.TaskType, row.Text
 		}
-		if reflection.Reflection.TaskType != taskType || row.Text != text {
+		if reflection.Reflection.TaskType != taskType || !sameLesson(row.Text, text) {
 			return out, ErrInvalid
 		}
 		valid, err := validLearningCandidate(ctx, tx, learningCandidate{row: row, run: run, evaluation: evaluation}, scope, taskType, text)

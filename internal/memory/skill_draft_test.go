@@ -77,7 +77,7 @@ func TestChatSkillDraft(t *testing.T) {
 			t.Fatal("baseline identity/stats leaked or caller mutated")
 		}
 	}
-	if g := drafter.Generator(); !validGenerator(&g) || g.PromptVersion != "skill-draft-v3" {
+	if g := drafter.Generator(); !validGenerator(&g) || g.PromptVersion != "skill-draft-v4" {
 		t.Fatal("provenance")
 	}
 }

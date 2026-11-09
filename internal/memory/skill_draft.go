@@ -36,7 +36,7 @@ type SkillDrafter interface {
 type ChatSkillDrafter struct{ Config LLMConfig }
 
 func (a *ChatSkillDrafter) Generator() Generator {
-	return Generator{Model: a.Config.Model, PromptVersion: "skill-draft-v3", PipelineVersion: "arkism-skill-draft-v1"}
+	return Generator{Model: a.Config.Model, PromptVersion: "skill-draft-v4", PipelineVersion: "arkism-skill-draft-v1"}
 }
 
 func invalidSkillDraftInput(in SkillDraftInput) bool {

@@ -53,8 +53,8 @@ type TacitEdge struct {
 	Scope           Scope      `json:"scope"`
 }
 
-// ReflectionView groups identical lesson candidates (same task type, same
-// text) across runs: one failure is one observation, never a fact.
+// ReflectionView groups matching lesson candidates (same task type, text the
+// same or reworded, see sameLesson) across runs: one failure is one observation, never a fact.
 type ReflectionView struct {
 	CandidateRefs  []Ref     `json:"candidate_refs"`
 	ID             string    `json:"id"`
@@ -266,7 +266,7 @@ func (s *Service) ListReflections(ctx context.Context, token string, scope Scope
 		if !slices.Contains(r.Tags, tag) {
 			return
 		}
-		key := status + "\x00" + r.Text
+		key := reflectionGroup(groups, order, status, r.Text)
 		g := groups[key]
 		if g == nil {
 			g = &ReflectionView{ID: r.ID, Subject: subject, Interpretation: r.Text, Status: status, CreatedAt: r.CreatedAt, Scope: r.Scope, EvidenceRefs: []Ref{}}
@@ -323,6 +323,16 @@ func (s *Service) ListReflections(ctx context.Context, token string, scope Scope
 	return out, nil
 }
 
+// reflectionGroup is the key of the group whose first lesson matches text, else a new key.
+func reflectionGroup(groups map[string]*ReflectionView, order []string, status, text string) string {
+	for _, key := range order {
+		if g := groups[key]; g.Status == status && sameLesson(g.Interpretation, text) {
+			return key
+		}
+	}
+	return status + "\x00" + text
+}
+
 func parseTacitNode(node string) (string, string, bool) {
 	kind, id, ok := strings.Cut(node, ":")
 	return kind, id, ok && validRunLabel(kind, 64) && validRunLabel(id, 256)
@@ -374,6 +384,9 @@ type ImprovementDecision struct {
 	DistinctRuns int    `json:"distinct_runs"`
 	EvidenceRefs []Ref  `json:"evidence_refs"`
 	Next         string `json:"next,omitempty"`
+	// ExistingSkill is the catalog skill the skill search finds for a new-skill lesson: a hint to
+	// update it rather than add a near copy. The person still decides.
+	ExistingSkill string `json:"existing_skill,omitempty"`
 }
 
 // promotionReason is the single conservative rule: >= 3 distinct runs and
@@ -487,19 +500,38 @@ func (s *Service) improvementEvidence(ctx context.Context, token string, in *Imp
 		if err != nil {
 			return "", 0, err
 		}
+		lesson := ""
 		for _, r := range page.Items {
 			if r.Status == "candidate" && r.DistinctRuns > out.DistinctRuns {
-				status, confidence, out.DistinctRuns, out.EvidenceRefs = "candidate", r.Confidence, r.DistinctRuns, r.EvidenceRefs
+				status, confidence, out.DistinctRuns, out.EvidenceRefs, lesson = "candidate", r.Confidence, r.DistinctRuns, r.EvidenceRefs, r.Interpretation
 			}
 		}
 		if status == "" {
 			return "", 0, ErrNotFound
+		}
+		if !strings.HasPrefix(in.ID, "skill:") {
+			out.ExistingSkill = s.existingSkillFor(ctx, token, in.Scope, lesson)
 		}
 		out.Next = "import the revised SKILL.md as a candidate version, then evaluate independently, approve and apply (skill review)"
 	default:
 		return "", 0, ErrInvalid
 	}
 	return status, confidence, nil
+}
+
+// existingSkillFor asks the skill search the router uses for the best skill matching a lesson.
+// A failed or empty search only drops the hint.
+func (s *Service) existingSkillFor(ctx context.Context, token string, scope Scope, lesson string) string {
+	in := SearchInput{Scope: scope, Query: lesson, Purpose: "skills", Limit: 1, retrievalQuery: skillQueryVariants(lesson)}
+	bundle, _, err := s.searchWithActor(ctx, token, in)
+	if err != nil || len(bundle.Items) == 0 {
+		return ""
+	}
+	r, err := s.Repo.Get(ctx, colSkillVersions, scope, bundle.Items[0].ID)
+	if err != nil || !live(r) {
+		return ""
+	}
+	return r.SkillID
 }
 
 func splitStatuses(value string) []string {
