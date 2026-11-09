@@ -71,9 +71,6 @@ func observeStageOutcome(family, stage, outcome string, elapsed time.Duration) {
 	h.observe(latencyBounds[:], elapsed.Seconds())
 }
 
-// timeStage is defer timeStage(family, stage, time.Now()).
-func timeStage(family, stage string, start time.Time) { observeStage(family, stage, time.Since(start)) }
-
 func stageFamilies() []metricFamily {
 	stageStats.mu.Lock()
 	defer stageStats.mu.Unlock()

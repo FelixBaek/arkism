@@ -336,6 +336,6 @@ func TestPostgresJobQueueMigrationUpgrade(t *testing.T) {
 		}
 	}
 	if got := schemaCount(t, p); got != len(schemaMigrations()) {
-		t.Fatal(fmt.Sprintf("migration count %d", got))
+		t.Fatalf("migration count %d", got)
 	}
 }

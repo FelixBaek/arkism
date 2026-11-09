@@ -1,81 +1,17 @@
+//go:build linux
+
 package memory
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"slices"
-	"sort"
 	"strings"
 	"testing"
 	"time"
 )
-
-// fakeRelation is one relations-table row between a memory and another node.
-type fakeRelation struct{ SourceID, TargetKind, TargetID, Kind string }
-
-func (f *fakeRepo) SearchMemoriesInWindow(_ context.Context, in SearchInput, from, to time.Time) ([]Hit, error) {
-	c, err := normalizeSearchCriteria(in.SearchCriteria)
-	if err != nil {
-		return nil, err
-	}
-	rows := []Record{}
-	for _, r := range f.rows(colMemories) {
-		if sameScope(r.Scope, in.Scope) {
-			rows = append(rows, r)
-		}
-	}
-	return windowHits(rows, c, time.Now().UTC(), timeWindow{From: from, To: to}, from.Location(), in.Limit), nil
-}
-
-// MemoryNeighbors mirrors memoryNeighborsSQL over f.relations (scope is ignored: one scope per test).
-func (f *fakeRepo) MemoryNeighbors(_ context.Context, _ Scope, seeds []string, limit int) ([]string, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	count, first := map[string]int{}, map[string]int{}
-	add := func(id string, pos int) {
-		if slices.Contains(seeds, id) {
-			return
-		}
-		if _, ok := first[id]; !ok || pos < first[id] {
-			first[id] = pos
-		}
-		count[id]++
-	}
-	for pos, seed := range seeds {
-		for _, r := range f.relations {
-			switch {
-			case r.SourceID == seed && r.TargetKind == "memory":
-				add(r.TargetID, pos)
-			case r.TargetKind == "memory" && r.TargetID == seed:
-				add(r.SourceID, pos)
-			case r.SourceID == seed && r.Kind == "mentions":
-				for _, o := range f.relations {
-					if o.Kind == "mentions" && o.TargetKind == r.TargetKind && o.TargetID == r.TargetID {
-						add(o.SourceID, pos)
-					}
-				}
-			}
-		}
-	}
-	ids := make([]string, 0, len(count))
-	for id := range count {
-		ids = append(ids, id)
-	}
-	sort.Slice(ids, func(i, j int) bool {
-		a, b := ids[i], ids[j]
-		if count[a] != count[b] {
-			return count[a] > count[b]
-		}
-		if first[a] != first[b] {
-			return first[a] < first[b]
-		}
-		return a < b
-	})
-	return ids[:min(limit, len(ids))], nil
-}
 
 func TestParseTimeIntent(t *testing.T) {
 	seoul := recallLocation("")

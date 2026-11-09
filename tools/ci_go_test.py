@@ -85,11 +85,12 @@ def run(cmd, cwd=None, env=None):
 
 
 def checked(cmd, cwd=None):
-    code, out = run(cmd, cwd)
-    if code:
-        print(out)
-        raise SystemExit(code)
-    return out
+    # stdout only: on a cold module cache go prints "go: downloading ..." to stderr, which is not output.
+    p = subprocess.run(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if p.returncode:
+        print(p.stdout + p.stderr)
+        raise SystemExit(p.returncode)
+    return p.stdout
 
 
 def main():

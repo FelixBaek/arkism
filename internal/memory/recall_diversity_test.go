@@ -1,3 +1,5 @@
+//go:build linux
+
 package memory
 
 import (
@@ -145,8 +147,8 @@ func TestSelectDiverseSourceSpan(t *testing.T) {
 		{"different scope", base.evidenceSpan, "source-a", Scope{}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			copy := Hit{vector: []float64{.95, .31225}, ID: "copy", Scope: tc.scope, Sources: []SourceRef{{SourceID: tc.source}}, evidenceSpan: tc.span}
-			rows := []ScoredHit{{Hit: base, Score: 1}, {Hit: copy, Score: .95}, diverseRow("distinct", .7)}
+			retold := Hit{vector: []float64{.95, .31225}, ID: "copy", Scope: tc.scope, Sources: []SourceRef{{SourceID: tc.source}}, evidenceSpan: tc.span}
+			rows := []ScoredHit{{Hit: base, Score: 1}, {Hit: retold, Score: .95}, diverseRow("distinct", .7)}
 			got := selectDiverse(rows, 2)
 			if (got[1].ID == "distinct") != tc.want {
 				t.Fatal(got)

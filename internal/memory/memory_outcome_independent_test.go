@@ -1,62 +1,13 @@
+//go:build linux
+
 package memory
 
 import (
 	"context"
 	"fmt"
-	"slices"
-	"strings"
 	"testing"
 	"time"
 )
-
-// independentOutcomeRows preserves every stored event, but selects the first
-// completed evaluation per memory content, dimension and exact trace identity.
-// Time filtering follows selection, so a late duplicate cannot refresh old evidence.
-func independentOutcomeRows(rows []Record, in MemoryOutcomeQuery) []Record {
-	base := in
-	base.From, base.To = nil, nil
-	ordered := slices.Clone(rows)
-	slices.SortFunc(ordered, func(a, b Record) int {
-		aAt, bAt := a.CreatedAt, b.CreatedAt
-		if a.MemoryOutcomeCompletedAt != nil {
-			aAt = *a.MemoryOutcomeCompletedAt
-		}
-		if b.MemoryOutcomeCompletedAt != nil {
-			bAt = *b.MemoryOutcomeCompletedAt
-		}
-		if n := aAt.Compare(bAt); n != 0 {
-			return n
-		}
-		if n := a.CreatedAt.Compare(b.CreatedAt); n != 0 {
-			return n
-		}
-		return strings.Compare(a.ID, b.ID)
-	})
-	out := []Record{}
-	seen := map[string]bool{}
-	for _, r := range ordered {
-		if !memoryOutcomeMatches(r, base) || r.MemoryOutcomeContentHash == "" {
-			continue
-		}
-		trace := outcomeTrace(r)
-		if trace == nil || trace.ID == "" {
-			continue
-		}
-		identity := "trace:" + trace.ID
-		if r.MemoryOutcomeTaskHash != "" && r.MemoryOutcomeCompletedAt != nil {
-			identity = "task:" + r.MemoryOutcomeTaskHash
-		}
-		key := structuredText([]string{r.Target.ID, r.MemoryOutcomeContentHash, outcomeDimension(r), identity})
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-		if memoryOutcomeMatches(r, in) {
-			out = append(out, r)
-		}
-	}
-	return out
-}
 
 func distinctOutcomeTask(t *testing.T, f *fixture, in MemoryOutcomeInput, name string) MemoryOutcomeInput {
 	t.Helper()
@@ -121,7 +72,6 @@ func TestIndependentOutcomePostgresParity(t *testing.T) {
 	f := newFixture(t)
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	hashes := map[string]string{"m": "content"}
-	rows := []Record{}
 	for i := 0; i < 6; i++ {
 		r := Record{ID: fmt.Sprintf("r%d", i), Scope: scopeA, Kind: memoryOutcomeKind, Status: "active", Revision: 1, CreatedAt: now.Add(time.Duration(i-6) * time.Hour), Target: &Ref{Collection: colMemories, ID: "m", Revision: 1}, Tags: []string{"dimension:work_task"}, Passed: i != 0, MemoryOutcomeContentHash: "content", Relations: []Ref{{Collection: "execution_traces", ID: "task", Revision: 1}}}
 		if i == 2 {
@@ -136,7 +86,6 @@ func TestIndependentOutcomePostgresParity(t *testing.T) {
 		if i == 5 {
 			r.Relations = nil
 		}
-		rows = append(rows, r)
 		if e := p.Insert(testCtx, "evaluations", r); e != nil {
 			t.Fatal(e)
 		}

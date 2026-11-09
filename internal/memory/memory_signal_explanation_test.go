@@ -1,3 +1,5 @@
+//go:build linux
+
 package memory
 
 import (
@@ -84,16 +86,6 @@ func TestSignalPolicyExplicitDisableOverridesInherited(t *testing.T) {
 	}
 }
 
-// signalPolicyHTTPResponses supplies real router responses for the strict API
-// corpus. The shared contract helper records both authenticated and anonymous
-// requests; no response shape is fabricated for schema validation.
-func signalPolicyHTTPResponses(t *testing.T) []apiContractCase {
-	t.Helper()
-	f, m, _ := outcomeFixture(t)
-	c := &contractHTTP{t: t, f: f, scope: scopeA, seen: map[string]bool{}}
-	c.call("GET /v1/memories/{id}/signal-policy", m.ID, nil, nil)
-	return c.cases
-}
 func TestSignalPolicyHTTPContractEvidence(t *testing.T) {
 	cases := signalPolicyHTTPResponses(t)
 	if len(cases) != 2 || cases[0].Status != 401 || cases[1].Status != 200 {

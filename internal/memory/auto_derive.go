@@ -285,16 +285,6 @@ func (s *Service) queueEntitySummaries(ctx context.Context, r Record) {
 	}
 }
 
-// approvedPeople are the live person entities r names as a person or in a relation.
-func (s *Service) approvedPeople(ctx context.Context, r Record) []string {
-	store, err := s.entityStore()
-	if err != nil || r.ApprovedBy == "" {
-		return nil
-	}
-	ids, _ := approvedPeopleIn(ctx, store, r)
-	return ids
-}
-
 func approvedPeopleIn(ctx context.Context, store namedEntityStore, r Record) ([]string, error) {
 	names := []string{}
 	for _, e := range r.Entities {

@@ -144,10 +144,10 @@ func readRestoreManifest(b *lockedBlobs) ([]byte, map[string]int64, restoreManif
 }
 
 // backupSizes maps manifest rows to sizes, refusing bad digests, sizes and repeats.
-func backupSizes(rows []backupFile, max int64) (map[string]int64, bool) {
+func backupSizes(rows []backupFile, limit int64) (map[string]int64, bool) {
 	sizes := map[string]int64{}
 	for _, f := range rows {
-		if !sourceHashPattern.MatchString(f.Digest) || f.Bytes < 1 || f.Bytes > max || sizes[f.Digest] != 0 {
+		if !sourceHashPattern.MatchString(f.Digest) || f.Bytes < 1 || f.Bytes > limit || sizes[f.Digest] != 0 {
 			return nil, false
 		}
 		sizes[f.Digest] = f.Bytes

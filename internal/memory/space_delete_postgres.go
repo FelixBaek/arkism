@@ -30,12 +30,12 @@ func (p *Postgres) SpaceArtifacts(ctx context.Context, space Scope, limit int) (
 }
 
 // EraseSpace deletes the space's rows inside the caller's transaction (see spaceEraser).
-func (p *Postgres) EraseSpace(ctx context.Context, space Scope, clear *spaceClear) (map[string]int64, error) {
+func (p *Postgres) EraseSpace(ctx context.Context, space Scope, only *spaceClear) (map[string]int64, error) {
 	if !validScope(space) {
 		return nil, ErrInvalid
 	}
-	if clear != nil {
-		return p.clearSpaceRecords(ctx, space, *clear)
+	if only != nil {
+		return p.clearSpaceRecords(ctx, space, *only)
 	}
 	if err := p.checkSpaceErasable(ctx, space); err != nil {
 		return nil, err

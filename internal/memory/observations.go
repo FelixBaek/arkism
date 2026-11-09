@@ -568,19 +568,6 @@ func groupRefs(members []Record) map[string]Ref {
 	return out
 }
 
-// sameSources: the two citation sets name the same memories (any revision).
-func sameSources(a []Ref, ids []string) bool {
-	if len(a) != len(ids) {
-		return false
-	}
-	for _, id := range ids {
-		if !namesMemory(a, id) {
-			return false
-		}
-	}
-	return true
-}
-
 // ConsolidateObservations is one worker run: sweep, refresh stale observations,
 // propose new ones from memory clusters and refresh due mental models, at most
 // max_groups model calls of each kind. dry_run writes no observation or mental model.

@@ -30,8 +30,8 @@ import (
 // BlobObjectStore keeps blob bytes by digest. Put's body hashes to digest.
 type BlobObjectStore interface {
 	Put(ctx context.Context, digest string, body io.Reader, size int64) error
-	// Get returns the bytes, ErrNotFound when absent, ErrInvalid past max bytes.
-	Get(ctx context.Context, digest string, max int64) ([]byte, error)
+	// Get returns the bytes, ErrNotFound when absent, ErrInvalid past limit bytes.
+	Get(ctx context.Context, digest string, limit int64) ([]byte, error)
 	// Delete succeeds when the object is already gone.
 	Delete(ctx context.Context, digest string) error
 	// List calls fn for every stored digest and its size.
@@ -156,7 +156,7 @@ func (s *S3BlobStore) Put(ctx context.Context, digest string, body io.Reader, si
 	return s3Status(resp, http.StatusOK)
 }
 
-func (s *S3BlobStore) Get(ctx context.Context, digest string, max int64) ([]byte, error) {
+func (s *S3BlobStore) Get(ctx context.Context, digest string, limit int64) ([]byte, error) {
 	key, err := s.key(digest)
 	if err != nil {
 		return nil, err
@@ -169,11 +169,11 @@ func (s *S3BlobStore) Get(ctx context.Context, digest string, max int64) ([]byte
 	if resp.StatusCode != http.StatusOK {
 		return nil, s3Status(resp, http.StatusOK)
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, max+1))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
 		return nil, ErrUnavailable
 	}
-	if int64(len(data)) > max {
+	if int64(len(data)) > limit {
 		return nil, ErrInvalid
 	}
 	return data, nil

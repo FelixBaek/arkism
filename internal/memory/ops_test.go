@@ -1,80 +1,16 @@
+//go:build linux
+
 package memory
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http/httptest"
 	"slices"
-	"sort"
 	"strings"
 	"testing"
 	"time"
 )
-
-// opsFakeRepo adds the operator query surface to the shared fake store.
-type opsFakeRepo struct{ *fakeRepo }
-
-func (o opsFakeRepo) OpsRecords(_ context.Context, q opsRecordQuery) ([]Record, error) {
-	out := []Record{}
-	for _, r := range o.rows(q.Collection) {
-		if opsFakeMatch(r, q) {
-			out = append(out, r)
-		}
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if !out[i].CreatedAt.Equal(out[j].CreatedAt) {
-			return out[i].CreatedAt.After(out[j].CreatedAt)
-		}
-		return out[i].ID > out[j].ID
-	})
-	if len(out) > q.Limit {
-		out = out[:q.Limit]
-	}
-	return out, nil
-}
-
-func opsFakeMatch(r Record, q opsRecordQuery) bool {
-	target := ""
-	if r.Target != nil {
-		target = r.Target.ID
-	}
-	after := q.After == nil || r.CreatedAt.Before(q.After.At) || r.CreatedAt.Equal(q.After.At) && r.ID < q.After.ID
-	return sameScope(r.Scope, q.Scope) && after && (q.Kind == "" || r.Kind == q.Kind) && strings.HasPrefix(r.Kind, q.KindPrefix) &&
-		(len(q.Statuses) == 0 || slices.Contains(q.Statuses, r.Status)) && (q.Actor == "" || r.CreatedBy == q.Actor) &&
-		(q.TargetID == "" || target == q.TargetID) && (q.Tag == "" || slices.Contains(r.Tags, q.Tag)) && (q.Transport == "" || r.Audit != nil && r.Audit.Transport == q.Transport) &&
-		(q.From.IsZero() || !r.CreatedAt.Before(q.From)) && (q.To.IsZero() || r.CreatedAt.Before(q.To))
-}
-
-func (o opsFakeRepo) OpsCounts(_ context.Context, q opsCountQuery) ([]OpsCount, error) {
-	counts := map[[2]string]int64{}
-	for _, r := range o.rows(q.Collection) {
-		if !sameScope(r.Scope, q.Scope) || len(q.Statuses) > 0 && !slices.Contains(q.Statuses, r.Status) {
-			continue
-		}
-		bucket := ""
-		if q.Bucket == "day" {
-			bucket = r.CreatedAt.UTC().Format("2006-01-02")
-		}
-		tags := r.Tags
-		if r.MentalModel != nil {
-			tags = r.MentalModel.Refresh.Tags
-		}
-		if q.Bucket == "day" && q.TimeField == "occurred" && r.Occurred != nil {
-			bucket = r.Occurred.From.UTC().Format("2006-01-02")
-		}
-		keys := map[string][]string{"": {""}, "kind": {r.Kind}, "status": {r.Status}, "tag": tags}[q.By]
-		for _, k := range keys {
-			counts[[2]string{bucket, k}]++
-		}
-	}
-	out := []OpsCount{}
-	for k, n := range counts {
-		out = append(out, OpsCount{Bucket: k[0], Key: k[1], Count: n})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Bucket+out[i].Key < out[j].Bucket+out[j].Key })
-	return out, nil
-}
 
 func newOpsFixture(t *testing.T) *fixture {
 	f := newFixture(t)

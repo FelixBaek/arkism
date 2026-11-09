@@ -1,3 +1,5 @@
+//go:build linux
+
 package memory
 
 import (
@@ -290,7 +292,7 @@ func TestAuditBodyIsOptInRedactedAndCapped(t *testing.T) {
 		t.Fatal("a non-JSON body was kept", b)
 	}
 	req := httptest.NewRequest(http.MethodPost, "/v1/x", strings.NewReader(`{}`))
-	if req, c := captureAuditBody(req); req.Body.(io.ReadCloser) == nil || c.request.text() != "" {
+	if req, c := captureAuditBody(req); req.Body == nil || c.request.text() != "" {
 		t.Fatal("a body without a JSON content type was captured")
 	}
 	if v := viewAuditEvent(auditRows(f, scopeA)["write:memories"]); v.RequestBody != body {

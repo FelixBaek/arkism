@@ -57,7 +57,7 @@ type spaceEraser interface {
 	SpaceArtifacts(ctx context.Context, space Scope, limit int) ([]Record, error)
 	// EraseSpace deletes every row of the space; with clear set, only the
 	// memory collections (and their queued embedding jobs) of that kind.
-	EraseSpace(ctx context.Context, space Scope, clear *spaceClear) (map[string]int64, error)
+	EraseSpace(ctx context.Context, space Scope, only *spaceClear) (map[string]int64, error)
 }
 
 // spaceClear picks the rows a memories clear removes: Collections, of Kind when set,
@@ -134,7 +134,7 @@ func (s *Service) DeleteSpaces(ctx context.Context, token string, workspace stri
 // directives, mental models, documents, wiki and attachments.
 func (s *Service) ClearSpaceMemories(ctx context.Context, token string, scope Scope, confirm, kind string) (SpaceDeleteReport, error) {
 	scope, ok := literalSpace(scope, confirm)
-	clear, known := clearFor(kind)
+	only, known := clearFor(kind)
 	if !ok || !known {
 		return SpaceDeleteReport{}, ErrInvalid
 	}
@@ -142,13 +142,13 @@ func (s *Service) ClearSpaceMemories(ctx context.Context, token string, scope Sc
 	if err != nil {
 		return SpaceDeleteReport{}, err
 	}
-	return s.eraseSpace(ctx, d, scope, clear)
+	return s.eraseSpace(ctx, d, scope, only)
 }
 
-func (s *Service) eraseSpace(ctx context.Context, d Decision, scope Scope, clear *spaceClear) (SpaceDeleteReport, error) {
+func (s *Service) eraseSpace(ctx context.Context, d Decision, scope Scope, only *spaceClear) (SpaceDeleteReport, error) {
 	report := SpaceDeleteReport{WorkspaceID: scope.WorkspaceID, ProjectID: scope.ProjectID}
 	action := "delete:space"
-	if clear != nil {
+	if only != nil {
 		action = "clear:memories"
 	}
 	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
@@ -156,14 +156,14 @@ func (s *Service) eraseSpace(ctx context.Context, d Decision, scope Scope, clear
 		if !ok {
 			return ErrUnavailable
 		}
-		if clear == nil {
+		if only == nil {
 			n, err := releaseSpaceArtifacts(ctx, tx, eraser, scope, d.PrincipalID)
 			if err != nil {
 				return err
 			}
 			report.Attachments = n
 		}
-		counts, err := eraser.EraseSpace(ctx, scope, clear)
+		counts, err := eraser.EraseSpace(ctx, scope, only)
 		if err != nil {
 			return err
 		}
@@ -173,7 +173,7 @@ func (s *Service) eraseSpace(ctx context.Context, d Decision, scope Scope, clear
 	if err != nil {
 		return SpaceDeleteReport{}, err
 	}
-	if clear == nil && s.SpaceTemplate != nil {
+	if only == nil && s.SpaceTemplate != nil {
 		s.SpaceTemplate.applied.Delete(scope) // a space made again under this name gets the template again
 	}
 	return report, nil

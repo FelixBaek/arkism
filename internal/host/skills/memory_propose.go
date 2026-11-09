@@ -57,11 +57,11 @@ func toolID(v any) (string, bool) {
 	return id, ok && id != "" && host.Len(id) <= 256 && !strings.Contains(id, "/") && id != "." && id != ".."
 }
 
-// toolString is a required string of at most max runes.
-func toolString(args map[string]any, key string, max int) (string, bool) {
+// toolString is a required string of at most limit runes.
+func toolString(args map[string]any, key string, limit int) (string, bool) {
 	s, ok := args[key].(string)
 	s = strings.TrimSpace(s)
-	return s, ok && s != "" && utf8.ValidString(s) && host.Len(s) <= max
+	return s, ok && s != "" && utf8.ValidString(s) && host.Len(s) <= limit
 }
 
 // toolInt reads an optional integer in [lo, hi]; a missing value gives def.

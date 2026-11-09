@@ -5,8 +5,9 @@
 set -euo pipefail
 if [[ "${RUNNER_ENVIRONMENT:-}" == github-hosted ]]; then
   # GitHub-hosted Ubuntu ships PostgreSQL without pgvector; the self-hosted runner has both preinstalled.
+  # Ubuntu's own pgvector (0.6) has no halfvec, which migration 4 needs; the PostgreSQL apt repository has 0.7+.
   major=$(find /usr/lib/postgresql -mindepth 1 -maxdepth 1 -printf '%f\n' | sort -V | tail -1)
-  sudo apt-get update -q >/dev/null
+  sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
   sudo apt-get install -y -q "postgresql-${major}-pgvector" >/dev/null
 fi
 bin=$(find /usr/lib/postgresql -mindepth 2 -maxdepth 2 -name bin | sort -V | tail -1)

@@ -161,7 +161,7 @@ func (s *SharedKeyBlobStore) Put(ctx context.Context, digest string, body io.Rea
 	return s3Status(resp, http.StatusCreated)
 }
 
-func (s *SharedKeyBlobStore) Get(ctx context.Context, digest string, max int64) ([]byte, error) {
+func (s *SharedKeyBlobStore) Get(ctx context.Context, digest string, limit int64) ([]byte, error) {
 	key, err := s.key(digest)
 	if err != nil {
 		return nil, err
@@ -174,11 +174,11 @@ func (s *SharedKeyBlobStore) Get(ctx context.Context, digest string, max int64) 
 	if resp.StatusCode != http.StatusOK {
 		return nil, s3Status(resp, http.StatusOK)
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, max+1))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
 		return nil, ErrUnavailable
 	}
-	if int64(len(data)) > max {
+	if int64(len(data)) > limit {
 		return nil, ErrInvalid
 	}
 	return data, nil

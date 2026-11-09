@@ -1,3 +1,5 @@
+//go:build linux
+
 package memory
 
 import (
@@ -22,9 +24,9 @@ func (x fakeTx) SpaceArtifacts(_ context.Context, space Scope, limit int) ([]Rec
 	return out, nil
 }
 
-func (x fakeTx) EraseSpace(_ context.Context, space Scope, clear *spaceClear) (map[string]int64, error) {
+func (x fakeTx) EraseSpace(_ context.Context, space Scope, only *spaceClear) (map[string]int64, error) {
 	now := time.Now()
-	if clear == nil {
+	if only == nil {
 		for _, j := range x.store[colJobs] {
 			held := j.PrivacyDeletion != nil && (j.PrivacyDeletion.State == privacyHoldHeld || j.PrivacyDeletion.LegalHoldStatus == privacyHoldHeld)
 			if spaceScope(j.Scope) == space && (j.LeaseUntil.After(now) || held) {
@@ -35,7 +37,7 @@ func (x fakeTx) EraseSpace(_ context.Context, space Scope, clear *spaceClear) (m
 	counts := map[string]int64{}
 	for col, rows := range x.store {
 		for key, r := range rows {
-			if spaceScope(r.Scope) != space || clear != nil && (!slices.Contains(clear.Collections, col) || clear.Kind != "" && r.Kind != clear.Kind) {
+			if spaceScope(r.Scope) != space || only != nil && (!slices.Contains(only.Collections, col) || only.Kind != "" && r.Kind != only.Kind) {
 				continue
 			}
 			delete(rows, key)
@@ -166,17 +168,17 @@ func TestClearSpaceMemoriesKeepsTheRest(t *testing.T) {
 func TestAcceptingSpaceProposalsRunsTheDelete(t *testing.T) {
 	f := newFixture(t)
 	seedSpace(f, scopeA)
-	clear, err := f.svc.ProposeMaintenance(testCtx, f.agent, changeInput(ChangeRequest{Action: "memories_clear"}))
+	proposal, err := f.svc.ProposeMaintenance(testCtx, f.agent, changeInput(ChangeRequest{Action: "memories_clear"}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = f.svc.DecideMaintenance(testCtx, f.human, clear.ID, MaintenanceDecision{Scope: scopeA, ExpectedRevision: 1, Decision: "accept"}); !errors.Is(err, ErrInvalid) {
+	if _, err = f.svc.DecideMaintenance(testCtx, f.human, proposal.ID, MaintenanceDecision{Scope: scopeA, ExpectedRevision: 1, Decision: "accept"}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("accepted a clear without the typed confirm: %v", err)
 	}
-	if _, err = f.svc.DecideMaintenance(testCtx, f.human, clear.ID, MaintenanceDecision{Scope: scopeA, ExpectedRevision: 1, Decision: "dismiss", Confirm: "proj-a"}); !errors.Is(err, ErrInvalid) {
+	if _, err = f.svc.DecideMaintenance(testCtx, f.human, proposal.ID, MaintenanceDecision{Scope: scopeA, ExpectedRevision: 1, Decision: "dismiss", Confirm: "proj-a"}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("a confirm on dismiss: %v", err)
 	}
-	done, err := f.svc.DecideMaintenance(testCtx, f.human, clear.ID, MaintenanceDecision{Scope: scopeA, ExpectedRevision: 1, Decision: "accept", Confirm: "proj-a"})
+	done, err := f.svc.DecideMaintenance(testCtx, f.human, proposal.ID, MaintenanceDecision{Scope: scopeA, ExpectedRevision: 1, Decision: "accept", Confirm: "proj-a"})
 	if err != nil || done.Status != "accepted" || spaceRows(f, scopeA)[colMemories] != 0 || spaceRows(f, scopeA)[colMentalModels] != 1 {
 		t.Fatalf("accept clear = %+v, %v (%v)", done.Status, err, spaceRows(f, scopeA))
 	}

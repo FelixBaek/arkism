@@ -1,7 +1,8 @@
+//go:build linux
+
 package memory
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -17,67 +18,6 @@ import (
 	"testing"
 	"time"
 )
-
-// extAnswer is the fake extension both transports serve: it refuses an operation
-// whose input says "forbidden", sleeps on "sleepy", refuses tenant checks for
-// human-2, and echoes routes and tools.
-func extAnswer(method string, params json.RawMessage) any {
-	var p struct {
-		Phase, Path, Tool string
-		Actor             map[string]string
-		Body              json.RawMessage
-		Data              map[string]int
-	}
-	_ = json.Unmarshal(params, &p)
-	text := string(params)
-	switch method {
-	case "describe":
-		return map[string]any{"operations": []string{OpCapture, OpRecall}, "tenant": true,
-			"routes": []map[string]any{{"method": "GET", "path": "/hello", "action": "read:memories"}, {"method": "GET", "path": "/env", "action": "read:memories", "roles": []string{"human"}}, {"method": "POST", "path": "/echo", "action": "read:memories"},
-				{"method": "POST", "path": "/count", "action": "read:memories", "data": true}, {"method": "POST", "path": "/sneaky", "action": "read:memories"}},
-			"tools": []map[string]any{{"name": "lookup", "description": "Look a thing up", "inputSchema": map[string]any{"type": "object"}}}}
-	case "operation":
-		if strings.Contains(text, "sleepy") && p.Phase == "before" {
-			time.Sleep(2 * time.Second)
-		}
-		return map[string]any{"allow": !strings.Contains(text, "forbidden")}
-	case "tenant":
-		return map[string]any{"allow": p.Actor["principal_id"] != "human-2"}
-	case "route":
-		body := map[string]any{"path": p.Path, "principal": p.Actor["principal_id"], "body": p.Body}
-		if p.Path == "/env" {
-			names := []string{}
-			for _, kv := range os.Environ() {
-				names = append(names, strings.SplitN(kv, "=", 2)[0])
-			}
-			body["env"] = names
-		}
-		if p.Path == "/count" || p.Path == "/sneaky" {
-			return map[string]any{"status": 200, "body": map[string]any{"seen": p.Data["n"]}, "data": []map[string]any{{"op": "put", "key": "n", "value": p.Data["n"] + 1}}}
-		}
-		return map[string]any{"status": 200, "body": body}
-	case "tool":
-		return map[string]any{"result": map[string]any{"tool": p.Tool, "args": p.Body}}
-	}
-	return nil
-}
-
-// fakeExtension is the stdio extension program (the test binary, ARKISM_TEST_HELPER=extension).
-func fakeExtension() int {
-	in, out := bufio.NewScanner(os.Stdin), json.NewEncoder(os.Stdout)
-	for in.Scan() {
-		var req struct {
-			ID     int64           `json:"id"`
-			Method string          `json:"method"`
-			Params json.RawMessage `json:"params"`
-		}
-		if json.Unmarshal(in.Bytes(), &req) != nil {
-			return 1
-		}
-		_ = out.Encode(map[string]any{"jsonrpc": "2.0", "id": req.ID, "result": extAnswer(req.Method, req.Params)})
-	}
-	return 0
-}
 
 func extConfigFile(t *testing.T, list ...ProcessExtensionConfig) string {
 	t.Helper()
