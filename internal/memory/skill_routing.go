@@ -63,15 +63,36 @@ type MeteredSkillJudge interface {
 	JudgeMeasured(context.Context, string, []SkillCandidate) (RouteResult, ProviderUsage, error)
 }
 
-func ruleRoute(candidates []SkillCandidate, reason string) RouteResult {
+// ruleRoute applies its pick with no judge, so a pick needs confident (see
+// ruleRouteConfident); otherwise the candidates are offered unconfirmed.
+func ruleRoute(candidates []SkillCandidate, reason string, confident bool) RouteResult {
 	out := RouteResult{Provider: "rules", Authority: AuthorityDataOnly, Judgments: []SkillJudgment{}, Degraded: []string{reason}}
-	if len(candidates) > 0 {
+	if len(candidates) > 0 && confident {
 		out.SelectedID = candidates[0].ID
 	}
 	for _, c := range candidates {
 		out.Judgments = append(out.Judgments, SkillJudgment{ID: c.ID, NeedsVerification: true, NeedsHumanReview: true})
 	}
 	return out
+}
+
+// ruleRouteConfident holds unless the meaning (vector) lane could have found the
+// top skill and did not. A keyword-only top hit was mostly the wrong skill, or a
+// skill for a request that needed none, in offline routing checks. With no
+// meaning lane, or no embedding for that skill yet, the keyword pick stays.
+func ruleRouteConfident(candidates []SkillCandidate, records map[string]Record, bundle ContextBundle, modes []string) bool {
+	if len(candidates) == 0 {
+		return false
+	}
+	if candidates[0].Kind != "skill" || records[candidates[0].ID].Embedding == nil || !searchModeEnabled(modes, "vector") || slices.Contains(bundle.Degraded, "memory_vector_disabled") || slices.Contains(bundle.Degraded, "memory_vector_unavailable") {
+		return true
+	}
+	for _, h := range bundle.Items {
+		if h.ID == candidates[0].ID {
+			return slices.Contains(h.Lanes, "vector")
+		}
+	}
+	return false
 }
 
 var koreanParticles = []string{
@@ -178,7 +199,8 @@ func (s *Service) RouteSkills(ctx context.Context, token string, in SearchInput)
 			}
 		}
 	}()
-	fallback := ruleRoute(candidates, "jev_unavailable")
+	confident := ruleRouteConfident(candidates, records, bundle, in.Modes)
+	fallback := ruleRoute(candidates, "jev_unavailable", confident)
 	if len(candidates) == 0 || router == nil {
 		return fallback, nil
 	}
@@ -187,7 +209,7 @@ func (s *Service) RouteSkills(ctx context.Context, token string, in SearchInput)
 		return RouteResult{}, err
 	}
 	if reason != "" {
-		return ruleRoute(candidates, reason), nil
+		return ruleRoute(candidates, reason, confident), nil
 	}
 	op, cancel := context.WithTimeout(ctx, jevTimeout)
 	defer cancel()
