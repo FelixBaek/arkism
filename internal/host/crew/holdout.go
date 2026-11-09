@@ -16,63 +16,93 @@ func holdoutTasks(plan, dataset map[string]any) (map[string]string, float64, err
 	if h == nil {
 		return nil, 0, cmpErr("invalid_holdout")
 	}
+	score, minCases, err := holdoutThresholds(h)
+	if err != nil {
+		return nil, 0, err
+	}
+	development, err := holdoutDevelopment(h)
+	if err != nil {
+		return nil, 0, err
+	}
+	tasks, err := holdoutDeclared(h, development, minCases)
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := holdoutCoverage(dataset, tasks, development); err != nil {
+		return nil, 0, err
+	}
+	return tasks, score, nil
+}
+func holdoutThresholds(h map[string]any) (float64, float64, error) {
 	score, ok := num(h["min_category_score"])
 	if !ok || score < .9 || score > 1 || !finiteCost(score) {
-		return nil, 0, cmpErr("invalid_holdout")
+		return 0, 0, cmpErr("invalid_holdout")
 	}
 	minCases, ok := num(h["min_category_cases"])
 	if !ok || minCases < 1 || minCases > 62 || float64(int(minCases)) != minCases {
-		return nil, 0, cmpErr("invalid_holdout")
+		return 0, 0, cmpErr("invalid_holdout")
 	}
+	return score, minCases, nil
+}
+func holdoutDevelopment(h map[string]any) (map[string]bool, error) {
 	development := map[string]bool{}
 	dev, ok := h["development_tasks"].([]any)
 	if !ok || len(dev) == 0 || len(dev) > 128 {
-		return nil, 0, cmpErr("invalid_holdout")
+		return nil, cmpErr("invalid_holdout")
 	}
 	for _, v := range dev {
 		s, ok := v.(string)
 		if !ok || !holdoutHash(s) || development[s] {
-			return nil, 0, cmpErr("invalid_holdout")
+			return nil, cmpErr("invalid_holdout")
 		}
 		development[s] = true
 	}
+	return development, nil
+}
+func holdoutDeclared(h map[string]any, development map[string]bool, minCases float64) (map[string]string, error) {
 	tasks := map[string]string{}
 	counts := map[string]int{}
 	declared, ok := h["tasks"].([]any)
 	if !ok || len(declared) == 0 || len(declared) > 62 {
-		return nil, 0, cmpErr("invalid_holdout")
+		return nil, cmpErr("invalid_holdout")
 	}
 	for _, v := range declared {
 		m := obj(v)
 		hash, hok := m["case_sha256"].(string)
 		category, cok := m["category"].(string)
-		if !hok || !cok || !holdoutHash(hash) || category == "" || len(category) > 64 || strings.TrimSpace(category) != category || strings.IndexFunc(category, unicode.IsControl) >= 0 || development[hash] || tasks[hash] != "" {
-			return nil, 0, cmpErr("invalid_holdout")
+		if !hok || !cok || !holdoutHash(hash) || !holdoutCategory(category) || development[hash] || tasks[hash] != "" {
+			return nil, cmpErr("invalid_holdout")
 		}
 		tasks[hash] = category
 		counts[category]++
 	}
 	for _, n := range counts {
 		if float64(n) < minCases {
-			return nil, 0, cmpErr("invalid_holdout")
+			return nil, cmpErr("invalid_holdout")
 		}
 	}
+	return tasks, nil
+}
+func holdoutCategory(category string) bool {
+	return category != "" && len(category) <= 64 && strings.TrimSpace(category) == category && strings.IndexFunc(category, unicode.IsControl) < 0
+}
+func holdoutCoverage(dataset map[string]any, tasks map[string]string, development map[string]bool) error {
 	seen := map[string]bool{}
 	for _, v := range list(dataset["cases"]) {
 		m := obj(v)
 		hash := digest([]byte(mustCanonical(v)))
 		_, declared := tasks[hash]
 		if development[hash] || declared != same(m["category"], "quality") || seen[hash] {
-			return nil, 0, cmpErr("holdout_leakage_or_coverage")
+			return cmpErr("holdout_leakage_or_coverage")
 		}
 		seen[hash] = true
 	}
 	for hash := range tasks {
 		if !seen[hash] {
-			return nil, 0, cmpErr("holdout_leakage_or_coverage")
+			return cmpErr("holdout_leakage_or_coverage")
 		}
 	}
-	return tasks, score, nil
+	return nil
 }
 func holdoutHash(s string) bool {
 	if len(s) != 64 {

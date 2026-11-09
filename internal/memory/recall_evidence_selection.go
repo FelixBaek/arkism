@@ -26,14 +26,8 @@ func (s *Service) evidenceSelectionStatus(in SearchInput, collection string) str
 	if !in.space.recallQuality().EvidenceSelection {
 		return ""
 	}
-	if in.Rerank == rerankOff {
-		return "rerank_disabled"
-	}
-	if collection != colMemories || in.IncludeInactive || in.RelatedTo != nil || in.contextView != nil || strings.HasPrefix(in.Destination, "external:") {
-		return "unsupported_context"
-	}
-	if in.WholeItems || in.ConversationContext || in.BudgetTokens != 0 || in.PreferObservations != nil && *in.PreferObservations || slices.Contains(in.Include, "source_facts") {
-		return "unsupported_delivery"
+	if status := evidenceSelectionInputStatus(in, collection); status != "" {
+		return status
 	}
 	if s.NativeSearchShadow != nil && s.NativeSearchShadow.config.Mode != "off" {
 		return "unsupported_native"
@@ -48,6 +42,21 @@ func (s *Service) evidenceSelectionStatus(in SearchInput, collection string) str
 		return "model_not_configured"
 	}
 	return "ready"
+}
+
+// evidenceSelectionInputStatus reports the request options that keep the
+// existing path, or "" when the request itself allows a selection.
+func evidenceSelectionInputStatus(in SearchInput, collection string) string {
+	if in.Rerank == rerankOff {
+		return "rerank_disabled"
+	}
+	if collection != colMemories || in.IncludeInactive || in.RelatedTo != nil || in.contextView != nil || strings.HasPrefix(in.Destination, "external:") {
+		return "unsupported_context"
+	}
+	if in.WholeItems || in.ConversationContext || in.BudgetTokens != 0 || in.PreferObservations != nil && *in.PreferObservations || slices.Contains(in.Include, "source_facts") {
+		return "unsupported_delivery"
+	}
+	return ""
 }
 
 type evidenceSelectionText struct {
@@ -170,6 +179,12 @@ func (s *Service) selectRecallEvidence(ctx context.Context, token string, in Sea
 	if !ok {
 		return "invalid_response"
 	}
+	return s.applyEvidenceSelection(ctx, token, in, answer, memories, conversations, sources, out)
+}
+
+// applyEvidenceSelection materializes a parsed selection and commits it to out
+// only when every budget and correction check passes.
+func (s *Service) applyEvidenceSelection(ctx context.Context, token string, in SearchInput, answer evidenceSelectionAnswer, memories, conversations []Hit, sources *conversationCandidatePool, out *ContextBundle) string {
 	selected := ContextBundle{Items: []Hit{}, Degraded: slices.Clone(out.Degraded), evidenceSelectionFenced: true}
 	for _, number := range answer.Memories {
 		selected.Items = append(selected.Items, memories[number-1])

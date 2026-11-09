@@ -51,18 +51,8 @@ type ContextPack struct {
 }
 
 func (s *Service) BuildContext(ctx context.Context, token string, in ContextBuildInput) (ContextPack, error) {
-	// Without budget_tokens the space's recall budget applies (read in directivesFirst, after validation).
-	if in.Agent != "" && (in.ConversationContext || in.WholeItems || in.BestEffortLanes || in.TemporalWindow != nil || in.TemporalWindows != nil) {
-		return ContextPack{}, ErrInvalid
-	}
-	maxItems, budget := 6, 2000
-	if in.MaxItems != nil {
-		maxItems = *in.MaxItems
-	}
-	if in.BudgetTokens != nil {
-		budget = *in.BudgetTokens
-	}
-	if maxItems < 3 || maxItems > 8 || budget < 1 || budget > 64000 || in.TokenEncoding == "" {
+	maxItems, budget, ok := contextBuildLimits(in)
+	if !ok {
 		return ContextPack{}, ErrInvalid
 	}
 	view, err := freezeContextView(in.Scope, in.ContextView)
@@ -102,6 +92,26 @@ func (s *Service) BuildContext(ctx context.Context, token string, in ContextBuil
 		return ContextPack{}, err
 	}
 	return contextPack(view, bundle, directives), nil
+}
+
+// contextBuildLimits validates the agent and size options and returns the item
+// limit and token budget. Without budget_tokens the space's recall budget
+// applies (read in directivesFirst, after validation).
+func contextBuildLimits(in ContextBuildInput) (maxItems, budget int, ok bool) {
+	if in.Agent != "" && (in.ConversationContext || in.WholeItems || in.BestEffortLanes || in.TemporalWindow != nil || in.TemporalWindows != nil) {
+		return 0, 0, false
+	}
+	maxItems, budget = 6, 2000
+	if in.MaxItems != nil {
+		maxItems = *in.MaxItems
+	}
+	if in.BudgetTokens != nil {
+		budget = *in.BudgetTokens
+	}
+	if maxItems < 3 || maxItems > 8 || budget < 1 || budget > 64000 || in.TokenEncoding == "" {
+		return 0, 0, false
+	}
+	return maxItems, budget, true
 }
 
 // directivesFirst validates the search before any service call, then packs the

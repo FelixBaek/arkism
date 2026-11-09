@@ -392,18 +392,8 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 	for _, h := range out.Items {
 		snapshots[Ref{Collection: h.Collection, ID: h.ID, Revision: h.Revision}] = searchHitHash(h)
 	}
-	if in.WholeItems {
-		boundWholeSearchHits(&out, in.MaxChars, historyRecords)
-	} else {
-		boundSearchHits(&out, in.MaxChars, historyRecords)
-	}
-	if in.ConversationContext {
-		boundConversationContext(&out, in.MaxChars)
-	}
-	if in.BudgetTokens > 0 {
-		if e = packContext(ctx, &out, in.BudgetTokens, in.TokenEncoding, in.ConversationContext); e != nil {
-			return ContextBundle{}, Decision{}, e
-		}
+	if e = boundSearchOutput(ctx, in, historyRecords, &out); e != nil {
+		return ContextBundle{}, Decision{}, e
 	}
 	out.ContextID = ID()
 	shadow.compute(ctx, s, token, in, d, out)
@@ -416,38 +406,61 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 	defer releaseCommit()
 	if e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		shadow.beginFinal()
-		checked := searchReadTx{Tx: tx}
-		if in.RelatedTo != nil {
-			if err := verifySearchAnchor(ctx, tx, checked, in, anchor); err != nil {
-				return err
-			}
-		}
-		if err := verifySearchHistory(ctx, tx, checked, in, out.History, historyRecords, snapshots); err != nil {
-			return err
-		}
-		if err := verifySearchItems(ctx, checked, in, run, out.Items, snapshots); err != nil {
-			return err
-		}
-		if run != nil {
-			if err := verifySearchRun(ctx, checked, in.Scope, run); err != nil {
-				return err
-			}
-		}
-		if in.ConversationContext || out.evidenceSelectionFenced {
-			if err := verifyConversationContext(ctx, tx, in.Scope, out); err != nil {
-				return err
-			}
-		}
-		if err := insertUsageReceipt(ctx, tx, in.Scope, out.ContextID, d.PrincipalID, usage); err != nil {
-			return err
-		}
-		return audit(ctx, tx, in.Scope, d.PrincipalID, "search", ContentHash(in.Query))
+		return commitSearch(ctx, tx, in, d, anchor, run, out, historyRecords, snapshots, usage)
 	}); e != nil {
 		shadow.failedFinal(e)
 		return ContextBundle{}, Decision{}, e
 	}
 	shadow.returned(out)
 	return s.withIncludes(ctx, token, in, out, d)
+}
+
+// boundSearchOutput fits the items, conversation context and token budget to
+// the requested bounds.
+func boundSearchOutput(ctx context.Context, in SearchInput, historyRecords map[string]Record, out *ContextBundle) error {
+	if in.WholeItems {
+		boundWholeSearchHits(out, in.MaxChars, historyRecords)
+	} else {
+		boundSearchHits(out, in.MaxChars, historyRecords)
+	}
+	if in.ConversationContext {
+		boundConversationContext(out, in.MaxChars)
+	}
+	if in.BudgetTokens > 0 {
+		return packContext(ctx, out, in.BudgetTokens, in.TokenEncoding, in.ConversationContext)
+	}
+	return nil
+}
+
+// commitSearch rechecks the anchor, history, items, run and conversation
+// context inside the final transaction, then records the usage and audit.
+func commitSearch(ctx context.Context, tx Tx, in SearchInput, d Decision, anchor Record, run *Ref, out ContextBundle, historyRecords map[string]Record, snapshots map[Ref]string, usage *ContextUsage) error {
+	checked := searchReadTx{Tx: tx}
+	if in.RelatedTo != nil {
+		if err := verifySearchAnchor(ctx, tx, checked, in, anchor); err != nil {
+			return err
+		}
+	}
+	if err := verifySearchHistory(ctx, tx, checked, in, out.History, historyRecords, snapshots); err != nil {
+		return err
+	}
+	if err := verifySearchItems(ctx, checked, in, run, out.Items, snapshots); err != nil {
+		return err
+	}
+	if run != nil {
+		if err := verifySearchRun(ctx, checked, in.Scope, run); err != nil {
+			return err
+		}
+	}
+	if in.ConversationContext || out.evidenceSelectionFenced {
+		if err := verifyConversationContext(ctx, tx, in.Scope, out); err != nil {
+			return err
+		}
+	}
+	if err := insertUsageReceipt(ctx, tx, in.Scope, out.ContextID, d.PrincipalID, usage); err != nil {
+		return err
+	}
+	return audit(ctx, tx, in.Scope, d.PrincipalID, "search", ContentHash(in.Query))
 }
 
 // prepareSearchInput validates the relation, history and criteria inputs,
@@ -492,16 +505,21 @@ func prepareSearchInput(in *SearchInput) (string, error) {
 			}
 		}
 	}
-	searchContent := in.Query
+	return searchAuthorizationText(*in, criteria), nil
+}
+
+// searchAuthorizationText is the query, or the structured relation, history
+// and criteria request when any of them narrows the search.
+func searchAuthorizationText(in SearchInput, criteria SearchCriteria) string {
 	if in.RelatedTo != nil || in.IncludeInactive || len(in.Kinds) > 0 || in.Filters != nil {
-		searchContent = structuredText(struct {
+		return structuredText(struct {
 			Query           string `json:"query"`
 			RelatedTo       *Ref   `json:"related_to,omitempty"`
 			IncludeInactive bool   `json:"include_inactive,omitempty"`
 			SearchCriteria
 		}{in.Query, in.RelatedTo, in.IncludeInactive, criteria})
 	}
-	return searchContent, nil
+	return in.Query
 }
 
 // boundSearchInput validates the budget, destination and size bounds and
@@ -937,55 +955,56 @@ func (s *Service) WorkOnce(ctx context.Context, workerToken string) (result erro
 	if job.Attempts > maxJobAttempts {
 		return ErrUnavailable
 	}
+	success, handled, e = s.runClaimedJob(ctx, workerToken, &job)
+	return e
+}
+
+// runClaimedJob runs one claimed job by kind. success and handled tell
+// WorkOnce's deferred FinishJob how to settle the claim.
+func (s *Service) runClaimedJob(ctx context.Context, workerToken string, job *Record) (success, handled bool, e error) {
 	if sourceErasureJob(job.Kind) {
-		e := s.eraseSourceMemories(ctx, workerToken, job)
-		handled = e == nil
-		return e
+		e := s.eraseSourceMemories(ctx, workerToken, *job)
+		return false, e == nil, e
 	}
-	if e = s.Extensions.beforeJob(ctx, job); e != nil {
-		return e
+	if e = s.Extensions.beforeJob(ctx, *job); e != nil {
+		return false, false, e
 	}
 	if job.Kind == webhookDeliveryKind {
-		success, e = s.deliverWebhook(ctx, &job)
-		return e
+		success, e = s.deliverWebhook(ctx, job)
+		return success, false, e
 	}
 	if job.Kind == autoDeriveJobKind {
-		e = s.runAutoDerive(ctx, workerToken, job)
-		handled = e == nil
-		return e
+		e = s.runAutoDerive(ctx, workerToken, *job)
+		return false, e == nil, e
 	}
 	if job.Kind == deriveScheduleKind {
-		e = s.runDeriveSchedule(ctx, workerToken, job)
-		handled = e == nil
-		return e
+		e = s.runDeriveSchedule(ctx, workerToken, *job)
+		return false, e == nil, e
 	}
 	if job.Kind == approvedEntitiesJobKind {
-		e = s.runApprovedEntities(ctx, workerToken, job)
+		e = s.runApprovedEntities(ctx, workerToken, *job)
 		if errors.Is(e, errSummaryScheduleBusy) {
-			e = s.deferClaimedJob(ctx, job, 30*time.Second)
-			handled = e == nil
-			return e
+			e = s.deferClaimedJob(ctx, *job, 30*time.Second)
+			return false, e == nil, e
 		}
-		success = e == nil
-		return e
+		return e == nil, false, e
 	}
 	if job.Kind == captureMergeGateKind {
-		e = s.runDeferredMergeGate(ctx, workerToken, job)
-		success = e == nil
-		return e
+		e = s.runDeferredMergeGate(ctx, workerToken, *job)
+		return e == nil, false, e
 	}
 	if job.Kind != "embedding" {
-		return ErrInvalid
+		return false, false, ErrInvalid
 	}
-	success, e = s.embedJob(ctx, workerToken, &job)
+	success, e = s.embedJob(ctx, workerToken, job)
 	if !success && errors.Is(e, ErrUnavailable) && time.Since(job.CreatedAt) < embedOutageWindow {
 		// An embedder outage is not a bad input: wait it out without spending
 		// attempts, so a restart of the embedder does not lose vectors for good.
-		if e = s.deferClaimedJob(ctx, job, embedOutageDelay); e == nil {
+		if e = s.deferClaimedJob(ctx, *job, embedOutageDelay); e == nil {
 			handled = true
 		}
 	}
-	return e
+	return success, handled, e
 }
 
 // advancePrivacyOnce advances the next due privacy deletion, if any. It

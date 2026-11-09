@@ -68,9 +68,25 @@ func directiveSourceRetired(ctx context.Context, tx Tx, scope Scope, r Record) (
 	if err != nil && !errors.Is(err, ErrNotFound) {
 		return false, err
 	}
-	if err != nil || source.Scope != *d.SourceScope || source.Revision < r.Proposal.Revision || (source.Status != statusActive || source.PrivacyQuarantined || source.ExpiresAt != nil && !source.ExpiresAt.After(time.Now())) || source.ContentErased || source.ApprovedBy == "" || source.Text != r.Text || ruleOf(source) != d.SourceRule {
+	if err != nil || directiveSourceDrifted(source, r) {
 		return true, nil
 	}
+	return directiveSourceChecksRetire(ctx, tx, source)
+}
+
+// directiveSourceDrifted reports whether the source memory no longer backs the directive.
+func directiveSourceDrifted(source, r Record) bool {
+	d := r.Directive
+	if source.Scope != *d.SourceScope || source.Revision < r.Proposal.Revision {
+		return true
+	}
+	if source.Status != statusActive || source.PrivacyQuarantined || source.ExpiresAt != nil && !source.ExpiresAt.After(time.Now()) {
+		return true
+	}
+	return source.ContentErased || source.ApprovedBy == "" || source.Text != r.Text || ruleOf(source) != d.SourceRule
+}
+
+func directiveSourceChecksRetire(ctx context.Context, tx Tx, source Record) (bool, error) {
 	if err := checkSources(ctx, tx, source); err != nil {
 		if !errors.Is(err, ErrInvalid) && !errors.Is(err, ErrDenied) && !errors.Is(err, ErrNotFound) {
 			return false, err
