@@ -261,12 +261,13 @@ func (s *Service) ListReflections(ctx context.Context, token string, scope Scope
 	}
 	tag := learningTag(subject)
 	groups := map[string]*ReflectionView{}
-	order := []string{}
+	order, texts := []string{}, map[string][]string{}
 	add := func(r Record, status string) {
 		if !slices.Contains(r.Tags, tag) {
 			return
 		}
-		key := reflectionGroup(groups, order, status, r.Text)
+		key := reflectionGroup(groups, texts, order, status, r.Text)
+		texts[key] = append(texts[key], r.Text)
 		g := groups[key]
 		if g == nil {
 			g = &ReflectionView{ID: r.ID, Subject: subject, Interpretation: r.Text, Status: status, CreatedAt: r.CreatedAt, Scope: r.Scope, EvidenceRefs: []Ref{}}
@@ -323,10 +324,10 @@ func (s *Service) ListReflections(ctx context.Context, token string, scope Scope
 	return out, nil
 }
 
-// reflectionGroup is the key of the group whose first lesson matches text, else a new key.
-func reflectionGroup(groups map[string]*ReflectionView, order []string, status, text string) string {
+// reflectionGroup is the key of the group whose every lesson matches text, else a new key.
+func reflectionGroup(groups map[string]*ReflectionView, texts map[string][]string, order []string, status, text string) string {
 	for _, key := range order {
-		if g := groups[key]; g.Status == status && sameLesson(g.Interpretation, text) {
+		if g := groups[key]; g.Status == status && sameLessons(texts[key], text) {
 			return key
 		}
 	}

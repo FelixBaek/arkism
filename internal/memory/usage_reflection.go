@@ -70,7 +70,7 @@ func (s *Service) reflectFailedUsage(ctx context.Context, in TraceIngestInput, s
 	}
 	out := &UsageLearning{Evaluation: Ref{Collection: "evaluations", ID: evaluation.ID, Revision: evaluation.Revision}}
 	learned, err := s.Learn(ctx, token, LearningInput{Scope: in.Scope, Run: stored.Run, Evaluation: out.Evaluation, TaskType: "skill:" + failed.SkillID,
-		Lesson: "Skill " + ref + " ended " + failed.Status + " with " + code + "; review its instructions for this failure.", FailureReason: code,
+		Lesson: "Skill " + ref + " ended " + failed.Status + " with " + code + usageLessonEnd, FailureReason: code,
 		VerificationMethod: "skill.usage status reported by the runtime (deterministic)"})
 	if errors.Is(err, ErrConflict) {
 		return out, nil // this run's lesson already exists

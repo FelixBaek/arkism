@@ -269,7 +269,9 @@ type Record struct {
 	Dream           *DreamJob            `json:"-" bson:"dream,omitempty"`
 	DreamRun        *DreamRun            `json:"dream_run,omitempty" bson:"dream_run,omitempty"`
 	// DreamPromoted is the dream run that made this skill version active without a trial (dream_skill.go).
-	DreamPromoted      string            `json:"-" bson:"dream_promoted,omitempty"`
+	DreamPromoted string `json:"-" bson:"dream_promoted,omitempty"`
+	// DreamDerivedFrom are the memories a dream merged or derived this one from; erasing one erases this too.
+	DreamDerivedFrom   []string          `json:"-" bson:"dream_derived_from,omitempty"`
 	SkillCompatibility map[string]string `json:"skill_compatibility,omitempty" bson:"skill_compatibility,omitempty"`
 	ApprovedBy         string            `json:"approved_by,omitempty" bson:"approved_by,omitempty"`
 	ValidationID       string            `json:"validation_id,omitempty" bson:"validation_id,omitempty"`

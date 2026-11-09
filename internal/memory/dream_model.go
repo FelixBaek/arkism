@@ -94,6 +94,9 @@ func (d *dreamer) allowed(ctx context.Context, stage string, actions ...string) 
 func (d *dreamer) propose(ctx context.Context, kind, text string, members []Record, mc *MemoryContext, tag string) (Record, error) {
 	in := CreateInput{Scope: d.scope, Kind: kind, Text: text, Summary: text, Sources: unionSources(members), MemoryContext: mc, Tags: []string{dreamGeneratedTag, tag}, Generated: true,
 		Generator: &Generator{Model: d.s.DreamModel.Model, PromptVersion: dreamPromptVersion, PipelineVersion: dreamPromptVersion}, Sensitivity: strictestSensitivity(members)}
+	for _, m := range members {
+		in.derivedFrom = append(in.derivedFrom, m.ID)
+	}
 	return d.s.Create(ctx, d.token, "memory_candidates", in)
 }
 
@@ -111,6 +114,9 @@ func strictestSensitivity(rows []Record) string {
 // dreamContext is the memory context of what the run writes from members: their domains, stated by
 // the user only when every member was.
 func dreamContext(members []Record, semantic, evidence string) *MemoryContext {
+	if evidence == "user_statement" && slices.ContainsFunc(members, func(m Record) bool { return !userStated(m) }) {
+		evidence = "inference"
+	}
 	mc := &MemoryContext{Domains: []string{}, EvidenceKind: evidence, SemanticKind: semantic}
 	for _, m := range members {
 		if m.MemoryContext != nil {

@@ -26,6 +26,7 @@ package memory
 // window; one that skipped items looks again after every.
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"log/slog"
@@ -409,11 +410,17 @@ func (d *dreamer) skipped(target string, revision int64) bool {
 	return false
 }
 
-// skip leaves an item for a person: logged (up to the item limit, then counted) and remembered.
-func (d *dreamer) skip(target string, revision int64, reason string, confidence float64) {
+// remember marks target as handled at revision without reporting it, so a later run passes it by
+// (skipped) until it changes: a run cut short does not ask the model about it again.
+func (d *dreamer) remember(target string, revision int64) {
 	if len(d.run.seen) < 2*dreamScanMax {
 		d.run.seen[target] = revision
 	}
+}
+
+// skip leaves an item for a person: logged (up to the item limit, then counted) and remembered.
+func (d *dreamer) skip(target string, revision int64, reason string, confidence float64) {
+	d.remember(target, revision)
 	if len(d.run.Skipped) >= d.set.items {
 		d.run.SkippedMore++
 		return
@@ -452,15 +459,30 @@ func afterRevisions(ctx context.Context, tx Tx, scope Scope, rows []dreamRow) er
 	return nil
 }
 
-// record logs an applied change (rows carry their after revisions) and saves the report.
-func (d *dreamer) record(ctx context.Context, c DreamChange, rows []dreamRow) error {
+// logInTx appends c to the stored report inside the transaction that applies it, so no change is ever
+// applied without the log entry undo reads. The rows get their after revisions there. Once the
+// transaction commits, the caller adds c to d.run with logged.
+func (d *dreamer) logInTx(ctx context.Context, tx Tx, c *DreamChange, rows []dreamRow) error {
+	if err := afterRevisions(ctx, tx, d.scope, rows); err != nil {
+		return err
+	}
 	if c.Before == "" {
 		c.Before = rows[0].BeforeStatus
 	}
 	c.Rows = rows
-	d.run.Changes = append(d.run.Changes, c)
-	return d.save(ctx, false)
+	cur, err := tx.Get(ctx, colJobs, d.scope, d.runID)
+	if err != nil {
+		return err
+	}
+	run := *d.run
+	run.Changes = append(slices.Clone(d.run.Changes), *c)
+	prev := cur.Revision
+	cur.DreamRun, cur.UpdatedAt, cur.Revision = &run, time.Now().UTC(), prev+1
+	return tx.Replace(ctx, colJobs, cur, prev)
 }
+
+// logged adds a committed change to the run in memory, as logInTx stored it.
+func (d *dreamer) logged(c DreamChange) { d.run.Changes = append(d.run.Changes, c) }
 
 // changed reports an error that means the item moved under the run: skip it, never retry the run.
 func changed(err error) bool {
@@ -520,11 +542,12 @@ func (d *dreamer) acceptPair(ctx context.Context, r Record, p MaintenanceProposa
 		return nil
 	}
 	mark := supersedeInput(d.scope, r, "accept")
+	c := DreamChange{Op: "supersede", Target: colMemories + "/" + p.Retire.ID, Reason: p.Type + ":" + p.Reason + " kept " + p.Keep.ID, Confidence: confidence, After: "superseded"}
 	err = d.s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		if _, err := decideInTx(ctx, tx, d.scope, r, &mark, nil, nil, "accepted", "accept", d.principal, roleService); err != nil {
 			return err
 		}
-		return afterRevisions(ctx, tx, d.scope, rows)
+		return d.logInTx(ctx, tx, &c, rows)
 	})
 	if changed(err) {
 		d.skip(target, r.Revision, "changed", confidence)
@@ -532,7 +555,8 @@ func (d *dreamer) acceptPair(ctx context.Context, r Record, p MaintenanceProposa
 	} else if err != nil {
 		return err
 	}
-	return d.record(ctx, DreamChange{Op: "supersede", Target: colMemories + "/" + p.Retire.ID, Reason: p.Type + ":" + p.Reason + " kept " + p.Keep.ID, Confidence: confidence, After: "superseded"}, rows)
+	d.logged(c)
+	return nil
 }
 
 // candidateJudgement is what the dream does with one classified candidate.
@@ -619,8 +643,10 @@ func (d *dreamer) candidates(ctx context.Context) error {
 
 var dreamAfter = map[string]string{"approve": "active", "edit_approve": "active", "supersede": "active", "reject": "rejected"}
 
-// settle applies one judgement through the review path a person uses; an approval that replaces
-// memories then supersedes each of them.
+// settle applies one judgement through the review path a person uses. An approval that replaces
+// memories supersedes each of them, and the change is logged, in the review's own transaction. When the
+// supersession is refused, a newer version is approved on its own; a merge or an insight, which only
+// exists to replace, is not approved at all.
 func (d *dreamer) settle(ctx context.Context, c Record, j candidateJudgement) error {
 	target := "memory_candidates/" + c.ID
 	refs := []Ref{{Collection: "memory_candidates", ID: c.ID}}
@@ -638,6 +664,27 @@ func (d *dreamer) settle(ctx context.Context, c Record, j candidateJudgement) er
 		d.skip(target, c.Revision, reason, j.confidence)
 		return nil
 	}
+	err = d.review(ctx, c, j, recs[1:], rows)
+	if errors.Is(err, errReplaceRefused) && j.op == "" {
+		d.skip(colMemories+"/"+recs[1].ID, recs[1].Revision, "supersede_refused", j.confidence) // the approval stands alone
+		err = d.review(ctx, c, j, nil, rows[:1])
+	}
+	switch {
+	case errors.Is(err, errReplaceRefused):
+		d.skip(target, c.Revision, j.op+"_refused", j.confidence)
+		return nil
+	case changed(err) || errors.Is(err, ErrSecretDetected):
+		d.skip(target, c.Revision, "review_refused", j.confidence)
+		return nil
+	}
+	return err
+}
+
+// errReplaceRefused: a memory an approval would supersede moved; the whole review is rolled back.
+var errReplaceRefused = errors.New("dream: replaced memory changed")
+
+// review decides c and, in the same transaction, supersedes olds with the approved memory and logs the change.
+func (d *dreamer) review(ctx context.Context, c Record, j candidateJudgement, olds []*Record, rows []dreamRow) error {
 	in := CandidateReviewInput{Automated: true, Scope: d.scope, ExpectedRevision: c.Revision, Action: j.action, Content: j.content, OperationID: d.runID + "." + strconv.Itoa(len(d.run.Changes)+len(d.run.Skipped)+d.run.SkippedMore)}
 	switch j.action {
 	case "reject":
@@ -645,24 +692,18 @@ func (d *dreamer) settle(ctx context.Context, c Record, j candidateJudgement) er
 	case "supersede":
 		in.Action = "approve"
 	}
-	settled, err := d.s.ReviewCandidate(ctx, d.token, c.ID, in)
-	if changed(err) || errors.Is(err, ErrSecretDetected) {
-		d.skip(target, c.Revision, "review_refused", j.confidence)
-		return nil
-	} else if err != nil {
-		return err
-	}
-	rows[0].AfterRevision = settled.Revision // the row the review wrote, as its transaction left it
-	if len(j.replaces) > 0 {
-		if rows, err = d.replaceAll(ctx, settled, recs[1:], j, rows); err != nil || rows == nil {
+	change := DreamChange{Op: cmp.Or(j.op, j.action), Target: "memory_candidates/" + c.ID, Reason: j.reason, Confidence: j.confidence, Before: c.Status, After: dreamAfter[j.action]}
+	in.inTx = func(ctx context.Context, tx Tx, settled Record) error {
+		if err := d.supersedeWith(ctx, tx, settled.ID, olds, j.reason); err != nil {
 			return err
 		}
+		return d.logInTx(ctx, tx, &change, rows)
 	}
-	op := j.op
-	if op == "" {
-		op = j.action
+	if _, err := d.s.ReviewCandidate(ctx, d.token, c.ID, in); err != nil {
+		return err
 	}
-	return d.record(ctx, DreamChange{Op: op, Target: target, Reason: j.reason, Confidence: j.confidence, Before: c.Status, After: dreamAfter[j.action]}, rows)
+	d.logged(change)
+	return nil
 }
 
 // retireRefusal: why the memories an approval would replace must stay ("" when none). The dream
@@ -679,53 +720,22 @@ func retireRefusal(c Record, olds []*Record) string {
 	return ""
 }
 
-// replaceAll supersedes every replaced memory for next in one transaction. When that is refused, a
-// newer version's approval stands with its supersession skipped; a merge or an insight, which only
-// exists to replace, is withdrawn again (rows nil: nothing to log).
-func (d *dreamer) replaceAll(ctx context.Context, next Record, olds []*Record, j candidateJudgement, rows []dreamRow) ([]dreamRow, error) {
-	err := d.s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		for _, old := range olds {
-			cur, err := tx.Get(ctx, colMemories, d.scope, next.ID)
-			if err != nil {
-				return err
-			}
-			mark := ConflictInput{Scope: d.scope, Memories: []Ref{{Collection: colMemories, ID: old.ID, Revision: old.Revision}, {Collection: colMemories, ID: cur.ID, Revision: cur.Revision}},
-				Action: "mark", Hold: "both", Reason: "dream: " + j.reason}
-			if err = supersedeInTx(ctx, tx, mark, d.principal, roleService); err != nil {
-				return err
-			}
-		}
-		return afterRevisions(ctx, tx, d.scope, rows)
-	})
-	if !changed(err) {
-		return rows, err
-	}
-	if j.op == "" {
-		d.skip(colMemories+"/"+olds[0].ID, olds[0].Revision, "supersede_refused", j.confidence) // the approval stands and is logged
-		return rows[:1], nil
-	}
-	d.skip("memory_candidates/"+next.ID, 0, j.op+"_refused", j.confidence)
-	return nil, d.withdraw(ctx, next.ID)
-}
-
-// withdraw rejects a memory the run approved a moment ago, when what it was for was refused.
-func (d *dreamer) withdraw(ctx context.Context, id string) error {
-	err := d.s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		cur, err := tx.Get(ctx, colMemories, d.scope, id)
+// supersedeWith supersedes every old memory with the memory next, inside the review's transaction.
+func (d *dreamer) supersedeWith(ctx context.Context, tx Tx, next string, olds []*Record, reason string) error {
+	for _, old := range olds {
+		cur, err := tx.Get(ctx, colMemories, d.scope, next)
 		if err != nil {
 			return err
 		}
-		prev := cur.Revision
-		cur.Status, cur.Revision, cur.UpdatedAt = "rejected", prev+1, time.Now().UTC()
-		if err = tx.Replace(ctx, colMemories, cur, prev); err != nil {
+		mark := ConflictInput{Scope: d.scope, Memories: []Ref{{Collection: colMemories, ID: old.ID, Revision: old.Revision}, {Collection: colMemories, ID: cur.ID, Revision: cur.Revision}},
+			Action: "mark", Hold: "both", Reason: "dream: " + reason}
+		if err = supersedeInTx(ctx, tx, mark, d.principal, roleService); changed(err) {
+			return errors.Join(errReplaceRefused, err)
+		} else if err != nil {
 			return err
 		}
-		return audit(ctx, tx, d.scope, d.principal, "dream:withdraw:memories", id)
-	})
-	if changed(err) {
-		return nil
 	}
-	return err
+	return nil
 }
 
 // expire retires active memories whose expiry passed: recall already leaves them out, the status says so.
@@ -752,6 +762,7 @@ func (d *dreamer) expire(ctx context.Context) error {
 
 // expireOne moves one expired memory to expired and logs it; a memory changed meanwhile is skipped.
 func (d *dreamer) expireOne(ctx context.Context, r Record, now time.Time) error {
+	c := DreamChange{Op: "expire", Target: colMemories + "/" + r.ID, Reason: "expired " + r.ExpiresAt.Format(time.RFC3339), Confidence: 1, After: "expired"}
 	err := d.s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		cur, err := tx.Get(ctx, colMemories, d.scope, r.ID)
 		if err != nil {
@@ -764,7 +775,10 @@ func (d *dreamer) expireOne(ctx context.Context, r Record, now time.Time) error 
 		if err = tx.Replace(ctx, colMemories, cur, r.Revision); err != nil {
 			return err
 		}
-		return audit(ctx, tx, d.scope, d.principal, "dream:expire:memories", r.ID)
+		if err = audit(ctx, tx, d.scope, d.principal, "dream:expire:memories", r.ID); err != nil {
+			return err
+		}
+		return d.logInTx(ctx, tx, &c, []dreamRow{{Collection: colMemories, ID: r.ID, BeforeStatus: r.Status}})
 	})
 	if changed(err) {
 		d.skip(colMemories+"/"+r.ID, r.Revision, "changed", 1)
@@ -772,6 +786,6 @@ func (d *dreamer) expireOne(ctx context.Context, r Record, now time.Time) error 
 	} else if err != nil {
 		return err
 	}
-	row := dreamRow{Collection: colMemories, ID: r.ID, BeforeStatus: r.Status, AfterRevision: r.Revision + 1}
-	return d.record(ctx, DreamChange{Op: "expire", Target: colMemories + "/" + r.ID, Reason: "expired " + r.ExpiresAt.Format(time.RFC3339), Confidence: 1, After: "expired"}, []dreamRow{row})
+	d.logged(c)
+	return nil
 }

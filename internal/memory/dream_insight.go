@@ -9,7 +9,9 @@ package memory
 import (
 	"context"
 	"errors"
+	"hash/fnv"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -53,7 +55,8 @@ func (d *dreamer) insights(ctx context.Context) error {
 	all := append(slices.Clone(pool), slices.DeleteFunc(undone, func(r Record) bool { return !slices.Contains(r.Tags, dreamInsightTag) })...)
 	pool = slices.DeleteFunc(slices.Clone(pool), func(r Record) bool { return slices.Contains(r.Tags, dreamInsightTag) })
 	pool = pool[:min(len(pool), dreamInsightBatch)]
-	if len(pool) < dreamInsightMin || !slices.ContainsFunc(pool, d.touched) || d.stop() || !d.allowed(ctx, "insights", "write:memory_candidates") {
+	sig := poolSignature(pool)
+	if len(pool) < dreamInsightMin || !slices.ContainsFunc(pool, d.touched) || d.skipped("insights/pool", sig) || d.stop() || !d.allowed(ctx, "insights", "write:memory_candidates") {
 		return nil
 	}
 	var answer struct {
@@ -67,6 +70,7 @@ func (d *dreamer) insights(ctx context.Context) error {
 		d.skip("stage/insights", int64(d.run.ModelCalls), "model_answer_unusable", 0)
 		return nil
 	}
+	d.remember("insights/pool", sig) // the same memories are not read again until one changes
 	for _, in := range answer.Insights {
 		if d.stop() {
 			return nil
@@ -121,11 +125,23 @@ func (d *dreamer) addInsight(ctx context.Context, pool, all []Record, in dreamIn
 		ids[i] = r.ID
 	}
 	made, err := d.propose(ctx, kinds[0], strings.TrimSpace(in.Text), evidence, dreamContext(evidence, kinds[1], "inference"), dreamInsightTag)
-	if changed(err) || errors.Is(err, ErrSecretDetected) {
+	if errors.Is(err, ErrCandidateQuota) {
+		d.skip(target, 0, "candidate_daily_limit", in.Confidence)
+		return nil
+	} else if changed(err) || errors.Is(err, ErrSecretDetected) {
 		d.skip(target, 0, "insight_refused", in.Confidence)
 		return nil
 	} else if err != nil {
 		return err
 	}
 	return d.settle(ctx, made, candidateJudgement{action: "approve", op: "insight", reason: in.Type + " from " + strings.Join(ids, ","), confidence: in.Confidence})
+}
+
+// poolSignature identifies a set of memories at their revisions.
+func poolSignature(pool []Record) int64 {
+	h := fnv.New64a()
+	for _, r := range pool {
+		_, _ = h.Write([]byte(r.ID + "@" + strconv.FormatInt(r.Revision, 10) + "\n"))
+	}
+	return int64(h.Sum64() >> 1)
 }

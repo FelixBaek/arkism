@@ -187,7 +187,7 @@ func (s *Service) Learn(ctx context.Context, token string, in LearningInput) (Le
 // compatibleLearningRuns counts the distinct runs whose live lesson matches this one, this run included.
 // Only the same lesson again from the same run is a conflict; a reworded one from that run is not counted twice.
 func compatibleLearningRuns(ctx context.Context, tx Tx, prior []learningCandidate, in LearningInput, lesson string) (map[string]bool, error) {
-	runs := map[string]bool{in.Run.ID: true}
+	runs, group := map[string]bool{in.Run.ID: true}, []string{lesson}
 	for _, candidate := range prior {
 		valid, err := validLearningCandidate(ctx, tx, candidate, in.Scope, in.TaskType, lesson)
 		if err != nil {
@@ -196,8 +196,8 @@ func compatibleLearningRuns(ctx context.Context, tx Tx, prior []learningCandidat
 		if valid && candidate.run.ID == in.Run.ID && candidate.row.Text == lesson {
 			return nil, ErrConflict
 		}
-		if valid {
-			runs[candidate.run.ID] = true
+		if valid && sameLessons(group, candidate.row.Text) {
+			runs[candidate.run.ID], group = true, append(group, candidate.row.Text)
 		}
 	}
 	return runs, nil
@@ -429,8 +429,27 @@ func learningTag(taskType string) string { return "learning:" + ContentHash(task
 // shortcut: lexical, so a full rewording in other words stays apart; compare stored embeddings if that matters.
 const lessonMatchMin = 0.25
 
+// usageLessonEnd ends the lesson written from a runtime's skill usage report. That text is a fixed
+// template, so two of them differ only in the status and code and must match exactly, not by overlap.
+const usageLessonEnd = "; review its instructions for this failure."
+
 func sameLesson(a, b string) bool {
-	return a == b || digestDice(digestGrams(a), digestGrams(b)) >= lessonMatchMin
+	if a == b || strings.HasSuffix(a, usageLessonEnd) || strings.HasSuffix(b, usageLessonEnd) {
+		return a == b
+	}
+	return digestDice(digestGrams(a), digestGrams(b)) >= lessonMatchMin
+}
+
+// sameLessons is complete linkage: text joins a lesson group only when it matches every lesson already in
+// it, so a chain of small rewordings cannot drift one group into a different lesson. Every place that
+// groups lessons (the reflection list, a skill proposal, the run count) uses this one rule.
+func sameLessons(group []string, text string) bool {
+	for _, g := range group {
+		if !sameLesson(g, text) {
+			return false
+		}
+	}
+	return true
 }
 
 func validLearningText(value string, maxN int, required bool) bool {

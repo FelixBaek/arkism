@@ -26,13 +26,15 @@ func dreamWhen(r Record) time.Time {
 }
 
 // currentOf picks the current one of two contradicting memories: its index, the rule and how sure the
-// rule is; -1 when neither rule separates them.
+// rule is; -1 when neither rule separates them or one side only takes effect in the future.
 func currentOf(a, b Record) (int, string, float64) {
 	if ua, ub := userStated(a), userStated(b); ua != ub {
 		return map[bool]int{true: 0, false: 1}[ua], "user_stated", 0.9
 	}
 	ta, tb := dreamWhen(a), dreamWhen(b)
-	switch {
+	switch now := time.Now(); {
+	case ta.After(now) || tb.After(now): // a memory that takes effect later is not the current one yet
+		return -1, "", 0
 	case ta.Sub(tb) >= contradictionMinGap:
 		return 0, "newer", 0.8
 	case tb.Sub(ta) >= contradictionMinGap:
@@ -102,11 +104,13 @@ func (d *dreamer) resolveConflict(ctx context.Context, rel Record) error {
 	}
 	rows[0].BeforeConflict, rows[1].BeforeConflict = rel.ID, rel.ID
 	in := ConflictInput{Scope: d.scope, Memories: rel.Relations, Action: "resolve", Reason: "dream: " + rule, ConflictID: rel.ID, ExpectedRevision: rel.Revision, Resolution: resolution}
+	loser := rel.Relations[1-w]
+	c := DreamChange{Op: "resolve", Target: loser.Collection + "/" + loser.ID, Reason: "contradiction:" + rule + " kept " + rel.Relations[w].ID, Confidence: confidence, Before: rows[1-w].BeforeStatus, After: map[bool]string{true: "superseded", false: "rejected"}[resolutionWinner[resolution] >= 0]}
 	err = d.s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		if _, err := applyConflictAs(ctx, tx, in, d.principal, roleService, resolutionWinner[resolution]); err != nil {
 			return err
 		}
-		return afterRevisions(ctx, tx, d.scope, rows)
+		return d.logInTx(ctx, tx, &c, rows)
 	})
 	if changed(err) {
 		d.skip(target, rel.Revision, "changed", confidence)
@@ -114,6 +118,6 @@ func (d *dreamer) resolveConflict(ctx context.Context, rel Record) error {
 	} else if err != nil {
 		return err
 	}
-	loser := rel.Relations[1-w]
-	return d.record(ctx, DreamChange{Op: "resolve", Target: loser.Collection + "/" + loser.ID, Reason: "contradiction:" + rule + " kept " + rel.Relations[w].ID, Confidence: confidence, Before: rows[1-w].BeforeStatus, After: map[bool]string{true: "superseded", false: "rejected"}[resolutionWinner[resolution] >= 0]}, rows)
+	d.logged(c)
+	return nil
 }

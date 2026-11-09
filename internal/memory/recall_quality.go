@@ -593,7 +593,10 @@ func recordReviewOutcome(ctx context.Context, tx Tx, id, principal string, revie
 	if err := recordMemoryReview(ctx, tx, id, principal, *review, result); err != nil {
 		return err
 	}
-	return closeCorrectedFact(ctx, tx, review, result, autoClose, principal)
+	if err := closeCorrectedFact(ctx, tx, review, result, autoClose, principal); err != nil || review.inTx == nil {
+		return err
+	}
+	return review.inTx(ctx, tx, result)
 }
 
 // autoCloseOn reads the space switch before a review that resolves a conflict keeping both.

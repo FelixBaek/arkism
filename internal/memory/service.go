@@ -141,6 +141,8 @@ type CreateInput struct {
 	Entities []EntityInput `json:"entities,omitempty"`
 	// entityRelations: server-owned, set by capture only (capture_labels.go).
 	entityRelations []EntityRelationInput
+	// derivedFrom: server-owned, the memories a dream run merged or derived this candidate from.
+	derivedFrom []string
 
 	TrustLevel     string      `json:"trust_level,omitempty"`
 	Confidence     *float64    `json:"confidence,omitempty"`
@@ -596,6 +598,7 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 	}
 	clean.capture = in.capture
 	clean.entityRelations = in.entityRelations // names were defended with the claim; a redacted end stops matching its entity
+	clean.derivedFrom = in.derivedFrom
 	in = clean
 	d, e := s.authorizeCreate(ctx, token, col, in, file)
 	if e != nil {
@@ -605,7 +608,7 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 	if e = normalizeCreateTimes(col, &in, now); e != nil {
 		return Record{}, e
 	}
-	r := Record{ConversationOrder: in.ConversationOrder, MemoryContext: copyMemoryContext(in.MemoryContext), ArchiveMessages: append([]ArchiveMessageRef(nil), in.ArchiveMessages...), Confidence: in.Confidence, Evaluation: in.Evaluation, Run: in.Run, ToolCall: in.ToolCall, OriginProduct: in.OriginProduct, SourceRef: in.SourceRef, SourceEventID: in.SourceEventID, TraceID: in.TraceID, CollectedAt: in.CollectedAt, Generator: in.Generator, CreatedByType: d.Role, Sensitivity: in.Sensitivity, Inspection: &inspection, ID: ID(), Scope: in.Scope, Kind: in.Kind, Status: "active", Revision: 1, Text: in.Text, Summary: in.Summary, Keywords: in.Keywords, Tags: in.Tags, Entities: in.Entities, EntityRelations: in.entityRelations, Sources: in.Sources, Relations: in.Relations, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, Trust: 0.5, EffectiveAt: in.EffectiveAt, Occurred: in.Occurred, ExpiresAt: in.ExpiresAt, SkillID: in.SkillID, BaseVersion: in.BaseVersion, Target: in.Target, Passed: in.Passed, Reflection: in.Reflection}
+	r := Record{ConversationOrder: in.ConversationOrder, MemoryContext: copyMemoryContext(in.MemoryContext), ArchiveMessages: append([]ArchiveMessageRef(nil), in.ArchiveMessages...), Confidence: in.Confidence, Evaluation: in.Evaluation, Run: in.Run, ToolCall: in.ToolCall, OriginProduct: in.OriginProduct, SourceRef: in.SourceRef, SourceEventID: in.SourceEventID, TraceID: in.TraceID, CollectedAt: in.CollectedAt, Generator: in.Generator, CreatedByType: d.Role, Sensitivity: in.Sensitivity, Inspection: &inspection, ID: ID(), Scope: in.Scope, Kind: in.Kind, Status: "active", Revision: 1, Text: in.Text, Summary: in.Summary, Keywords: in.Keywords, Tags: in.Tags, Entities: in.Entities, EntityRelations: in.entityRelations, Sources: in.Sources, Relations: in.Relations, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, Trust: 0.5, EffectiveAt: in.EffectiveAt, Occurred: in.Occurred, ExpiresAt: in.ExpiresAt, SkillID: in.SkillID, BaseVersion: in.BaseVersion, Target: in.Target, Passed: in.Passed, Reflection: in.Reflection, DreamDerivedFrom: in.derivedFrom}
 	if r.ExpiresAt != nil && !r.ExpiresAt.After(now) {
 		return Record{}, ErrInvalid
 	}

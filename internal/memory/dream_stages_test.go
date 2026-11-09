@@ -272,6 +272,14 @@ func TestDreamModelBudgetStopsTheRun(t *testing.T) {
 	if job.Dream.Since != nil || job.Status != JobStatusPending {
 		t.Fatal("a run cut short must look at the same memories again", job.Dream.Since, job.Status)
 	}
+	// The next run does not ask about the batch the model already answered: its one call goes further.
+	if err := s.f.svc.runDream(testCtx, s.worker, job); err != nil {
+		t.Fatal(err)
+	}
+	page, _ := s.f.svc.ListDreamRuns(testCtx, s.f.human, scopeA, 5)
+	if s.calls.Load() != 2 || len(page.Items) != 2 || !slices.ContainsFunc(page.Items[0].Run.Changes, func(c DreamChange) bool { return c.Op == "insight" }) {
+		t.Fatal("second run repeated the answered batch", s.calls.Load(), page.Items[0].Run.Changes)
+	}
 }
 
 func TestDreamCurrentOf(t *testing.T) {
@@ -302,6 +310,12 @@ func TestDreamCurrentOf(t *testing.T) {
 	late.EffectiveAt = &eff
 	if w, _, _ := currentOf(late, at(-time.Hour, "")); w != 1 {
 		t.Error("the time a memory takes effect counts, not when it was written")
+	}
+	future := now.Add(48 * time.Hour)
+	planned := at(-time.Hour, "")
+	planned.EffectiveAt = &future
+	if w, _, _ := currentOf(planned, at(-2*time.Hour, "")); w != -1 {
+		t.Error("a memory that takes effect in the future must not win on time")
 	}
 }
 
