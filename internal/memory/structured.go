@@ -178,5 +178,9 @@ func checkActiveSkill(ctx context.Context, tx Tx, r Record) error {
 	if r.ComparisonPlan == nil && r.Kind == importedSkillBaselineKind && r.Revision == 1 && r.ValidationID == "" && r.ApprovedBy != "" && r.CreatedByType == roleHuman && validAnalysis(r.Analysis) {
 		return nil
 	}
+	// A version the dream promoted from repeated lessons runs before any trial; undo takes it back.
+	if r.DreamPromoted != "" && r.ValidationID == "" && r.ApprovedBy != "" && validAnalysis(r.Analysis) {
+		return nil
+	}
 	return validation(ctx, tx, r, r.ValidationID, false)
 }

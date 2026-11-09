@@ -153,22 +153,7 @@ func undoDreamRow(ctx context.Context, tx Tx, scope Scope, row dreamRow, princip
 	if cur.Revision != row.AfterRevision || cur.ContentErased || cur.PrivacyQuarantined {
 		return ErrConflict
 	}
-	next := cur
-	switch {
-	case row.Collection == colMaintenance && cur.Maintenance != nil:
-		p := *cur.Maintenance // the merged pair stays two: the person's dismiss
-		p.Decision, p.DecidedBy, p.DecidedAt = "dismiss", principal, &now
-		next.Maintenance, next.Status = &p, maintenanceDecisions["dismiss"]
-	case row.BeforeStatus == "":
-		next.Status = "rejected" // an approval the dream made is withdrawn
-	default:
-		// The dream changed only the status (and a conflict id it cleared again); a candidate also got
-		// the dream's review, which goes with it.
-		next.Status, next.ConflictID = row.BeforeStatus, ""
-		if row.Collection == "memory_candidates" {
-			next.Review = nil
-		}
-	}
+	next := undoneRow(cur, row, principal, now)
 	if !slices.Contains(next.Tags, dreamUndoneTag) {
 		next.Tags = append(slices.Clone(next.Tags), dreamUndoneTag)
 	}
@@ -176,7 +161,55 @@ func undoDreamRow(ctx context.Context, tx Tx, scope Scope, row dreamRow, princip
 	if err = tx.Replace(ctx, row.Collection, next, cur.Revision); err != nil {
 		return err
 	}
+	if row.BeforeConflict != "" {
+		if err = rebindConflictMember(ctx, tx, scope, row.BeforeConflict, next); err != nil {
+			return err
+		}
+	}
 	return audit(ctx, tx, scope, principal, "dream:undo:"+row.Collection, row.ID)
+}
+
+// undoneRow is a row as it was before the dream changed it.
+func undoneRow(cur Record, row dreamRow, principal string, now time.Time) Record {
+	next := cur
+	switch {
+	case row.Collection == colMaintenance && cur.Maintenance != nil:
+		p := *cur.Maintenance // the merged pair stays two: the person's dismiss
+		p.Decision, p.DecidedBy, p.DecidedAt = "dismiss", principal, &now
+		next.Maintenance, next.Status = &p, maintenanceDecisions["dismiss"]
+	case row.Header:
+		next.ActiveVersion = row.BeforeActive // a promotion is taken back: the skill uses its earlier version
+	case row.BeforeStatus == "":
+		next.Status = "rejected" // an approval (or a skill version) the dream made is withdrawn
+	default:
+		// The dream changed only the status (and the conflict it resolved or one it cleared again);
+		// a candidate also got the dream's review, which goes with it.
+		next.Status, next.ConflictID = row.BeforeStatus, row.BeforeConflict
+		if row.Collection == "memory_candidates" {
+			next.Review = nil
+		}
+		if row.Collection == "memory_relations" && cur.Conflict != nil {
+			open := ConflictDetails{Hold: cur.Conflict.Hold} // the conflict is open again
+			next.Conflict = &open
+		}
+	}
+	return next
+}
+
+// rebindConflictMember points the reopened conflict at the member's new revision, so it can be resolved again.
+func rebindConflictMember(ctx context.Context, tx Tx, scope Scope, relID string, member Record) error {
+	rel, err := tx.Get(ctx, "memory_relations", scope, relID)
+	if err != nil {
+		return err
+	}
+	for i, ref := range rel.Relations {
+		if ref.ID == member.ID {
+			rel.Relations[i].Revision = member.Revision
+		}
+	}
+	prev := rel.Revision
+	rel.Revision, rel.UpdatedAt = prev+1, member.UpdatedAt
+	return tx.Replace(ctx, "memory_relations", rel, prev)
 }
 
 func registerDreamRunsCoreHTTP(mux routeRegistrar, s *Service) {

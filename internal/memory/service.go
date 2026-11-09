@@ -105,6 +105,8 @@ type Service struct {
 	CostRates CostRates
 	// Wiki, when set, is the model the optional LLM-Wiki jobs call.
 	Wiki WikiLLM
+	// DreamModel, when configured, is the model the dream's generative stages call (dream_model.go).
+	DreamModel LLMConfig
 	// LLMTraceContent keeps redacted, clipped prompt and answer text in model
 	// call traces (llm_requests.go); off stores sizes and hashes only.
 	LLMTraceContent bool

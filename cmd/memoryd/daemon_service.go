@@ -148,6 +148,11 @@ func configureDaemonProviders(svc *memory.Service, cfg daemonOptions) error {
 	if config.Configured() {
 		svc.Analyzer = &memory.ChatSkillAnalyzer{Config: config}
 		svc.Drafter = &memory.ChatSkillDrafter{Config: config}
+		// MEMORY_DREAM_MODEL: the model the dream's generative stages call on the server model's endpoint.
+		if model := os.Getenv("MEMORY_DREAM_MODEL"); model != "" {
+			svc.DreamModel = config
+			svc.DreamModel.Model = model
+		}
 		if os.Getenv("ARKISM_WIKI") == "on" { // optional LLM-Wiki jobs, off by default
 			// MEMORY_FILE_VISION=1: the model reads uploaded images and scanned PDFs.
 			svc.Wiki = &memory.ChatWikiLLM{Config: config, Vision: os.Getenv("MEMORY_FILE_VISION") == "1", Batch: os.Getenv("MEMORY_EXTRACT_BATCH") == "1"}

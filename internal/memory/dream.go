@@ -55,6 +55,9 @@ type DreamJob struct {
 	// Skipped remembers what earlier runs left for a person, by target and revision, so a run does not
 	// log it again until the item itself changes.
 	Skipped map[string]int64 `json:"-" bson:"skipped,omitempty"`
+	// Since is the start of the last run that finished every stage: the generative stages look at
+	// memories changed after it.
+	Since *time.Time `json:"-" bson:"since,omitempty"`
 }
 
 // DreamRun is one run's report: what it changed, what it skipped and why.
@@ -67,12 +70,17 @@ type DreamRun struct {
 	Skipped    []DreamSkip   `json:"skipped" bson:"skipped"`
 	// SkippedMore counts new skips past the logged ones (MEMORY_DREAM_ITEMS of them).
 	SkippedMore int `json:"skipped_more,omitempty" bson:"skipped_more,omitempty"`
-	seen        map[string]int64
+	// Model is the dream model ("" when none is configured: the generative stages did not run);
+	// ModelCalls counts the calls this run made (at most MEMORY_DREAM_MODEL_CALLS).
+	Model      string `json:"model,omitempty" bson:"model,omitempty"`
+	ModelCalls int    `json:"model_calls" bson:"model_calls"`
+	seen       map[string]int64
+	since      *time.Time // the previous run: generative stages look at memories changed after it
 }
 
 // DreamChange is one automatic change. Rows hold what undo needs; the rest is the readable summary.
 type DreamChange struct {
-	Op         string     `json:"op" bson:"op"` // approve | edit_approve | reject | supersede | expire
+	Op         string     `json:"op" bson:"op"` // approve | edit_approve | reject | supersede | expire | resolve | merge | insight | promote_skill
 	Target     string     `json:"target" bson:"target"`
 	Reason     string     `json:"reason" bson:"reason"`
 	Confidence float64    `json:"confidence" bson:"confidence"`
@@ -90,6 +98,11 @@ type dreamRow struct {
 	ID            string `bson:"id"`
 	BeforeStatus  string `bson:"before_status,omitempty"`
 	AfterRevision int64  `bson:"after_revision"`
+	// BeforeConflict is the open conflict a resolved member was held in; undo holds it there again.
+	BeforeConflict string `bson:"before_conflict,omitempty"`
+	// BeforeActive is a skill header's active version before a promotion (Header marks such a row).
+	Header       bool   `bson:"header,omitempty"`
+	BeforeActive string `bson:"before_active,omitempty"`
 }
 
 // DreamSkip is an item the run left for a person, with why.
@@ -102,7 +115,7 @@ type DreamSkip struct {
 type dreamSettings struct {
 	auto                   bool
 	idle, every, timeLimit time.Duration
-	items                  int
+	items, modelCalls      int
 	minConfidence          float64
 }
 
@@ -116,10 +129,11 @@ func dreamRunning(ctx context.Context) bool {
 
 // dreamConfig reads MEMORY_DREAM (auto by default, manual turns it off), MEMORY_DREAM_IDLE (30m),
 // MEMORY_DREAM_EVERY (24h), MEMORY_DREAM_ITEMS (50 changes and 50 skips per run), MEMORY_DREAM_TIME
-// (60s, at most 80s so a run ends inside one worker iteration) and MEMORY_DREAM_MIN_CONFIDENCE (0.7).
-// Invalid values keep the default.
+// (60s, at most 80s so a run ends inside one worker iteration), MEMORY_DREAM_MIN_CONFIDENCE (0.7) and
+// MEMORY_DREAM_MODEL_CALLS (12 model calls per run, 0 turns the generative stages off). Invalid values
+// keep the default.
 func dreamConfig() dreamSettings {
-	set := dreamSettings{auto: os.Getenv("MEMORY_DREAM") != "manual", idle: 30 * time.Minute, every: 24 * time.Hour, timeLimit: time.Minute, items: 50, minConfidence: 0.7}
+	set := dreamSettings{auto: os.Getenv("MEMORY_DREAM") != "manual", idle: 30 * time.Minute, every: 24 * time.Hour, timeLimit: time.Minute, items: 50, modelCalls: 12, minConfidence: 0.7}
 	envDuration := func(name string, low, high time.Duration, into *time.Duration) {
 		if d, err := time.ParseDuration(os.Getenv(name)); err == nil && d >= low && d <= high {
 			*into = d
@@ -133,6 +147,9 @@ func dreamConfig() dreamSettings {
 	}
 	if f, err := strconv.ParseFloat(os.Getenv("MEMORY_DREAM_MIN_CONFIDENCE"), 64); err == nil && f >= 0.5 && f <= 1 {
 		set.minConfidence = f
+	}
+	if n, err := strconv.Atoi(os.Getenv("MEMORY_DREAM_MODEL_CALLS")); err == nil && n >= 0 && n <= 100 {
+		set.modelCalls = n
 	}
 	return set
 }
@@ -212,7 +229,7 @@ func (s *Service) runDream(ctx context.Context, workerToken string, job Record) 
 		state = *job.Dream
 	}
 	started := time.Now().UTC()
-	run := &DreamRun{Outcome: "manual", StartedAt: started, seen: state.Skipped}
+	run := &DreamRun{Outcome: "manual", StartedAt: started, seen: state.Skipped, since: state.Since}
 	if set.auto {
 		run.Trigger = "idle"
 		if state.LastActivity != nil && state.LastActivity.Add(set.idle).After(started) {
@@ -225,8 +242,11 @@ func (s *Service) runDream(ctx context.Context, workerToken string, job Record) 
 	}
 	now := time.Now().UTC()
 	state.LastRun, state.Outcome, state.FirstActivity, state.Skipped = &now, run.Outcome, nil, run.seen
+	if run.Outcome == "ok" {
+		state.Since = &started // the generative stages saw everything changed before this run began
+	}
 	next, due := now.Add(set.every), set.auto && len(run.Skipped) > 0
-	if set.auto && (run.Outcome == "item_limit" || run.Outcome == "time_limit" || s.newCandidateSince(ctx, job.Scope, started)) {
+	if set.auto && (run.Outcome == "item_limit" || run.Outcome == "time_limit" || run.Outcome == "model_limit" || s.newCandidateSince(ctx, job.Scope, started)) {
 		next, due = now.Add(set.idle), true
 	}
 	return s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
@@ -267,17 +287,19 @@ type dreamer struct {
 	run       *DreamRun
 	known     map[string]int64 // skips earlier runs logged
 	deadline  time.Time
-	stageFrom int       // changes before the current stage
-	stageEnd  time.Time // the current stage's share of the time limit
-	limit     string    // the first limit a stage hit
+	stageFrom int        // changes before the current stage
+	stageEnd  time.Time  // the current stage's share of the time limit
+	limit     string     // the first limit a stage hit
+	since     *time.Time // the previous run, nil before the first
 }
 
 // dream checks the worker's grants, stores the run report and applies what it may. Each stage (pair
-// proposals, review entries, expiry) gets its own item limit and an even share of the time left, so a
-// full first stage never starves the others.
+// proposals, open contradictions, review entries, merging paraphrases, insights, skill promotion,
+// expiry) gets its own item limit and an even share of the time left, so a full first stage never
+// starves the others. The generative stages share the run's model calls (dream_model.go).
 func (s *Service) dream(ctx context.Context, token string, scope Scope, set dreamSettings, run *DreamRun) (*DreamRun, error) {
 	run.Outcome, run.Changes, run.Skipped = "running", []DreamChange{}, []DreamSkip{}
-	d := &dreamer{s: s, token: token, scope: scope, set: set, run: run, known: run.seen, runID: "dream-run-" + ID(), deadline: run.StartedAt.Add(set.timeLimit)}
+	d := &dreamer{s: s, token: token, scope: scope, set: set, run: run, known: run.seen, since: run.since, runID: "dream-run-" + ID(), deadline: run.StartedAt.Add(set.timeLimit)}
 	run.seen = map[string]int64{}
 	for _, action := range dreamGrants {
 		who, err := s.authorize(ctx, token, action, scope, "", "")
@@ -302,7 +324,10 @@ func (s *Service) dream(ctx context.Context, token string, scope Scope, set drea
 		return nil, err
 	}
 	ctx = context.WithValue(ctx, dreamRunKey{}, d.runID)
-	steps := []func(context.Context) error{d.maintenance, d.candidates, d.expire}
+	if d.modelReady() {
+		run.Model = s.DreamModel.Model
+	}
+	steps := []func(context.Context) error{d.maintenance, d.contradictions, d.candidates, d.consolidate, d.insights, d.skills, d.expire}
 	for i, step := range steps {
 		now := time.Now()
 		d.stageFrom, d.stageEnd = len(run.Changes), now.Add(d.deadline.Sub(now)/time.Duration(len(steps)-i))
@@ -330,10 +355,15 @@ func (d *dreamer) stop() bool {
 	default:
 		return false
 	}
+	d.hit(limit)
+	return true
+}
+
+// hit remembers the first limit the run reached: its outcome.
+func (d *dreamer) hit(limit string) {
 	if d.limit == "" {
 		d.limit = limit
 	}
-	return true
 }
 
 // save writes the run report; it is written after every change so a crash leaves what was applied logged.
@@ -507,10 +537,12 @@ func (d *dreamer) acceptPair(ctx context.Context, r Record, p MaintenanceProposa
 
 // candidateJudgement is what the dream does with one classified candidate.
 type candidateJudgement struct {
-	action     string // approve | edit_approve | reject | supersede | skip
+	action     string // approve | edit_approve | reject | supersede | skip (contradiction until decided)
 	content    string
 	reason     string // a code and ids only: reports keep no memory text
 	confidence float64
+	op         string   // the logged op when it differs from action (merge, insight)
+	replaces   []string // memories the approved one supersedes
 }
 
 var riskConfidence = map[string]float64{"low": 0.9, "medium": 0.7, "high": 0.3}
@@ -535,11 +567,11 @@ func judgeCandidate(c Record, minConfidence float64) candidateJudgement {
 	}
 	switch {
 	case cl.Relation == "contradiction":
-		j.action, j.reason = "skip", "contradiction_needs_person"
+		j.action, j.reason = "contradiction", "contradicts "+cl.DupHint // dream_contradiction.go decides which is current
 	case cl.Relation == "duplicate" || verdict == "merge" && cl.DupHint != "":
 		j.action, j.reason = "reject", "duplicate of "+cl.DupHint
 	case cl.Relation == "newer_version":
-		j.action, j.reason = "supersede", "newer version of "+cl.DupHint
+		j.action, j.reason, j.replaces = "supersede", "newer version of "+cl.DupHint, []string{cl.DupHint}
 	case verdict == "discard":
 		j.action, j.reason = "reject", "not_worth_keeping"
 	case verdict == "fix" && cl.Verdict.Text != "":
@@ -549,7 +581,7 @@ func judgeCandidate(c Record, minConfidence float64) candidateJudgement {
 	default:
 		j.action, j.reason = "skip", "no_verdict"
 	}
-	if j.action != "skip" && j.confidence < minConfidence {
+	if j.action != "skip" && j.action != "contradiction" && j.confidence < minConfidence {
 		j.action, j.reason = "skip", "low_confidence"
 	}
 	return j
@@ -563,13 +595,17 @@ func (d *dreamer) candidates(ctx context.Context) error {
 	}
 	for _, c := range rows {
 		target := "memory_candidates/" + c.ID
-		if slices.Contains(c.Tags, dreamUndoneTag) || d.skipped(target, c.Revision) {
+		// Lessons wait as candidates for skill promotion (dream_skill.go); held ones for their conflict.
+		if slices.Contains(c.Tags, dreamUndoneTag) || c.Kind == "lesson" || c.ConflictID != "" || d.skipped(target, c.Revision) {
 			continue
 		}
 		if d.stop() {
 			return nil
 		}
 		j := judgeCandidate(c, d.set.minConfidence)
+		if j.action == "contradiction" {
+			j = d.judgeContradiction(ctx, c, j)
+		}
 		if j.action == "skip" {
 			d.skip(target, c.Revision, j.reason, j.confidence)
 			continue
@@ -583,29 +619,24 @@ func (d *dreamer) candidates(ctx context.Context) error {
 
 var dreamAfter = map[string]string{"approve": "active", "edit_approve": "active", "supersede": "active", "reject": "rejected"}
 
+// settle applies one judgement through the review path a person uses; an approval that replaces
+// memories then supersedes each of them.
 func (d *dreamer) settle(ctx context.Context, c Record, j candidateJudgement) error {
 	target := "memory_candidates/" + c.ID
 	refs := []Ref{{Collection: "memory_candidates", ID: c.ID}}
 	if j.action != "reject" {
 		refs = []Ref{{Collection: colMemories, ID: c.ID}} // the approved memory takes the candidate's id
 	}
-	if j.action == "supersede" {
-		refs = append(refs, Ref{Collection: colMemories, ID: c.Classification.DupHint})
+	for _, id := range j.replaces {
+		refs = append(refs, Ref{Collection: colMemories, ID: id})
 	}
 	rows, recs, err := d.snapshot(ctx, refs...)
 	if err != nil {
 		return err
 	}
-	var old *Record
-	if j.action == "supersede" {
-		if old = recs[1]; old == nil || old.Status != statusActive {
-			d.skip(target, c.Revision, "replaced_memory_gone", j.confidence)
-			return nil
-		}
-		if userStated(*old) && !userStated(c) {
-			d.skip(target, c.Revision, "would_retire_user_statement", j.confidence)
-			return nil
-		}
+	if reason := retireRefusal(c, recs[1:]); reason != "" {
+		d.skip(target, c.Revision, reason, j.confidence)
+		return nil
 	}
 	in := CandidateReviewInput{Automated: true, Scope: d.scope, ExpectedRevision: c.Revision, Action: j.action, Content: j.content, OperationID: d.runID + "." + strconv.Itoa(len(d.run.Changes)+len(d.run.Skipped)+d.run.SkippedMore)}
 	switch j.action {
@@ -622,28 +653,79 @@ func (d *dreamer) settle(ctx context.Context, c Record, j candidateJudgement) er
 		return err
 	}
 	rows[0].AfterRevision = settled.Revision // the row the review wrote, as its transaction left it
-	if old != nil {
-		if err = d.supersede(ctx, *old, settled, j.reason, rows); changed(err) {
-			d.skip(colMemories+"/"+old.ID, old.Revision, "supersede_refused", j.confidence) // the approval stands and is logged below
-			rows = rows[:1]
-		} else if err != nil {
+	if len(j.replaces) > 0 {
+		if rows, err = d.replaceAll(ctx, settled, recs[1:], j, rows); err != nil || rows == nil {
 			return err
 		}
 	}
-	return d.record(ctx, DreamChange{Op: j.action, Target: target, Reason: j.reason, Confidence: j.confidence, Before: c.Status, After: dreamAfter[j.action]}, rows)
+	op := j.op
+	if op == "" {
+		op = j.action
+	}
+	return d.record(ctx, DreamChange{Op: op, Target: target, Reason: j.reason, Confidence: j.confidence, Before: c.Status, After: dreamAfter[j.action]}, rows)
 }
 
-// supersede retires old for next through the conflict path, as a person's accept of a pair does, and
-// reads both rows' revisions in that transaction.
-func (d *dreamer) supersede(ctx context.Context, old, next Record, reason string, rows []dreamRow) error {
-	mark := ConflictInput{Scope: d.scope, Memories: []Ref{{Collection: colMemories, ID: old.ID, Revision: old.Revision}, {Collection: colMemories, ID: next.ID, Revision: next.Revision}},
-		Action: "mark", Hold: "both", Reason: "dream: " + reason}
-	return d.s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		if err := supersedeInTx(ctx, tx, mark, d.principal, roleService); err != nil {
-			return err
+// retireRefusal: why the memories an approval would replace must stay ("" when none). The dream
+// never retires a memory the user stated for one that is not.
+func retireRefusal(c Record, olds []*Record) string {
+	for _, old := range olds {
+		if old == nil || old.Status != statusActive || old.ConflictID != "" {
+			return "replaced_memory_gone"
+		}
+		if userStated(*old) && !userStated(c) {
+			return "would_retire_user_statement"
+		}
+	}
+	return ""
+}
+
+// replaceAll supersedes every replaced memory for next in one transaction. When that is refused, a
+// newer version's approval stands with its supersession skipped; a merge or an insight, which only
+// exists to replace, is withdrawn again (rows nil: nothing to log).
+func (d *dreamer) replaceAll(ctx context.Context, next Record, olds []*Record, j candidateJudgement, rows []dreamRow) ([]dreamRow, error) {
+	err := d.s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		for _, old := range olds {
+			cur, err := tx.Get(ctx, colMemories, d.scope, next.ID)
+			if err != nil {
+				return err
+			}
+			mark := ConflictInput{Scope: d.scope, Memories: []Ref{{Collection: colMemories, ID: old.ID, Revision: old.Revision}, {Collection: colMemories, ID: cur.ID, Revision: cur.Revision}},
+				Action: "mark", Hold: "both", Reason: "dream: " + j.reason}
+			if err = supersedeInTx(ctx, tx, mark, d.principal, roleService); err != nil {
+				return err
+			}
 		}
 		return afterRevisions(ctx, tx, d.scope, rows)
 	})
+	if !changed(err) {
+		return rows, err
+	}
+	if j.op == "" {
+		d.skip(colMemories+"/"+olds[0].ID, olds[0].Revision, "supersede_refused", j.confidence) // the approval stands and is logged
+		return rows[:1], nil
+	}
+	d.skip("memory_candidates/"+next.ID, 0, j.op+"_refused", j.confidence)
+	return nil, d.withdraw(ctx, next.ID)
+}
+
+// withdraw rejects a memory the run approved a moment ago, when what it was for was refused.
+func (d *dreamer) withdraw(ctx context.Context, id string) error {
+	err := d.s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		cur, err := tx.Get(ctx, colMemories, d.scope, id)
+		if err != nil {
+			return err
+		}
+		prev := cur.Revision
+		cur.Status, cur.Revision, cur.UpdatedAt = "rejected", prev+1, time.Now().UTC()
+		if err = tx.Replace(ctx, colMemories, cur, prev); err != nil {
+			return err
+		}
+		return audit(ctx, tx, d.scope, d.principal, "dream:withdraw:memories", id)
+	})
+	if changed(err) {
+		return nil
+	}
+	return err
 }
 
 // expire retires active memories whose expiry passed: recall already leaves them out, the status says so.

@@ -53,7 +53,7 @@ func TestDreamJudgeCandidate(t *testing.T) {
 		"keep medium failed": {cl("medium", "", "keep", true), "skip"},
 		"high risk":          {cl("high", "", "keep", false), "skip"},
 		"duplicate":          {cl("low", "duplicate", "", false), "reject"},
-		"contradiction":      {cl("low", "contradiction", "keep", false), "skip"},
+		"contradiction":      {cl("low", "contradiction", "keep", false), "contradiction"},
 		"newer":              {cl("low", "newer_version", "", false), "supersede"},
 		"discard":            {cl("low", "", "discard", false), "reject"},
 		"fix":                {cl("low", "", "fix", false), "edit_approve"},
@@ -182,7 +182,7 @@ func TestDreamAppliesJudgedChangesAndLogsThem(t *testing.T) {
 	for _, k := range run.Skipped {
 		skipped[k.Target] = k.Reason
 	}
-	if skipped["memory_candidates/"+s.contra.ID] != "contradiction_needs_person" || skipped["memory_candidates/"+s.risky.ID] != "low_confidence" {
+	if skipped["memory_candidates/"+s.contra.ID] != "contradiction_undecidable" || skipped["memory_candidates/"+s.risky.ID] != "low_confidence" {
 		t.Fatal("skips", skipped)
 	}
 	s.expect(t, "after", map[string]map[string]string{

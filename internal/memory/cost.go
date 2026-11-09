@@ -152,6 +152,8 @@ func operationCap(operation string) callCap {
 		return callCap{prefix: modelRerankOperation, limit: modelRerankDailyCalls}
 	case operation == recallExpandOperation:
 		return callCap{prefix: recallExpandOperation, limit: recallExpandDailyCalls}
+	case strings.HasPrefix(operation, dreamOperationPrefix):
+		return callCap{prefix: dreamOperationPrefix, limit: dreamDailyCalls}
 	}
 	return callCap{}
 }

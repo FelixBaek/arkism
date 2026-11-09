@@ -698,7 +698,7 @@ export type WireRequestSkillHoldoutPlan = { "development_tasks"?: ((Array<string
 export type WireRequestSkillHoldoutTask = { "case_sha256"?: string; "category"?: string };
 export type SkillHoldoutTask = { "case_sha256": string; "category": string };
 export type SkillHoldoutPlan = { "development_tasks": Array<string>; "tasks": Array<SkillHoldoutTask>; "min_category_score": number; "min_category_cases": number };
-export type WireResponseDreamRun = { "trigger": string; "started_at": string; "finished_at"?: string; "outcome": string; "changes": ((Array<WireResponseDreamChange> | null)); "skipped": ((Array<WireResponseDreamSkip> | null)); "skipped_more"?: number };
+export type WireResponseDreamRun = { "trigger": string; "started_at": string; "finished_at"?: string; "outcome": string; "changes": ((Array<WireResponseDreamChange> | null)); "skipped": ((Array<WireResponseDreamSkip> | null)); "skipped_more"?: number; "model"?: string; "model_calls": number };
 export type WireResponseDreamChange = { "op": string; "target": string; "reason": string; "confidence": number; "before": string; "after": string; "undone_at"?: string; "undone_by"?: string };
 export type WireResponseDreamSkip = { "target": string; "reason": string; "confidence"?: number };
 
