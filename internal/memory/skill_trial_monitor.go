@@ -18,12 +18,31 @@ type SkillTrialRecovery struct {
 // independent failing evaluation in the use's own scope. $1..$3 are the workspace, project and user.
 const skillUseFailedSQL = `(s.payload->>'status' IN ('failure','validation_failed') OR (s.payload->>'tool_failures')::integer>0 OR (s.payload->>'runtime_errors')::integer>0 OR EXISTS (SELECT 1 FROM memory_records e WHERE e.collection='evaluations' AND e.workspace_id=$1 AND e.project_id=$2 AND e.user_id=$3 AND e.agent_id=s.agent_id AND e.status='active' AND e.doc->'target'->>'collection'='sources' AND e.doc->'target'->>'id'=s.id AND e.doc->'evaluation'->>'eval_type'<>'model_self' AND e.doc->'evaluation'->>'passed'='false'))`
 
-// SkillVersionOutcomes counts the recorded uses of one skill version and how many of them failed. Runs
-// are recorded under an agent while the skill usually lives in the user's agent-less scope, so a skill
-// of that scope counts the uses of every agent of the user.
-func (p *Postgres) SkillVersionOutcomes(ctx context.Context, scope Scope, version string) (uses, failed int, err error) {
-	err = p.q().QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE `+skillUseFailedSQL+`) FROM source_events s WHERE s.organization_id=$1 AND s.project_id=$2 AND s.user_id=$3 AND ($4='' OR s.agent_id=$4) AND s.kind=$5 AND s.payload->>'version_id'=$6`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, skillUsageEventKind, version).Scan(&uses, &failed)
-	return uses, failed, pgErr(err)
+// SkillRunOutcomes counts, for each skill version, the runs that used it since the time given for it and
+// how many of those runs had a failed use: {runs, failed}. A run is one trace of one agent, however many
+// uses it reports, and a cancelled use says nothing either way. Runs are recorded under an agent while
+// the skill usually lives in the user's agent-less scope, so a skill of that scope counts the runs of
+// every agent of the user.
+func (p *Postgres) SkillRunOutcomes(ctx context.Context, scope Scope, since map[string]time.Time) (map[string][2]int, error) {
+	versions, from := make([]string, 0, len(since)), make([]time.Time, 0, len(since))
+	for v, t := range since {
+		versions, from = append(versions, v), append(from, t)
+	}
+	rows, e := p.q().Query(ctx, `SELECT version, count(*), count(*) FILTER (WHERE failed) FROM (SELECT w.version, bool_or(`+skillUseFailedSQL+`) AS failed FROM source_events s JOIN unnest($6::text[], $7::timestamptz[]) AS w(version, since) ON s.payload->>'version_id'=w.version AND (s.payload->>'started_at')::timestamptz >= w.since WHERE s.organization_id=$1 AND s.project_id=$2 AND s.user_id=$3 AND ($4='' OR s.agent_id=$4) AND s.kind=$5 AND s.payload->>'status'<>'cancelled' GROUP BY w.version, s.agent_id, s.trace_id) runs GROUP BY version`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, skillUsageEventKind, versions, from)
+	if e != nil {
+		return nil, pgErr(e)
+	}
+	defer rows.Close()
+	out := map[string][2]int{}
+	for rows.Next() {
+		var version string
+		var n [2]int
+		if e = rows.Scan(&version, &n[0], &n[1]); e != nil {
+			return nil, pgErr(e)
+		}
+		out[version] = n
+	}
+	return out, pgErr(rows.Err())
 }
 
 // Only potential regressions are selected; every returned canonical event and

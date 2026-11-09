@@ -279,19 +279,20 @@ func (s *Service) newCandidateSince(ctx context.Context, scope Scope, at time.Ti
 
 // dreamer is one run in progress.
 type dreamer struct {
-	s         *Service
-	token     string
-	scope     Scope
-	set       dreamSettings
-	principal string
-	runID     string
-	run       *DreamRun
-	known     map[string]int64 // skips earlier runs logged
-	deadline  time.Time
-	stageFrom int        // changes before the current stage
-	stageEnd  time.Time  // the current stage's share of the time limit
-	limit     string     // the first limit a stage hit
-	since     *time.Time // the previous run, nil before the first
+	s          *Service
+	token      string
+	scope      Scope
+	set        dreamSettings
+	principal  string
+	runID      string
+	run        *DreamRun
+	known      map[string]int64 // skips earlier runs logged
+	deadline   time.Time
+	stageFrom  int        // changes before the current stage
+	stageEnd   time.Time  // the current stage's share of the time limit
+	limit      string     // the first limit a stage hit
+	since      *time.Time // the previous run, nil before the first
+	demotedNow []string   // skills this run took a version back from
 }
 
 // dream checks the worker's grants, stores the run report and applies what it may. Each stage (pair

@@ -66,11 +66,17 @@ func recordedUses(t *testing.T, f *fixture, v Record, status string, n int) {
 	t.Helper()
 	time.Sleep(2 * time.Millisecond)
 	for i := 0; i < n; i++ {
-		at := time.Now().UTC()
-		u := SkillUsage{SkillID: v.SkillID, Version: 2, VersionID: v.ID, ContentHash: v.Analysis.ContentHash, Runtime: "codex", Status: status, StartedAt: at, CompletedAt: at}
-		if e := f.repo.Insert(testCtx, "sources", Record{ID: fmt.Sprintf("use-%s-%s-%d", v.ID, status, i), Scope: scopeA, Kind: skillUsageEventKind, Status: "active", Revision: 1, Text: structuredText(u), CreatedAt: at, UpdatedAt: at}); e != nil {
-			t.Fatal(e)
-		}
+		id := fmt.Sprintf("use-%s-%s-%d", v.ID, status, i)
+		recordUse(t, f, v, status, id, id, time.Now().UTC())
+	}
+}
+
+// recordUse stores one use event of the version, as part of the named run.
+func recordUse(t *testing.T, f *fixture, v Record, status, id, run string, at time.Time) {
+	t.Helper()
+	u := SkillUsage{SkillID: v.SkillID, Version: 2, VersionID: v.ID, ContentHash: v.Analysis.ContentHash, Runtime: "codex", Status: status, StartedAt: at, CompletedAt: at}
+	if e := f.repo.Insert(testCtx, "sources", Record{ID: id, TraceID: run, Scope: scopeA, Kind: skillUsageEventKind, Status: "active", Revision: 1, Text: structuredText(u), CreatedAt: at, UpdatedAt: at}); e != nil {
+		t.Fatal(e)
 	}
 }
 

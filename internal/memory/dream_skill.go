@@ -11,6 +11,7 @@ package memory
 import (
 	"context"
 	"errors"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -135,6 +136,11 @@ func (d *dreamer) promote(ctx context.Context, subject string, g ReflectionView)
 		d.skip(target, rev, "skill_owned_by_person", g.Confidence)
 		return false, nil
 	}
+	if slices.Contains(d.demotedNow, skillID) {
+		// Writing the skill again in the run that took its version back would leave that step
+		// impossible to undo. Not logged as a skip, so the next run drafts the group.
+		return false, nil
+	}
 	before, err := d.s.Repo.Get(ctx, colSkills, d.scope, skillID)
 	if err != nil && !errors.Is(err, ErrNotFound) {
 		return false, err
@@ -178,7 +184,8 @@ func (d *dreamer) receipt(ctx context.Context, eventID string) bool {
 	return err == nil
 }
 
-// draftRefusal: why a draft is not activated without a person ("" when it may be). It must add no
+// draftRefusal: why a draft is not activated without a person ("" when it may be). It must be usable
+// as written (draftUnusable), add no
 // address, command, tool grant or permission that neither the version it replaces nor the lessons
 // carry, a revision must not be worse than the file it replaces (revisionWorse), and a skill the
 // deployment runs trials for waits for its trial.
@@ -190,6 +197,9 @@ func (d *dreamer) draftRefusal(ctx context.Context, v Record, baseVersion string
 		allowed += "\n" + analysisProse(base) + baseFile
 	}
 	file := d.versionFile(ctx, v)
+	if reason := draftUnusable(v.Analysis, file, baseFile != ""); reason != "" {
+		return reason
+	}
 	if rule, token := riskyAddition(analysisProse(v.Analysis)+file, allowed, v.Analysis, base); rule != "" {
 		return "skill_risky_addition:" + rule + ":" + token
 	}
@@ -215,35 +225,78 @@ func (d *dreamer) versionFile(ctx context.Context, v Record) string {
 	return out
 }
 
+// skillStepLine is a numbered step of a skill file: "1.", "1)", "Step 1", "1단계" or a circled number,
+// also as a heading, in bold or behind a list mark. A plain bullet is no step.
+var skillStepLine = regexp.MustCompile(`(?m)^[ \t]*(?:#{1,6}[ \t]+)?(?:[-*][ \t]+)?(?:\*\*|__)?(?:\d{1,2}[.)]|(?i:step)[ \t]*\d{1,2}\b|\d{1,2}[ \t]*단계|[①-⑳])`)
+
+// draftUnusable: why nobody could follow a draft the dream is about to activate ("" when they can). It
+// says when not to use the skill, and a new skill lists at least two numbered steps; a revision keeps
+// the form of the file it replaces. Only the dream asks this: a person's own draft is theirs to shape.
+func draftUnusable(a *SkillAnalysis, file string, revision bool) string {
+	switch {
+	case a == nil || len(a.AvoidWhen) == 0:
+		return "skill_draft_no_avoid_when"
+	case !revision && len(skillStepLine.FindAllString(file, 2)) < 2:
+		return "skill_draft_no_steps"
+	}
+	return ""
+}
+
 // dreamRevisionCover is the share of a revision's new lines that must reuse the wording of the lessons
-// or of the file it replaces (character pairs, as faithful counts them).
+// or of the file it replaces, and the share of a line found again that makes it the same line (character
+// pairs, as faithful counts them).
 const dreamRevisionCover = 0.6
 
+// skillNegation is a word that turns a step into a prohibition.
+// shortcut: a word list for English and Korean, so a revision in another language is only checked for dropped and invented lines; add its words when skills are written in it.
+var skillNegation = regexp.MustCompile(`(?i)\b(?:not|never|no|cannot|without|avoid)\b|n't\b|않|금지|말 ?것|마라|마세요|마십시오|말아|지 ?마|못하|없이|(?:^|\s)안\s`)
+
 // revisionWorse: why a revised skill file is worse than the one it replaces ("" when it is not). A
-// revision may replace a line or add lines; it may not drop more of the original's lines than it
-// writes, and what it writes must come from the lessons or the original, so a lesson that says little
-// cannot talk the model into steps nobody verified.
-// shortcut: a lesson that only removes a step is left to a person; allow it once lessons name the step they retire.
+// revision may reword a line, merge lines or add lines. It may not turn a prohibition into a step or a
+// step into a prohibition, nor let a prohibition go; it may not drop more of the original's lines than
+// it writes (a line whose wording is found again in the revision was merged, not dropped); and what it
+// writes must come from the lessons or the original, so a lesson that says little cannot talk the model
+// into steps nobody verified.
+// shortcut: a lesson that only removes a step or lifts a prohibition is left to a person; allow it once lessons name the line they retire.
 func revisionWorse(base, next string, lessons []string) string {
 	old, cur := textLines(base), textLines(next)
-	lost, written := 0, []string{}
-	for _, line := range old {
-		if !slices.Contains(cur, line) {
-			lost++
-		}
-	}
+	written := []string{}
 	for _, line := range cur {
 		if !slices.Contains(old, line) {
 			written = append(written, line)
 		}
 	}
-	if lost > len(written) {
+	all, dropped := digestGrams(strings.Join(written, "\n")), 0
+	for _, line := range old {
+		if slices.Contains(cur, line) {
+			continue
+		}
+		twin, negated := rewordedAs(line, written), skillNegation.MatchString(line)
+		if twin == "" && negated || twin != "" && negated != skillNegation.MatchString(twin) {
+			return "skill_revision_flips_negation"
+		}
+		if twin == "" && digestCover(digestGrams(line), all) < dreamRevisionCover {
+			dropped++
+		}
+	}
+	if dropped > len(written) {
 		return "skill_revision_drops_steps"
 	}
-	if len(written) > 0 && digestCover(digestGrams(strings.Join(written, "\n")), digestGrams(strings.Join(lessons, "\n")+"\n"+base)) < dreamRevisionCover {
+	if len(written) > 0 && digestCover(all, digestGrams(strings.Join(lessons, "\n")+"\n"+base)) < dreamRevisionCover {
 		return "skill_revision_unfaithful"
 	}
 	return ""
+}
+
+// rewordedAs is the written line that keeps most of line's wording, "" when none keeps enough of it.
+func rewordedAs(line string, written []string) string {
+	grams, twin, best := digestGrams(line), "", dreamRevisionCover
+	for _, w := range written {
+		if c := digestCover(grams, digestGrams(w)); c >= best {
+			twin, best = w, c
+		}
+	}
+	return twin
 }
 
 // textLines: the non-empty lines of text, trimmed.

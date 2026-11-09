@@ -166,6 +166,11 @@ func undoDreamRow(ctx context.Context, tx Tx, scope Scope, row dreamRow, princip
 			return err
 		}
 	}
+	if row.Collection == colSkillVersions && next.Status == statusActive {
+		if err = enqueue(ctx, tx, colSkillVersions, next); err != nil { // the skill search finds it again
+			return err
+		}
+	}
 	return audit(ctx, tx, scope, principal, "dream:undo:"+row.Collection, row.ID)
 }
 
