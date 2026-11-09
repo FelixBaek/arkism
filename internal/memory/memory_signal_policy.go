@@ -62,20 +62,9 @@ func (s *Service) signalRecords(ctx context.Context, scope Scope, rows []ScoredH
 				wanted[id] = r.ID
 			}
 		}
-		records := []Record{}
-		if reader, ok := s.Repo.(signalRecordReader); ok {
-			var err error
-			records, err = reader.MemorySignalRecords(ctx, scope, ids)
-			if err != nil {
-				continue
-			}
-		} else {
-			for _, id := range ids {
-				r, err := s.Repo.Get(ctx, colJobs, scope, id)
-				if err == nil {
-					records = append(records, r)
-				}
-			}
+		records, err := s.signalRecordBatch(ctx, scope, ids)
+		if err != nil {
+			continue
 		}
 		for _, r := range records {
 			id, ok := wanted[r.ID]
@@ -86,6 +75,22 @@ func (s *Service) signalRecords(ctx context.Context, scope Scope, rows []ScoredH
 	}
 	return out
 }
+
+// signalRecordBatch reads one batch of signal records; without a batch reader, missing ids are skipped.
+func (s *Service) signalRecordBatch(ctx context.Context, scope Scope, ids []string) ([]Record, error) {
+	if reader, ok := s.Repo.(signalRecordReader); ok {
+		return reader.MemorySignalRecords(ctx, scope, ids)
+	}
+	records := []Record{}
+	for _, id := range ids {
+		r, err := s.Repo.Get(ctx, colJobs, scope, id)
+		if err == nil {
+			records = append(records, r)
+		}
+	}
+	return records, nil
+}
+
 func (s *Service) policyOutcomeWeights(ctx context.Context, in SearchInput, rows []ScoredHit) map[string]float64 {
 	p := in.space.recallQuality().SignalPolicy
 	if p == nil || p.Disabled {
@@ -115,16 +120,21 @@ func (s *Service) policyOutcomeWeights(ctx context.Context, in SearchInput, rows
 		if err != nil {
 			continue
 		}
-		for _, c := range counts {
-			if _, ok := query.ContentHashes[c.MemoryID]; !ok || c.Total < p.MinSamples || c.Passed < 0 || c.Passed > c.Total {
-				continue
-			}
-			w := 1.0
-			if existing, ok := out[c.MemoryID]; ok {
-				w = existing
-			}
-			out[c.MemoryID] = w * (0.5 + float64(c.Passed+1)/float64(c.Total+2))
-		}
+		applyPolicyOutcomeCounts(out, query.ContentHashes, counts, p.MinSamples)
 	}
 	return out
+}
+
+// applyPolicyOutcomeCounts multiplies each requested memory's weight by its smoothed pass rate.
+func applyPolicyOutcomeCounts(out map[string]float64, requested map[string]string, counts []MemoryOutcomeCount, minSamples int) {
+	for _, c := range counts {
+		if _, ok := requested[c.MemoryID]; !ok || c.Total < minSamples || c.Passed < 0 || c.Passed > c.Total {
+			continue
+		}
+		w := 1.0
+		if existing, ok := out[c.MemoryID]; ok {
+			w = existing
+		}
+		out[c.MemoryID] = w * (0.5 + float64(c.Passed+1)/float64(c.Total+2))
+	}
 }

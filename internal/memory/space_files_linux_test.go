@@ -7,6 +7,20 @@ import (
 	"testing"
 )
 
+func assertBundleCarriesOnlyOwnFiles(t *testing.T, bundle string) {
+	t.Helper()
+	for _, want := range []string{"Bleed 3 mm", `"user_id":"synthetic-user"`, `"section":"attachments"`} {
+		if !strings.Contains(bundle, want) {
+			t.Fatalf("bundle misses %q:\n%s", want, bundle)
+		}
+	}
+	for _, leak := range []string{"Someone else", "aHVtYW4yIHByaXZhdGUgZmlsZQ"} {
+		if strings.Contains(bundle, leak) {
+			t.Fatalf("bundle carries another person's private file %q", leak)
+		}
+	}
+}
+
 func TestSpaceBundleCarriesKnowledgeAndAttachments(t *testing.T) {
 	f := handoffFixture(t)
 	mine := knowledgeFixtureInput()
@@ -29,16 +43,7 @@ func TestSpaceBundleCarriesKnowledgeAndAttachments(t *testing.T) {
 
 	parts := SpaceExportInput{Parts: []string{spaceSectionKnowledge, spaceSectionAttachments}}
 	bundle := exportBundle(t, f, scopeA, parts)
-	for _, want := range []string{"Bleed 3 mm", `"user_id":"synthetic-user"`, `"section":"attachments"`} {
-		if !strings.Contains(bundle, want) {
-			t.Fatalf("bundle misses %q:\n%s", want, bundle)
-		}
-	}
-	for _, leak := range []string{"Someone else", "aHVtYW4yIHByaXZhdGUgZmlsZQ"} {
-		if strings.Contains(bundle, leak) {
-			t.Fatalf("bundle carries another person's private file %q", leak)
-		}
-	}
+	assertBundleCarriesOnlyOwnFiles(t, bundle)
 
 	// An agent's export carries no files at all.
 	job, err := f.svc.ExportSpace(testCtx, f.agent, scopeA, parts)

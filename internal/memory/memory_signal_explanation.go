@@ -55,21 +55,8 @@ func (s *Service) ExplainMemorySignal(ctx context.Context, token string, scope S
 	}
 	now := s.recallClock(SearchInput{})
 	out := MemorySignalExplanation{Memory: Ref{Collection: colMemories, ID: id, Revision: m.Revision}, Authority: AuthorityDataOnly, Mode: "legacy", AsOf: now, Applicable: live(m) && m.Status == "active", EvaluationFactor: 1, WorkFactor: 1, EffectiveFactor: 1}
-	count := func(q MemoryOutcomeQuery) (MemoryOutcomeCount, error) {
-		rows, e := s.Repo.MemoryOutcomeCounts(ctx, q)
-		if e != nil {
-			return MemoryOutcomeCount{}, e
-		}
-		if len(rows) == 0 {
-			return MemoryOutcomeCount{}, nil
-		}
-		if len(rows) != 1 || rows[0].MemoryID != id || rows[0].Total < 0 || rows[0].Passed < 0 || rows[0].Passed > rows[0].Total {
-			return MemoryOutcomeCount{}, ErrUnavailable
-		}
-		return rows[0], nil
-	}
 	q := MemoryOutcomeQuery{Scope: scope, MemoryIDs: []string{id}}
-	all, err := count(q)
+	all, err := s.memorySignalCount(ctx, q, id)
 	if err != nil {
 		return MemorySignalExplanation{}, err
 	}
@@ -85,32 +72,8 @@ func (s *Service) ExplainMemorySignal(ctx context.Context, token string, scope S
 		out.SignalComputedAt = &at
 	}
 	if policy := settings.recallQuality().SignalPolicy; policy != nil && !policy.Disabled {
-		out.Mode = "recent_first_trace"
-		out.Policy = policy
-		from := now.Add(-time.Duration(policy.WindowDays) * 24 * time.Hour)
-		q.Dimension = policy.Dimension
-		q.From = &from
-		q.To = &now
-		q.ContentHashes = map[string]string{id: signalContentHash(HitFromRecord(colMemories, m))}
-		events, e := count(q)
-		if e != nil {
-			return MemorySignalExplanation{}, e
-		}
-		out.WindowEvents = events.Total
-		q.IndependentFirst = true
-		eligible, e := count(q)
-		if e != nil {
-			return MemorySignalExplanation{}, e
-		}
-		out.EligibleTotal, out.EligiblePassed = eligible.Total, eligible.Passed
-		out.ExcludedWindowEvents = out.WindowEvents - out.EligibleTotal
-		if out.ExcludedWindowEvents < 0 {
-			return MemorySignalExplanation{}, ErrUnavailable
-		}
-		out.EvaluationFactor = 1
-		out.MinimumMet = eligible.Total >= policy.MinSamples
-		if out.MinimumMet {
-			out.EvaluationFactor = 0.5 + float64(eligible.Passed+1)/float64(eligible.Total+2)
+		if err = s.explainSignalWindow(ctx, &out, policy, q, m, now); err != nil {
+			return MemorySignalExplanation{}, err
 		}
 	}
 	out.EffectiveFactor = out.EvaluationFactor * out.WorkFactor
@@ -125,6 +88,55 @@ func (s *Service) ExplainMemorySignal(ctx context.Context, token string, scope S
 	}
 	return out, nil
 }
+
+// memorySignalCount returns the one outcome count row of memory id, or zero.
+func (s *Service) memorySignalCount(ctx context.Context, q MemoryOutcomeQuery, id string) (MemoryOutcomeCount, error) {
+	rows, e := s.Repo.MemoryOutcomeCounts(ctx, q)
+	if e != nil {
+		return MemoryOutcomeCount{}, e
+	}
+	if len(rows) == 0 {
+		return MemoryOutcomeCount{}, nil
+	}
+	if len(rows) != 1 || rows[0].MemoryID != id || rows[0].Total < 0 || rows[0].Passed < 0 || rows[0].Passed > rows[0].Total {
+		return MemoryOutcomeCount{}, ErrUnavailable
+	}
+	return rows[0], nil
+}
+
+// explainSignalWindow fills the recent-window part of out under policy.
+func (s *Service) explainSignalWindow(ctx context.Context, out *MemorySignalExplanation, policy *SignalPolicy, q MemoryOutcomeQuery, m Record, now time.Time) error {
+	id := out.Memory.ID
+	out.Mode = "recent_first_trace"
+	out.Policy = policy
+	from := now.Add(-time.Duration(policy.WindowDays) * 24 * time.Hour)
+	q.Dimension = policy.Dimension
+	q.From = &from
+	q.To = &now
+	q.ContentHashes = map[string]string{id: signalContentHash(HitFromRecord(colMemories, m))}
+	events, e := s.memorySignalCount(ctx, q, id)
+	if e != nil {
+		return e
+	}
+	out.WindowEvents = events.Total
+	q.IndependentFirst = true
+	eligible, e := s.memorySignalCount(ctx, q, id)
+	if e != nil {
+		return e
+	}
+	out.EligibleTotal, out.EligiblePassed = eligible.Total, eligible.Passed
+	out.ExcludedWindowEvents = out.WindowEvents - out.EligibleTotal
+	if out.ExcludedWindowEvents < 0 {
+		return ErrUnavailable
+	}
+	out.EvaluationFactor = 1
+	out.MinimumMet = eligible.Total >= policy.MinSamples
+	if out.MinimumMet {
+		out.EvaluationFactor = 0.5 + float64(eligible.Passed+1)/float64(eligible.Total+2)
+	}
+	return nil
+}
+
 func memorySignalExplanationRoute(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/memories/{id}/signal-policy", func(w http.ResponseWriter, r *http.Request) {
 		scope, err := parseSourceTraceQuery(r.URL.RawQuery)

@@ -71,31 +71,8 @@ func skillHoldoutPasses(p *SkillHoldoutPlan, rows []SkillComparisonCase) (bool, 
 	counts := map[string]int{}
 	passed := map[string]int{}
 	for _, row := range rows {
-		if development[row.CaseSHA256] {
-			return false, ErrInvalid
-		}
-		category, declared := tasks[row.CaseSHA256]
-		if declared != (row.Category == "quality") {
-			return false, ErrInvalid
-		}
-		if !declared {
-			continue
-		}
-		if row.Variant != "baseline" && row.Variant != "candidate" {
-			return false, ErrInvalid
-		}
-		if seen[row.CaseSHA256] == nil {
-			seen[row.CaseSHA256] = map[string]bool{}
-		}
-		if seen[row.CaseSHA256][row.Variant] {
-			return false, ErrInvalid
-		}
-		seen[row.CaseSHA256][row.Variant] = true
-		if row.Variant == "candidate" {
-			counts[category]++
-			if row.Passed {
-				passed[category]++
-			}
+		if err := tallySkillHoldoutRow(row, development, tasks, seen, counts, passed); err != nil {
+			return false, err
 		}
 	}
 	for h := range tasks {
@@ -109,6 +86,38 @@ func skillHoldoutPasses(p *SkillHoldoutPlan, rows []SkillComparisonCase) (bool, 
 		}
 	}
 	return true, nil
+}
+
+// tallySkillHoldoutRow checks one comparison row against the plan and counts
+// a declared candidate row into counts and passed by category.
+func tallySkillHoldoutRow(row SkillComparisonCase, development map[string]bool, tasks map[string]string, seen map[string]map[string]bool, counts, passed map[string]int) error {
+	if development[row.CaseSHA256] {
+		return ErrInvalid
+	}
+	category, declared := tasks[row.CaseSHA256]
+	if declared != (row.Category == "quality") {
+		return ErrInvalid
+	}
+	if !declared {
+		return nil
+	}
+	if row.Variant != "baseline" && row.Variant != "candidate" {
+		return ErrInvalid
+	}
+	if seen[row.CaseSHA256] == nil {
+		seen[row.CaseSHA256] = map[string]bool{}
+	}
+	if seen[row.CaseSHA256][row.Variant] {
+		return ErrInvalid
+	}
+	seen[row.CaseSHA256][row.Variant] = true
+	if row.Variant == "candidate" {
+		counts[category]++
+		if row.Passed {
+			passed[category]++
+		}
+	}
+	return nil
 }
 
 // A normal evaluation with invented aggregate scores cannot satisfy holdout
@@ -128,38 +137,53 @@ func checkSkillHoldoutEvidence(ctx context.Context, tx Tx, r, v Record) error {
 		if source.Kind != "skill_comparison_result" {
 			continue
 		}
-		if !live(source) || source.ContentErased || source.PrivacyQuarantined || source.CreatedBy != v.CreatedBy || source.CreatedBy == r.CreatedBy || (source.CreatedByType != "service" && source.CreatedByType != "pipeline") || source.ContentHash != ContentHash(source.Text) {
-			return ErrDenied
-		}
-		var result SkillComparisonResult
-		if json.Unmarshal([]byte(source.Text), &result) != nil {
-			var envelope struct {
-				TrialID string                `json:"trial_id"`
-				Result  SkillComparisonResult `json:"result"`
-			}
-			if json.Unmarshal([]byte(source.Text), &envelope) != nil || envelope.TrialID == "" {
-				return ErrDenied
-			}
-			result = envelope.Result
-		}
-		if result.Candidate != *v.Target || result.Report == nil || result.Report.PlanSHA256 != comparisonPlanHash(r.ComparisonPlan) || result.DatasetSHA256 != r.ComparisonPlan.DatasetSHA256 || result.EnvironmentSHA256 != r.ComparisonPlan.EnvironmentSHA256 || result.ContentSHA256["candidate"] != r.Analysis.ContentHash {
-			return ErrDenied
-		}
-		_, measured, e := comparisonMeasurements(result, r.Scope)
-		if e != nil {
-			return e
-		}
-		if structuredText(measured) != structuredText(v.Evaluation.ComparisonReport) {
-			return ErrDenied
-		}
-		passed, e := skillHoldoutPasses(r.ComparisonPlan.Holdout, result.Cases)
-		if e != nil {
-			return e
-		}
-		if !passed {
-			return ErrDenied
-		}
-		return nil
+		return checkSkillHoldoutSource(r, v, source)
 	}
 	return ErrDenied
+}
+
+// checkSkillHoldoutSource checks one recorded comparison result source against
+// the plan and recomputes its report and holdout cases.
+func checkSkillHoldoutSource(r, v, source Record) error {
+	if !live(source) || source.ContentErased || source.PrivacyQuarantined || source.CreatedBy != v.CreatedBy || source.CreatedBy == r.CreatedBy || (source.CreatedByType != "service" && source.CreatedByType != "pipeline") || source.ContentHash != ContentHash(source.Text) {
+		return ErrDenied
+	}
+	result, ok := decodeSkillComparisonResult(source.Text)
+	if !ok {
+		return ErrDenied
+	}
+	if result.Candidate != *v.Target || result.Report == nil || result.Report.PlanSHA256 != comparisonPlanHash(r.ComparisonPlan) || result.DatasetSHA256 != r.ComparisonPlan.DatasetSHA256 || result.EnvironmentSHA256 != r.ComparisonPlan.EnvironmentSHA256 || result.ContentSHA256["candidate"] != r.Analysis.ContentHash {
+		return ErrDenied
+	}
+	_, measured, e := comparisonMeasurements(result, r.Scope)
+	if e != nil {
+		return e
+	}
+	if structuredText(measured) != structuredText(v.Evaluation.ComparisonReport) {
+		return ErrDenied
+	}
+	passed, e := skillHoldoutPasses(r.ComparisonPlan.Holdout, result.Cases)
+	if e != nil {
+		return e
+	}
+	if !passed {
+		return ErrDenied
+	}
+	return nil
+}
+
+// decodeSkillComparisonResult reads a bare result or a trial envelope.
+func decodeSkillComparisonResult(text string) (SkillComparisonResult, bool) {
+	var result SkillComparisonResult
+	if json.Unmarshal([]byte(text), &result) == nil {
+		return result, true
+	}
+	var envelope struct {
+		TrialID string                `json:"trial_id"`
+		Result  SkillComparisonResult `json:"result"`
+	}
+	if json.Unmarshal([]byte(text), &envelope) != nil || envelope.TrialID == "" {
+		return SkillComparisonResult{}, false
+	}
+	return envelope.Result, true
 }

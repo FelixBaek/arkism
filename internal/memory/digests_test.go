@@ -438,4 +438,8 @@ func TestDiffLines(t *testing.T) {
 	if len(diffLines("", "new")) != 1 || diffLines("", "new")[0].Op != "+" {
 		t.Fatal("new body")
 	}
+	long := strings.Repeat("x\n", maxDiffLines) + "x"
+	if got := diffLines(long, "y"); len(got) != maxDiffLines+2 || got[0].Op != "-" || got[len(got)-1].Op != "+" {
+		t.Fatal("a body past the cap shows as replaced whole")
+	}
 }

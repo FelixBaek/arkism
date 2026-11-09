@@ -95,8 +95,9 @@ const ui = path.resolve(process.env.ARKISM_UI_DIRECTORY || path.resolve(__dirnam
     await page.evaluate(() => document.documentElement.style.removeProperty("--fs"));
     await page.screenshot({ path: path.join(output, "memory.png") });
     // Candidates and conflicts retain a next-page control when local search hides all rows.
-    // 확인해 주세요 is a box on the memory list (no area tab line); its button opens the check lists
-    await page.getByRole("button", { name: "하나씩 확인하기", exact: true }).click();
+    // MEMORY has no tab line and a selected memory takes the side panel: 한눈에's 확인해 주세요 chip opens the check lists
+    await page.locator('[data-menu="memory"]').click();
+    await page.locator("button.ov-chip", { hasText: "확인해 주세요" }).click();
     await page.getByRole("tab", { name: /^새 기억 확인/ }).click();
     await page.getByRole("searchbox", { name: "기억 검색", exact: true }).fill("outside-loaded");
     await next("candidates");

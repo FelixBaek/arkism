@@ -14,13 +14,13 @@ import (
 )
 
 // parseOffsetCursor reads the decimal-offset cursor offsetPage returns; "" is the first page.
-// ok is false unless the cursor is the canonical decimal of 0 <= offset <= max.
-func parseOffsetCursor(cursor string, max int) (int, bool) {
+// ok is false unless the cursor is the canonical decimal of 0 <= offset <= limit.
+func parseOffsetCursor(cursor string, limit int) (int, bool) {
 	if cursor == "" {
 		return 0, true
 	}
 	n, err := strconv.Atoi(cursor)
-	return n, err == nil && n >= 0 && n <= max && strconv.Itoa(n) == cursor
+	return n, err == nil && n >= 0 && n <= limit && strconv.Itoa(n) == cursor
 }
 
 // offsetWindow is the clamped [start, end) of a page of limit items from offset among n,

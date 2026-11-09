@@ -1012,7 +1012,7 @@ test("overview: 기억 지도 draws names seen together, filters names by tag an
   const offs = [route("GET", "/v1/memory-graph", () => ok(graph)), route("GET", "/v1/entities/", () => ok({ memories: [], related: [], timeline: [] })),
     route("GET", "/v1/entities/graph", (a) => { asked.push(a.path); return ok({ nodes: [{ id: "a", name: "Orbit", type: "project", mentions: 3 }, { id: "b", name: "민지", type: "person", mentions: 2 }], edges: [{ source: "a", target: "b", weight: 2 }, { source: "a", target: "gone", weight: 1 }] }); }),
     route("GET", "/v1/observations", () => ok({ items: [] }))];
-  let d = await openWindow({ wide: "map" }); await app.settle(80); d = win();
+  await openWindow({ wide: "map" }); await app.settle(80); const d = win();
   assert.match(text(d.querySelector(".ov-map-legend")), /같이 나온 이름/);
   assert.doesNotMatch(asked[0], /tags=|min_count=/, "no filter by default");
   const opts = d.querySelector(".ov-map-opts"); assert.match(text(opts.querySelector("summary")), /자세히/);

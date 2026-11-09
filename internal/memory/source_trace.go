@@ -96,36 +96,11 @@ func (s *Service) traceRecordSources(ctx context.Context, token string, scope Sc
 			return ErrInvalid
 		}
 		out = MemorySources{Memory: Ref{Collection: collection, ID: r.ID, Revision: r.Revision}, ApprovedBy: r.ApprovedBy, Sources: []SourceTrace{}, Authority: "data_only_untrusted"}
-		// Cache only within this transaction attempt; duplicate locations keep their own proofs.
-		rows := map[string]Record{}
-		states := map[string]string{}
-		deleted := map[string]time.Time{}
-		for i, ref := range r.Sources {
-			if limit > 0 && i >= limit {
-				break
-			}
-			if ref.SourceID == "" || len(ref.SourceID) > 256 {
-				return ErrInvalid
-			}
-			state, seen := states[ref.SourceID]
-			if !seen {
-				var err error
-				state, err = s.traceSourceState(ctx, tx, token, scope, ref.SourceID, d, rows, deleted)
-				if err != nil {
-					return err
-				}
-				states[ref.SourceID] = state
-			}
-			item := SourceTrace{SourceID: ref.SourceID, State: state}
-			if state == "deleted" {
-				at := deleted[ref.SourceID]
-				item.DeletedAt = &at
-			}
-			if state == "available" {
-				fillAvailableSourceTrace(&item, ref, rows[ref.SourceID])
-			}
-			out.Sources = append(out.Sources, item)
+		traces, e := s.traceSourceRefs(ctx, tx, token, scope, d, r.Sources, limit)
+		if e != nil {
+			return e
 		}
+		out.Sources = append(out.Sources, traces...)
 		action := "read:memory_sources"
 		if collection == "memory_candidates" {
 			action = "read:candidate_sources"
@@ -134,6 +109,42 @@ func (s *Service) traceRecordSources(ctx context.Context, token string, scope Sc
 	})
 	if e != nil {
 		return MemorySources{}, e
+	}
+	return out, nil
+}
+
+// traceSourceRefs traces the first limit refs (all when limit is 0).
+func (s *Service) traceSourceRefs(ctx context.Context, tx Tx, token string, scope Scope, d Decision, refs []SourceRef, limit int) ([]SourceTrace, error) {
+	out := []SourceTrace{}
+	// Cache only within this transaction attempt; duplicate locations keep their own proofs.
+	rows := map[string]Record{}
+	states := map[string]string{}
+	deleted := map[string]time.Time{}
+	for i, ref := range refs {
+		if limit > 0 && i >= limit {
+			break
+		}
+		if ref.SourceID == "" || len(ref.SourceID) > 256 {
+			return nil, ErrInvalid
+		}
+		state, seen := states[ref.SourceID]
+		if !seen {
+			var err error
+			state, err = s.traceSourceState(ctx, tx, token, scope, ref.SourceID, d, rows, deleted)
+			if err != nil {
+				return nil, err
+			}
+			states[ref.SourceID] = state
+		}
+		item := SourceTrace{SourceID: ref.SourceID, State: state}
+		if state == "deleted" {
+			at := deleted[ref.SourceID]
+			item.DeletedAt = &at
+		}
+		if state == "available" {
+			fillAvailableSourceTrace(&item, ref, rows[ref.SourceID])
+		}
+		out = append(out, item)
 	}
 	return out, nil
 }

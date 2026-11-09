@@ -141,25 +141,31 @@ func (s *Service) CreateDirective(ctx context.Context, token string, in Directiv
 		Text: strings.TrimSpace(in.Rule), Tags: in.Tags, Directive: &Directive{Title: strings.TrimSpace(in.Title), Priority: in.Priority, AppliesTo: in.AppliesTo},
 		CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role}
 	err = s.Repo.Transaction(s.digestCtx(ctx), func(ctx context.Context, tx Tx) error {
-		if status == statusActive {
-			if e := checkDirectiveCapacity(ctx, tx, r.Scope, d.PrincipalID, ""); e != nil {
-				return e
-			}
-		}
-		if status == obsProposed {
-			if err := proposalCapReached(ctx, tx, r.Scope, colDirectives, directiveProposedMax); err != nil {
-				return err
-			}
-		}
-		if err := tx.Insert(ctx, colDirectives, r); err != nil {
-			return err
-		}
-		return audit(ctx, tx, r.Scope, d.PrincipalID, "create:directive", r.ID)
+		return insertDirective(ctx, tx, r, d.PrincipalID)
 	})
 	if err != nil {
 		return DirectiveView{}, err
 	}
 	return viewDirective(r), nil
+}
+
+// insertDirective stores a new directive once its status has room: an active one
+// within the directive capacity, a proposed one within the open-proposal cap.
+func insertDirective(ctx context.Context, tx Tx, r Record, actor string) error {
+	if r.Status == statusActive {
+		if e := checkDirectiveCapacity(ctx, tx, r.Scope, actor, ""); e != nil {
+			return e
+		}
+	}
+	if r.Status == obsProposed {
+		if err := proposalCapReached(ctx, tx, r.Scope, colDirectives, directiveProposedMax); err != nil {
+			return err
+		}
+	}
+	if err := tx.Insert(ctx, colDirectives, r); err != nil {
+		return err
+	}
+	return audit(ctx, tx, r.Scope, actor, "create:directive", r.ID)
 }
 
 func (s *Service) getDirective(ctx context.Context, get func(context.Context, string, Scope, string) (Record, error), scope Scope, id string) (Record, error) {
@@ -388,19 +394,19 @@ func directiveRule(r Record) DirectiveRule {
 	return DirectiveRule{ID: r.ID, Title: r.Directive.Title, Rule: r.Text, Priority: r.Directive.Priority}
 }
 
-// proposalCapReached refuses an agent proposal once a scope holds max open ones of a
+// proposalCapReached refuses an agent proposal once a scope holds limit open ones of a
 // collection. It counts inside the insert's serializable transaction, so two racing
 // proposals cannot both take the last slot (one is retried and then sees the other).
-func proposalCapReached(ctx context.Context, tx Tx, scope Scope, col string, max int) error {
+func proposalCapReached(ctx context.Context, tx Tx, scope Scope, col string, limit int) error {
 	lister := listerOf(ctx, tx)
 	if lister == nil {
 		return ErrUnavailable
 	}
-	open, err := lister.ListRecordsByStatus(ctx, scope, col, obsProposed, max)
+	open, err := lister.ListRecordsByStatus(ctx, scope, col, obsProposed, limit)
 	if err != nil {
 		return err
 	}
-	if len(open) >= max {
+	if len(open) >= limit {
 		return ErrConflict
 	}
 	return nil

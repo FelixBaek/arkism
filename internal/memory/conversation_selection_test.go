@@ -99,6 +99,24 @@ func TestConversationSelectionServiceRequiresReturnedLexicalEvidence(t *testing.
 	}
 }
 
+// checkSelectedConversation checks redaction, budget, authority, attribution and blocked sources of selected turns.
+func checkSelectedConversation(t *testing.T, bundle *ContextBundle, blockedRecords []Record) {
+	t.Helper()
+	for _, h := range bundle.Conversation {
+		if strings.Contains(h.Text, "hidden") || utf8.RuneCountInString(h.Text) > sessionLaneRunes || h.Authority != AuthorityDataOnly || h.Origin != conversationSourceKind {
+			t.Fatal("redaction, excerpt budget or authority changed", h)
+		}
+		if _, ok := bundle.conversationRecords[Ref{Collection: "sources", ID: h.ID, Revision: h.Revision}]; !ok {
+			t.Fatal("missing exact revision attribution", h)
+		}
+		for _, blocked := range blockedRecords {
+			if h.ID == blocked.ID {
+				t.Fatal("stale metadata bypassed source revalidation", h)
+			}
+		}
+	}
+}
+
 func TestConversationSelectionServiceOptInAndSourceBoundaries(t *testing.T) {
 	f := newFixture(t)
 	var records []Record
@@ -133,19 +151,7 @@ func TestConversationSelectionServiceOptInAndSourceBoundaries(t *testing.T) {
 	if len(improved.Conversation) != 5 || improved.Conversation[0].ID != good.ID {
 		t.Fatal("failed to inspect and select evidence beyond first five batches", improved.Conversation)
 	}
-	for _, h := range improved.Conversation {
-		if strings.Contains(h.Text, "hidden") || utf8.RuneCountInString(h.Text) > sessionLaneRunes || h.Authority != AuthorityDataOnly || h.Origin != conversationSourceKind {
-			t.Fatal("redaction, excerpt budget or authority changed", h)
-		}
-		if _, ok := improved.conversationRecords[Ref{Collection: "sources", ID: h.ID, Revision: h.Revision}]; !ok {
-			t.Fatal("missing exact revision attribution", h)
-		}
-		for _, blocked := range records[6:] {
-			if h.ID == blocked.ID {
-				t.Fatal("stale metadata bypassed source revalidation", h)
-			}
-		}
-	}
+	checkSelectedConversation(t, &improved, records[6:])
 	if len(improved.conversationRecords) != 5 || !strings.Contains(redactSessionPrivate(good.Text), improved.Conversation[0].Text) {
 		t.Fatal("selected record accounting or verbatim window changed", improved)
 	}

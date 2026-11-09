@@ -62,21 +62,7 @@ func TestDocumentReaders(t *testing.T) {
 		{"mail.eml", []byte(eml), []string{"Subject: 회의록", "From: a@example.com", "배포는 금요일", "Attachment: plan.pdf"}, 1},
 	}
 	for _, c := range cases {
-		pages, _, err := documentPages(c.name, c.raw)
-		joined := strings.Join(pages, "\n\n")
-		if err != nil || len(pages) != c.pages {
-			t.Fatalf("%s: %d pages %v\n%s", c.name, len(pages), err, joined)
-		}
-		for _, w := range c.want {
-			if !strings.Contains(joined, w) {
-				t.Fatalf("%s misses %q:\n%s", c.name, w, joined)
-			}
-		}
-		for _, bad := range []string{"alert", "hidden", "p{}", "html copy", "はいふ", "JVBERi0"} {
-			if strings.Contains(joined, bad) {
-				t.Fatalf("%s kept %q:\n%s", c.name, bad, joined)
-			}
-		}
+		checkDocumentReader(t, c.name, c.raw, c.want, c.pages)
 	}
 	if pages, _, _ := documentPages("deck.pptx", pptx); pages[0] != "Second slide\nline two" {
 		t.Fatalf("slide order %q", pages)
@@ -91,6 +77,26 @@ func TestDocumentReaders(t *testing.T) {
 	}
 	if code, status := errorResponse(errUnsupportedFormat); code != "unsupported_media_type" || status != 415 {
 		t.Fatal(code, status)
+	}
+}
+
+// checkDocumentReader reads one document and checks its page count, kept text and dropped text.
+func checkDocumentReader(t *testing.T, name string, raw []byte, want []string, wantPages int) {
+	t.Helper()
+	pages, _, err := documentPages(name, raw)
+	joined := strings.Join(pages, "\n\n")
+	if err != nil || len(pages) != wantPages {
+		t.Fatalf("%s: %d pages %v\n%s", name, len(pages), err, joined)
+	}
+	for _, w := range want {
+		if !strings.Contains(joined, w) {
+			t.Fatalf("%s misses %q:\n%s", name, w, joined)
+		}
+	}
+	for _, bad := range []string{"alert", "hidden", "p{}", "html copy", "はいふ", "JVBERi0"} {
+		if strings.Contains(joined, bad) {
+			t.Fatalf("%s kept %q:\n%s", name, bad, joined)
+		}
 	}
 }
 

@@ -215,6 +215,11 @@ func reflectOptionArgs(args map[string]any, payload map[string]any) error {
 	if err := reflectIncludeArg(args, payload); err != nil {
 		return err
 	}
+	return reflectSwitchArgs(args, payload)
+}
+
+// reflectSwitchArgs copies the mental-model and directive switches, false included.
+func reflectSwitchArgs(args map[string]any, payload map[string]any) error {
 	for _, key := range []string{"exclude_mental_models", "apply_all_directives"} {
 		if v, has := args[key]; has && v != nil {
 			b, ok := v.(bool)

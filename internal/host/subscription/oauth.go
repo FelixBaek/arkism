@@ -85,7 +85,14 @@ var (
 // CursorBin is the cursor CLI, which keeps its own login (`cursor-agent login`).
 func CursorBin() string { return host.Bin("ARKISM_CURSOR_BIN", "cursor-agent") }
 
-func oauthPath(id, ext string) string { return filepath.Join(host.AgentsState, "oauth", id+ext) }
+// oauthPath names a known provider's file. The name comes from the provider table, never from the caller's id.
+func oauthPath(id, ext string) (string, error) {
+	p := OAuthProviders[id]
+	if p == nil {
+		return "", errors.New("unknown_provider")
+	}
+	return filepath.Join(host.AgentsState, "oauth", p.ID+ext), nil
+}
 
 // loadCred reads a login from the credential store, else its file; nil when there is none.
 func loadCred(id string) (*oauthCred, error) {
@@ -96,7 +103,11 @@ func loadCred(id string) (*oauthCred, error) {
 		}
 	}
 	if raw == nil {
-		b, err := os.ReadFile(oauthPath(id, ".json"))
+		path, err := oauthPath(id, ".json")
+		if err != nil {
+			return nil, err
+		}
+		b, err := os.ReadFile(path)
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
 		}
@@ -118,13 +129,16 @@ func saveCred(id string, c *oauthCred) error {
 	if err != nil {
 		return err
 	}
+	path, err := oauthPath(id, ".json")
+	if err != nil {
+		return err
+	}
 	if keystore.Available() {
 		if _, err := keystore.PutIn(oauthService, id, string(raw)); err == nil {
-			_ = os.Remove(oauthPath(id, ".json"))
+			_ = os.Remove(path)
 			return nil
 		}
 	}
-	path := oauthPath(id, ".json")
 	f, err := os.CreateTemp(filepath.Dir(path), ".oauth-") // 0600
 	if err != nil {
 		return err
@@ -155,7 +169,11 @@ func OAuthLogout(id string) error {
 			return err
 		}
 	}
-	if err := os.Remove(oauthPath(id, ".json")); err != nil && !errors.Is(err, os.ErrNotExist) {
+	path, err := oauthPath(id, ".json")
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	return nil
@@ -164,14 +182,18 @@ func OAuthLogout(id string) error {
 // oauthLock serialises refreshes and writes of one login, in this process and across processes.
 // A slow provider holds only its own login.
 func oauthLock(id string) (func(), error) {
+	path, err := oauthPath(id, ".lock")
+	if err != nil {
+		return nil, err
+	}
 	v, _ := oauthMu.LoadOrStore(id, &sync.Mutex{})
 	mu := v.(*sync.Mutex)
 	mu.Lock()
-	if err := os.MkdirAll(filepath.Dir(oauthPath(id, "")), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		mu.Unlock()
 		return nil, err
 	}
-	unlock, err := lockFile(oauthPath(id, ".lock"), 0o600, true)
+	unlock, err := lockFile(path, 0o600, true)
 	if err != nil {
 		mu.Unlock()
 		return nil, err

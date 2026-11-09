@@ -68,19 +68,9 @@ func (p *Postgres) maintenanceTransaction(ctx context.Context, fn func(*Postgres
 	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(4706904311881285641)`); err != nil {
 		return MemoryMaintenanceStatus{}, pgErr(err)
 	}
-	var revision int64
-	var raw []byte
-	if err = tx.QueryRow(ctx, `SELECT revision,operation FROM arkism.memory_maintenance_gate WHERE id=1 FOR UPDATE`).Scan(&revision, &raw); err != nil {
-		return MemoryMaintenanceStatus{}, pgErr(err)
-	}
-	var job *memoryMaintenance
-	if raw != nil {
-		if err = json.Unmarshal(raw, &job); err != nil || job == nil {
-			return MemoryMaintenanceStatus{}, ErrUnavailable
-		}
-	}
-	if job != nil && (!validScope(job.Scope) || job.ID == "" || job.Phase < 0 || job.Offset < 0 || job.Scanned < 0 || (job.Kind != "privacy" && job.Kind != "stale") || (job.Kind == "privacy" && job.Phase > 11) || (job.Kind == "stale" && job.Phase > len(staleMaintenancePhases))) {
-		return MemoryMaintenanceStatus{}, ErrUnavailable
+	revision, job, err := loadMaintenanceJob(ctx, tx)
+	if err != nil {
+		return MemoryMaintenanceStatus{}, err
 	}
 	child := &Postgres{pool: p.pool, tx: tx, vectorMaxDistance: p.vectorMaxDistance}
 	next, err := fn(child, revision, job)
@@ -90,22 +80,63 @@ func (p *Postgres) maintenanceTransaction(ctx context.Context, fn func(*Postgres
 	if err != nil {
 		return MemoryMaintenanceStatus{}, err
 	}
-	var payload any
-	if next != nil {
-		b, e := json.Marshal(next)
-		if e != nil {
-			return MemoryMaintenanceStatus{}, ErrInvalid
-		}
-		payload = string(b)
-	}
-	if _, err = tx.Exec(ctx, `UPDATE arkism.memory_maintenance_gate SET revision=revision+1,operation=$1::jsonb WHERE id=1`, payload); err != nil {
-		return MemoryMaintenanceStatus{}, pgErr(err)
+	if err = saveMaintenanceJob(ctx, tx, next); err != nil {
+		return MemoryMaintenanceStatus{}, err
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return MemoryMaintenanceStatus{}, pgErr(err)
 	}
 	return maintenanceStatus(revision+1, next), nil
 }
+
+// loadMaintenanceJob reads the locked gate row; a stored job that fails validation is unavailable.
+func loadMaintenanceJob(ctx context.Context, tx pgx.Tx) (int64, *memoryMaintenance, error) {
+	var revision int64
+	var raw []byte
+	if err := tx.QueryRow(ctx, `SELECT revision,operation FROM arkism.memory_maintenance_gate WHERE id=1 FOR UPDATE`).Scan(&revision, &raw); err != nil {
+		return 0, nil, pgErr(err)
+	}
+	var job *memoryMaintenance
+	if raw != nil {
+		if err := json.Unmarshal(raw, &job); err != nil || job == nil {
+			return 0, nil, ErrUnavailable
+		}
+	}
+	if job != nil && !validMaintenanceJob(job) {
+		return 0, nil, ErrUnavailable
+	}
+	return revision, job, nil
+}
+
+func validMaintenanceJob(job *memoryMaintenance) bool {
+	if !validScope(job.Scope) || job.ID == "" || job.Phase < 0 || job.Offset < 0 || job.Scanned < 0 {
+		return false
+	}
+	switch job.Kind {
+	case "privacy":
+		return job.Phase <= 11
+	case "stale":
+		return job.Phase <= len(staleMaintenancePhases)
+	}
+	return false
+}
+
+// saveMaintenanceJob bumps the gate revision and stores next (nil clears the operation).
+func saveMaintenanceJob(ctx context.Context, tx pgx.Tx, next *memoryMaintenance) error {
+	var payload any
+	if next != nil {
+		b, err := json.Marshal(next)
+		if err != nil {
+			return ErrInvalid
+		}
+		payload = string(b)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE arkism.memory_maintenance_gate SET revision=revision+1,operation=$1::jsonb WHERE id=1`, payload); err != nil {
+		return pgErr(err)
+	}
+	return nil
+}
+
 func maintenanceStatus(rev int64, j *memoryMaintenance) MemoryMaintenanceStatus {
 	out := MemoryMaintenanceStatus{Revision: rev, Active: j != nil}
 	if j != nil {
@@ -185,50 +216,72 @@ func (s *Service) BeginPrivacyMaintenance(ctx context.Context, token string, in 
 		if actor.Role != "human" {
 			return nil, ErrDenied
 		}
-		seedTraces := []string{}
-		if in.TargetType != "subject" {
-			collection := "sources"
-			if in.TargetType == "trace" {
-				collection = "execution_traces"
-			}
-			evidence := PrivacyImpact{}
-			for _, target := range in.TargetIDs {
-				row, e := tx.Get(ctx, collection, in.Scope, target)
-				if e != nil {
-					return nil, e
-				}
-				evidence.Records = append(evidence.Records, Ref{Collection: collection, ID: row.ID, Revision: row.Revision})
-				if in.TargetType == "source_event" && row.TraceID != "" {
-					maintenanceAdd(&seedTraces, row.TraceID)
-				}
-			}
-			if in.ExpectedRevision != 0 {
-				if e := checkPrivacyExpectedRevision(in, evidence); e != nil {
-					return nil, e
-				}
-			}
+		seedTraces, err := privacyMaintenanceSeedTraces(ctx, tx, in)
+		if err != nil {
+			return nil, err
 		}
 		id := privacyJobID(in.Scope, actor.PrincipalID, in.IdempotencyKey)
-		if _, err = tx.Get(ctx, colJobs, in.Scope, id); !errors.Is(err, ErrNotFound) {
-			if err == nil {
-				err = ErrConflict
-			}
+		if err = checkPrivacyMaintenanceJobFree(ctx, tx, in.Scope, id); err != nil {
 			return nil, err
 		}
-		if err = checkPrivacyOverlap(ctx, tx, in.Scope, id, "subject", PrivacyImpact{}, false); err != nil {
-			return nil, err
-		}
-		now := time.Now().UTC().Truncate(time.Millisecond)
-		pd := &PrivacyDeletion{State: privacyDiscoveringImpact, RequesterType: actor.Role, RequesterID: actor.PrincipalID, TargetType: in.TargetType, TargetIDs: slices.Clone(in.TargetIDs), Reason: in.Reason, LegalHoldStatus: privacyHoldNone, RetentionPolicyRef: in.RetentionPolicyRef, RequestedAt: now, AuthorizedAt: &now, IdempotencyKey: in.IdempotencyKey, CorrelationID: auditRequestID(ctx), RequestHash: ContentHash(structuredText(in)), PurgeReportRef: "jobs/" + id + "#privacy_deletion.report"}
-		if in.TargetType == "source_event" {
-			pd.Impact.SourceEventIDs = slices.Clone(in.TargetIDs)
-			pd.Impact.TraceIDs = seedTraces
-		}
-		if in.TargetType == "trace" {
-			pd.Impact.TraceIDs = slices.Clone(in.TargetIDs)
-		}
+		pd := newMaintenancePrivacyDeletion(ctx, in, actor, id, seedTraces)
 		return &memoryMaintenance{ID: id, Kind: "privacy", Scope: in.Scope, Actor: actor.PrincipalID, Request: &in, Privacy: pd}, audit(ctx, tx, in.Scope, actor.PrincipalID, "begin:memory_maintenance", id)
 	})
+}
+
+// checkPrivacyMaintenanceJobFree refuses a request whose job already exists or
+// that overlaps another privacy deletion.
+func checkPrivacyMaintenanceJobFree(ctx context.Context, tx *Postgres, scope Scope, id string) error {
+	if _, err := tx.Get(ctx, colJobs, scope, id); !errors.Is(err, ErrNotFound) {
+		if err == nil {
+			err = ErrConflict
+		}
+		return err
+	}
+	return checkPrivacyOverlap(ctx, tx, scope, id, "subject", PrivacyImpact{}, false)
+}
+
+// privacyMaintenanceSeedTraces checks that every named source event or trace
+// exists and returns the traces the named source events point to.
+func privacyMaintenanceSeedTraces(ctx context.Context, tx *Postgres, in PrivacyDeletionRequest) ([]string, error) {
+	seedTraces := []string{}
+	if in.TargetType == "subject" {
+		return seedTraces, nil
+	}
+	collection := "sources"
+	if in.TargetType == "trace" {
+		collection = "execution_traces"
+	}
+	evidence := PrivacyImpact{}
+	for _, target := range in.TargetIDs {
+		row, e := tx.Get(ctx, collection, in.Scope, target)
+		if e != nil {
+			return nil, e
+		}
+		evidence.Records = append(evidence.Records, Ref{Collection: collection, ID: row.ID, Revision: row.Revision})
+		if in.TargetType == "source_event" && row.TraceID != "" {
+			maintenanceAdd(&seedTraces, row.TraceID)
+		}
+	}
+	if in.ExpectedRevision != 0 {
+		if e := checkPrivacyExpectedRevision(in, evidence); e != nil {
+			return nil, e
+		}
+	}
+	return seedTraces, nil
+}
+
+func newMaintenancePrivacyDeletion(ctx context.Context, in PrivacyDeletionRequest, actor Decision, id string, seedTraces []string) *PrivacyDeletion {
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	pd := &PrivacyDeletion{State: privacyDiscoveringImpact, RequesterType: actor.Role, RequesterID: actor.PrincipalID, TargetType: in.TargetType, TargetIDs: slices.Clone(in.TargetIDs), Reason: in.Reason, LegalHoldStatus: privacyHoldNone, RetentionPolicyRef: in.RetentionPolicyRef, RequestedAt: now, AuthorizedAt: &now, IdempotencyKey: in.IdempotencyKey, CorrelationID: auditRequestID(ctx), RequestHash: ContentHash(structuredText(in)), PurgeReportRef: "jobs/" + id + "#privacy_deletion.report"}
+	if in.TargetType == "source_event" {
+		pd.Impact.SourceEventIDs = slices.Clone(in.TargetIDs)
+		pd.Impact.TraceIDs = seedTraces
+	}
+	if in.TargetType == "trace" {
+		pd.Impact.TraceIDs = slices.Clone(in.TargetIDs)
+	}
+	return pd
 }
 func (p *Postgres) AdvanceMemoryMaintenance(ctx context.Context, expected int64) (MemoryMaintenanceStatus, error) {
 	return p.maintenanceTransaction(ctx, func(tx *Postgres, rev int64, j *memoryMaintenance) (*memoryMaintenance, error) {

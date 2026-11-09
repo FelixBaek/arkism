@@ -328,11 +328,11 @@ type cancelOnCallLLM struct {
 	cancel func()
 }
 
-func (c *cancelOnCallLLM) Complete(ctx context.Context, system, user string, max int) (string, ProviderUsage, error) {
+func (c *cancelOnCallLLM) Complete(ctx context.Context, system, user string, maxTokens int) (string, ProviderUsage, error) {
 	if len(c.prompts) == 0 {
 		c.cancel()
 	}
-	return c.fakeWikiLLM.Complete(ctx, system, user, max)
+	return c.fakeWikiLLM.Complete(ctx, system, user, maxTokens)
 }
 
 func TestFileExtractCancelStopsTheRunningJob(t *testing.T) {

@@ -139,20 +139,26 @@ func TestObjectBlobStorage(t *testing.T) {
 	if _, err = f.svc.Repo.Get(testCtx, colBlobs, blobScope(), digest); !errors.Is(err, ErrNotFound) {
 		t.Fatal("blob record kept", err)
 	}
+	checkObjectOrphanGCAndRestore(t, f, fake)
+}
+
+// checkObjectOrphanGCAndRestore covers orphan collection and restore refusal with object storage on.
+func checkObjectOrphanGCAndRestore(t *testing.T, f *fixture, fake *fakeObjects) {
+	t.Helper()
 	orphan := ContentHash("orphan bytes")
 	fake.objects["/bucket/blobs/"+orphan] = []byte("orphan bytes")
 	result, err := f.svc.CollectBlobGarbage(testCtx, f.work)
 	if err != nil || result.CollectedBlobs != 1 || fake.has(orphan) {
 		t.Fatalf("orphan GC %+v %v", result, err)
 	}
-	if err = os.WriteFile(filepath.Join(f.svc.BlobDirectory, orphan), []byte("orphan bytes"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(f.svc.BlobDirectory, orphan), []byte("orphan bytes"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = f.svc.CollectBlobGarbage(testCtx, f.work); !errors.Is(err, ErrUnavailable) {
 		t.Fatal("local digest file ignored while object storage is on", err)
 	}
 	f.auth.actors[f.work] = actor("restorer", "service", false, "restore")
-	if err = f.svc.AdoptRestoredBlobs(testCtx, f.work); err == nil {
+	if err := f.svc.AdoptRestoredBlobs(testCtx, f.work); err == nil {
 		t.Fatal("restore adopted without a quarantined manifest")
 	}
 }

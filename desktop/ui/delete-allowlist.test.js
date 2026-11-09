@@ -8,7 +8,7 @@ const path = require("path");
 test("UI DELETE paths are allowed by the desktop app", () => {
   const rust = fs.readFileSync(path.join(__dirname, "..", "src-tauri", "src", "main.rs"), "utf8");
   const body = rust.slice(rust.indexOf("fn allowed("), rust.indexOf("fn valid_base("));
-  const allowed = [...body.matchAll(/(?:one_id\(|query_id\(|starts_with\()"(\/v1\/[a-z_\/-]+\/)"/g)].map((m) => m[1]);
+  const allowed = [...body.matchAll(/(?:one_id\(|query_id\(|starts_with\()"(\/v1\/[a-z_/-]+\/)"/g)].map((m) => m[1]);
   const missing = [];
   for (const f of fs.readdirSync(__dirname).filter((n) => n.endsWith(".js") && !n.endsWith(".test.js"))) {
     const src = fs.readFileSync(path.join(__dirname, f), "utf8");

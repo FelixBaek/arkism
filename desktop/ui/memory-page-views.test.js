@@ -151,7 +151,8 @@ test("the timeline loads older pages: at its bottom end, and when ‹ goes to a 
     env.deps.memory.memView = "timeline"; env.snap("memories").cursor = "next";
     draw();
     const bars = env.document.querySelectorAll("#table .tlc-bar"), first = new Date(Number(env.document.querySelector("#table .tlc-day:last-child").dataset.at));
-    assert.ok(bars.length < 130 && first.getMonth() === 6, "with pages left, the strip starts the day after the oldest saved memory (07-03), never on a day not loaded");
+    let days = 0; for (const t = new Date(2026, 6, 3); t <= new Date(); t.setDate(t.getDate() + 1)) days++; // 07-03 through today, whatever today is
+    assert.ok(bars.length === days && first.getMonth() === 6, "with pages left, the strip starts the day after the oldest saved memory (07-03), never on a day not loaded");
     const io = seen.find((o) => o.n === env.document.querySelector("#table .mem-brief-older"));
     io.cb([{ isIntersecting: true }]); io.cb([{ isIntersecting: true }]);
     assert.deepEqual(env.log.filter((l) => l === "more:memories"), ["more:memories"], "the bottom end loads once");

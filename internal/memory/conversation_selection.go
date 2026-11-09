@@ -15,6 +15,34 @@ func selectConversationCandidates(query string, candidates []ScoredHit, memories
 		return nil
 	}
 	terms := searchQueryTerms(query)
+	concepts := distinctQueryConcepts(terms)
+	matches, best := conversationConceptMatches(concepts, candidates)
+	weights, total := conversationConceptWeights(matches, len(concepts))
+	base := make([]float64, len(candidates))
+	passages := make([]conversationPassage, len(candidates))
+	for i, row := range candidates {
+		base[i] = conversationBaseScore(row, best, terms, matches[i], weights, total)
+		passages[i] = conversationPassageOf(row.Text)
+	}
+	covered := make([]conversationPassage, 0, len(memories)+len(existing)+limit)
+	for _, hits := range [][]Hit{memories, existing} {
+		for _, h := range hits {
+			covered = append(covered, conversationPassageOf(h.Text))
+		}
+	}
+	used := make([]bool, len(candidates))
+	out := make([]Hit, 0, min(limit, len(candidates)))
+	for len(out) < limit && len(out) < len(candidates) {
+		at := nextConversationPick(base, passages, covered, used)
+		used[at] = true
+		out = append(out, candidates[at].Hit)
+		covered = append(covered, passages[at])
+	}
+	return out
+}
+
+// distinctQueryConcepts keeps the first query term of each concept.
+func distinctQueryConcepts(terms []string) []string {
 	var concepts []string
 	seen := map[string]bool{}
 	for _, term := range terms {
@@ -24,7 +52,11 @@ func selectConversationCandidates(query string, candidates []ScoredHit, memories
 			concepts = append(concepts, term)
 		}
 	}
-	weights := make([]float64, len(concepts))
+	return concepts
+}
+
+// conversationConceptMatches marks which concepts each candidate excerpt holds and returns the best score.
+func conversationConceptMatches(concepts []string, candidates []ScoredHit) ([][]bool, float64) {
 	matches := make([][]bool, len(candidates))
 	best := 0.0
 	for i, row := range candidates {
@@ -37,64 +69,62 @@ func selectConversationCandidates(query string, candidates []ScoredHit, memories
 			matches[i][j] = found > 0
 		}
 	}
+	return matches, best
+}
+
+// conversationConceptWeights weighs each concept by how rare it is among the candidates.
+func conversationConceptWeights(matches [][]bool, conceptCount int) ([]float64, float64) {
+	weights := make([]float64, conceptCount)
 	total := 0.0
-	for j := range concepts {
+	for j := range weights {
 		n := 0
-		for i := range candidates {
+		for i := range matches {
 			if matches[i][j] {
 				n++
 			}
 		}
-		weights[j] = 1 + math.Log(float64(len(candidates)+1)/float64(n+1))
+		weights[j] = 1 + math.Log(float64(len(matches)+1)/float64(n+1))
 		total += weights[j]
 	}
-	base := make([]float64, len(candidates))
-	passages := make([]conversationPassage, len(candidates))
-	for i, row := range candidates {
-		if best > 0 {
-			base[i] = .75 * row.Score / best
-		}
-		// Use the existing relevance threshold on the excerpt alone. A name
-		// or metadata match cannot earn the lexical relevance bonus.
-		if total > 0 && lexicallyRelevant(terms, Hit{Text: row.Text}) {
-			for j, yes := range matches[i] {
-				if yes {
-					base[i] += .25 * weights[j] / total
-				}
-			}
-		}
-		passages[i] = conversationPassageOf(row.Text)
+	return weights, total
+}
+
+func conversationBaseScore(row ScoredHit, best float64, terms []string, matched []bool, weights []float64, total float64) float64 {
+	base := 0.0
+	if best > 0 {
+		base = .75 * row.Score / best
 	}
-	covered := make([]conversationPassage, 0, len(memories)+len(existing)+limit)
-	for _, hits := range [][]Hit{memories, existing} {
-		for _, h := range hits {
-			covered = append(covered, conversationPassageOf(h.Text))
+	// Use the existing relevance threshold on the excerpt alone. A name
+	// or metadata match cannot earn the lexical relevance bonus.
+	if total > 0 && lexicallyRelevant(terms, Hit{Text: row.Text}) {
+		for j, yes := range matched {
+			if yes {
+				base += .25 * weights[j] / total
+			}
 		}
 	}
-	used := make([]bool, len(candidates))
-	out := make([]Hit, 0, min(limit, len(candidates)))
-	for len(out) < limit && len(out) < len(candidates) {
-		at, score := -1, math.Inf(-1)
-		for i := range candidates {
-			if used[i] {
-				continue
-			}
-			value := base[i]
-			for _, previous := range covered {
-				if conversationPassageRepeated(passages[i], previous) {
-					value -= .15
-					break
-				}
-			}
-			if value > score { // stable original fusion order resolves ties
-				at, score = i, value
+	return base
+}
+
+// nextConversationPick returns the unused candidate with the best score after the repeated-passage penalty.
+func nextConversationPick(base []float64, passages, covered []conversationPassage, used []bool) int {
+	at, score := -1, math.Inf(-1)
+	for i := range base {
+		if used[i] {
+			continue
+		}
+		value := base[i]
+		for _, previous := range covered {
+			if conversationPassageRepeated(passages[i], previous) {
+				value -= .15
+				break
 			}
 		}
-		used[at] = true
-		out = append(out, candidates[at].Hit)
-		covered = append(covered, passages[at])
+		if value > score { // stable original fusion order resolves ties
+			at, score = i, value
+		}
 	}
-	return out
+	return at
 }
 
 type conversationPassage struct {

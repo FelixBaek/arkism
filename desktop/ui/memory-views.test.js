@@ -326,7 +326,7 @@ test("시간순 sorts by event time, groups by day, splits lanes and opens the m
   const opened = [];
   let reply = hits(items, week);
   const calls = [];
-  const { view, opened: shown } = lineView(async (path, opts) => { calls.push(path); if (path.startsWith("/v1/memories/")) { if (reply instanceof Error) throw reply; return reply; } return hits(items, week); }, { openRecord: (r) => opened.push(r.id) });
+  const { view, opened: shown } = lineView(async (path) => { calls.push(path); if (path.startsWith("/v1/memories/")) { if (reply instanceof Error) throw reply; return reply; } return hits(items, week); }, { openRecord: (r) => opened.push(r.id) });
   view.draw();
   const q = h.$("#chips form input"); dom.input(q, "지난주 배포"); h.$("#chips form").requestSubmit(); await dom.flush();
   const rows = () => h.$("#table").querySelectorAll(".original-row");

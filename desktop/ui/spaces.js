@@ -138,7 +138,7 @@
       S.preview = null; void reload();
       show(`템플릿을 넣었어요. 규칙·정리 틀 ${job.report?.imported || 0}개는 '확인해 주세요'에서 승인해야 쓰여요.`, false, (job.report?.imported || 0) > 0);
     });
-    function previewCard(kit) {
+    function previewCard() {
       const p = S.preview, card = el("div", "d-action sp-preview");
       card.append(el("strong", "", p.template ? "템플릿 파일이에요" : "기억 공간 파일이에요. 기억은 빼고 설정과 규칙·정리 틀만 가져와요."));
       const counts = p.sections.filter((s) => s.name in SECTION && (p.template || s.name !== "memories"));
@@ -188,7 +188,7 @@
       t1.disabled = t2.disabled = S.busy;
       const tpl = [kit.line("템플릿으로 내보내기", "기억은 빼고 설정과 규칙·정리 틀만 담아요. 다른 공간을 같은 방식으로 시작할 때 써요.", t1)];
       if (human()) tpl.push(kit.line("템플릿 가져오기", "파일을 고르면 무엇이 들어 있는지 먼저 보여 줘요. 설정을 저장한 적 없는 공간에만 넣을 수 있어요.", t2));
-      if (S.preview) tpl.push(previewCard(kit));
+      if (S.preview) tpl.push(previewCard());
       g.append(kit.more("자세히 · 템플릿", ...tpl));
       if (S.preview) g.lastElementChild.open = true;
       g.append(...answer("move"));
@@ -204,7 +204,7 @@
     const rename = async () => {
       const now = S.view?.config?.display_name || "";
       const name = (await askText("보이는 이름\n프로젝트 ID는 그대로예요.", now, { okLabel: "바꾸기", primary: true }))?.trim();
-      if (name != null && name !== now) writeConfig({ display_name: name }, "이름을 바꿨어요.");
+      if (name != null && name !== now) void writeConfig({ display_name: name }, "이름을 바꿨어요.");
     };
     // one alias at a time, in order: each answer is the space with that change
     const aliasCall = (alias, add) => request(`${spacePath()}/aliases${add ? "" : `/${enc(alias)}`}`, add ? { method: "POST", body: JSON.stringify({ alias }) } : { method: "DELETE" });
@@ -213,10 +213,10 @@
       const alias = (await askText("새 별칭\n영어 소문자·숫자·- _ . 로 63자까지. @별칭으로 이 공간을 부를 수 있어요.", "", { okLabel: "추가", primary: true }))?.trim().toLowerCase();
       if (!alias) return;
       if (!ALIAS.test(alias)) { show("별칭은 영어 소문자나 숫자로 시작하고, 영어 소문자·숫자·- _ . 만 쓸 수 있어요.", true); return; }
-      aliasRun(() => aliasCall(alias, true), "별칭을 추가했어요.");
+      void aliasRun(() => aliasCall(alias, true), "별칭을 추가했어요.");
     };
     const makePrimary = (aliases, a) => aliasRun(async () => { for (const x of primaryMoves(aliases, a)) { await aliasCall(x, false); await aliasCall(x, true); } }, "대표 별칭을 바꿨어요.");
-    const dropAlias = async (a) => { if (await ask(`별칭 ‘${a}’를 뺄까요?\n@${a}로 부르던 곳은 이 공간을 찾지 못해요.`, "빼기")) aliasRun(() => aliasCall(a, false), "별칭을 뺐어요."); };
+    const dropAlias = async (a) => { if (await ask(`별칭 ‘${a}’를 뺄까요?\n@${a}로 부르던 곳은 이 공간을 찾지 못해요.`, "빼기")) void aliasRun(() => aliasCall(a, false), "별칭을 뺐어요."); };
     function nameGroup(kit) {
       const g = kit.group("이름과 별칭", "목록과 화면에 보이는 이름, 그리고 이 공간을 부르는 다른 이름(@별칭)이에요.");
       if (S.view === false) { g.append(el("p", "pg-hint", "이 계정으로는 공간 설정을 볼 수 없어요.")); return g; }

@@ -35,14 +35,7 @@ func TestMaintenanceSubjectRestartHoldAndEquivalentImpact(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	var want PrivacyImpact
-	if err := p.Transaction(testCtx, func(ctx context.Context, tx Tx) error {
-		var err error
-		want, err = tx.(*Postgres).DiscoverPrivacyImpactComplete(ctx, scope, "subject", []string{scope.UserID})
-		return err
-	}); err != nil {
-		t.Fatal(err)
-	}
+	want := discoverCompletePrivacyImpact(t, p, scope, "subject", []string{scope.UserID})
 	in := PrivacyDeletionRequest{Scope: scope, TargetType: "subject", TargetIDs: []string{scope.UserID}, IdempotencyKey: "maintenance-subject", Reason: "owner_request", RetentionPolicyRef: retentionSynthetic}
 	st, err := svc.BeginPrivacyMaintenance(testCtx, token, in)
 	if err != nil {
@@ -51,10 +44,52 @@ func TestMaintenanceSubjectRestartHoldAndEquivalentImpact(t *testing.T) {
 	if !st.Active {
 		t.Fatal("gate not closed")
 	}
-	if _, err = p.Get(testCtx, "sources", scope, "ctx-src"); !errors.Is(err, ErrUnavailable) {
+	checkMaintenanceBlocksOwnerAndRetention(t, p, scope)
+	same, err := p.MemoryMaintenanceStatus(testCtx)
+	if err != nil || same.Revision != st.Revision {
+		t.Fatal("status changed revision", same, err)
+	}
+	fresh, st := maintenanceHoldAndRestart(t, p, st)
+	st = drainBoundedMaintenance(t, fresh, st)
+	job, err := p.Get(testCtx, colJobs, scope, privacyJobID(scope, scope.UserID, in.IdempotencyKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := job.PrivacyDeletion.Impact
+	if !reflect.DeepEqual(want, got) {
+		t.Fatalf("impact differs\nwant=%+v\ngot=%+v", want, got)
+	}
+	if !job.PrivacyDeletion.Report.LiveAccessRemoved || job.PrivacyDeletion.State != privacyQuarantined {
+		t.Fatal("premature publication")
+	}
+	for _, ref := range got.Records {
+		r, err := p.Get(testCtx, ref.Collection, scope, ref.ID)
+		if err != nil || !r.PrivacyQuarantined {
+			t.Fatal("unquarantined", ref, err)
+		}
+	}
+}
+
+func discoverCompletePrivacyImpact(t *testing.T, p *Postgres, scope Scope, target string, ids []string) PrivacyImpact {
+	t.Helper()
+	var want PrivacyImpact
+	if err := p.Transaction(testCtx, func(ctx context.Context, tx Tx) error {
+		var err error
+		want, err = tx.(*Postgres).DiscoverPrivacyImpactComplete(ctx, scope, target, ids)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return want
+}
+
+// checkMaintenanceBlocksOwnerAndRetention: a closed gate refuses owner reads, writes and retention sweeps.
+func checkMaintenanceBlocksOwnerAndRetention(t *testing.T, p *Postgres, scope Scope) {
+	t.Helper()
+	if _, err := p.Get(testCtx, "sources", scope, "ctx-src"); !errors.Is(err, ErrUnavailable) {
 		t.Fatal("owner application read bypass", err)
 	}
-	if err = p.Insert(testCtx, "sources", Record{ID: "during-maintenance", Scope: scope, Kind: "document", Status: statusActive, Revision: 1}); !errors.Is(err, ErrUnavailable) {
+	if err := p.Insert(testCtx, "sources", Record{ID: "during-maintenance", Scope: scope, Kind: "document", Status: statusActive, Revision: 1}); !errors.Is(err, ErrUnavailable) {
 		t.Fatal("owner application write bypass", err)
 	}
 	cutoff := time.Now().Add(-48 * time.Hour)
@@ -68,11 +103,13 @@ func TestMaintenanceSubjectRestartHoldAndEquivalentImpact(t *testing.T) {
 			t.Fatal("retention bypassed maintenance", n, err)
 		}
 	}
-	same, err := p.MemoryMaintenanceStatus(testCtx)
-	if err != nil || same.Revision != st.Revision {
-		t.Fatal("status changed revision", same, err)
-	}
-	st, err = p.AdvanceMemoryMaintenance(testCtx, st.Revision)
+}
+
+// maintenanceHoldAndRestart advances one bounded page, holds, restarts on a
+// fresh handle, releases the hold and checks a cancelled advance changes nothing.
+func maintenanceHoldAndRestart(t *testing.T, p *Postgres, st MemoryMaintenanceStatus) (*Postgres, MemoryMaintenanceStatus) {
+	t.Helper()
+	st, err := p.AdvanceMemoryMaintenance(testCtx, st.Revision)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,9 +141,15 @@ func TestMaintenanceSubjectRestartHoldAndEquivalentImpact(t *testing.T) {
 	if err != nil || after != st {
 		t.Fatal("cancel changed progress", after, st, err)
 	}
+	return fresh, st
+}
+
+func drainBoundedMaintenance(t *testing.T, p *Postgres, st MemoryMaintenanceStatus) MemoryMaintenanceStatus {
+	t.Helper()
+	var err error
 	for i := 0; i < 100 && st.Active; i++ {
 		prior := st.Scanned
-		st, err = fresh.AdvanceMemoryMaintenance(testCtx, st.Revision)
+		st, err = p.AdvanceMemoryMaintenance(testCtx, st.Revision)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -117,23 +160,7 @@ func TestMaintenanceSubjectRestartHoldAndEquivalentImpact(t *testing.T) {
 	if st.Active {
 		t.Fatal("maintenance did not finish", st)
 	}
-	job, err := p.Get(testCtx, colJobs, scope, privacyJobID(scope, scope.UserID, in.IdempotencyKey))
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := job.PrivacyDeletion.Impact
-	if !reflect.DeepEqual(want, got) {
-		t.Fatalf("impact differs\nwant=%+v\ngot=%+v", want, got)
-	}
-	if !job.PrivacyDeletion.Report.LiveAccessRemoved || job.PrivacyDeletion.State != privacyQuarantined {
-		t.Fatal("premature publication")
-	}
-	for _, ref := range got.Records {
-		r, err := p.Get(testCtx, ref.Collection, scope, ref.ID)
-		if err != nil || !r.PrivacyQuarantined {
-			t.Fatal("unquarantined", ref, err)
-		}
-	}
+	return st
 }
 
 func TestMaintenanceBeginDrainsInflightAndFailedBeginRollsBack(t *testing.T) {
@@ -197,22 +224,7 @@ func TestMaintenanceBeginDrainsInflightAndFailedBeginRollsBack(t *testing.T) {
 
 func TestMaintenanceSupersedeResumesWithoutServingUnvisitedDigests(t *testing.T) {
 	p, svc, scope, token := durableMaintenanceFixture(t)
-	src, err := p.Get(testCtx, "sources", scope, "ctx-src")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, id := range []string{"old-memory", "next-memory"} {
-		row := Record{ID: id, Scope: scope, Kind: "decision", Status: statusActive, Revision: 1, Text: "synthetic decision", Sources: refs(src), SourceEventID: src.ID, ApprovedBy: scope.UserID}
-		if err = p.Insert(testCtx, colMemories, row); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for i := 0; i < 205; i++ {
-		row := Record{ID: fmt.Sprintf("digest-%04d", i), Scope: scope, Kind: digestKindTopic, Status: digestActive, Revision: 1, Text: "outdated derived summary", Digest: &DigestData{Members: []Ref{{Collection: colMemories, ID: "old-memory", Revision: 1}}}}
-		if err = p.Insert(testCtx, colTopicDigests, row); err != nil {
-			t.Fatal(err)
-		}
-	}
+	seedSupersedeDigests(t, p, scope)
 	st, err := svc.BeginSupersedeMaintenance(testCtx, token, "old-memory", SupersedeInput{Scope: scope, ExpectedRevision: 1, Reason: "updated decision", ReplacementMemoryID: "next-memory", ReplacementExpectedRevision: 1})
 	if err != nil {
 		t.Fatal(err)
@@ -256,77 +268,105 @@ func TestMaintenanceSupersedeResumesWithoutServingUnvisitedDigests(t *testing.T)
 	}
 }
 
+// seedSupersedeDigests adds old/next memories and 205 topic digests built on old-memory.
+func seedSupersedeDigests(t *testing.T, p *Postgres, scope Scope) {
+	t.Helper()
+	src, err := p.Get(testCtx, "sources", scope, "ctx-src")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"old-memory", "next-memory"} {
+		row := Record{ID: id, Scope: scope, Kind: "decision", Status: statusActive, Revision: 1, Text: "synthetic decision", Sources: refs(src), SourceEventID: src.ID, ApprovedBy: scope.UserID}
+		if err = p.Insert(testCtx, colMemories, row); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < 205; i++ {
+		row := Record{ID: fmt.Sprintf("digest-%04d", i), Scope: scope, Kind: digestKindTopic, Status: digestActive, Revision: 1, Text: "outdated derived summary", Digest: &DigestData{Members: []Ref{{Collection: colMemories, ID: "old-memory", Revision: 1}}}}
+		if err = p.Insert(testCtx, colTopicDigests, row); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestMaintenanceSourceAndTraceParityDeepChainAndSafeCancellation(t *testing.T) {
 	for _, target := range []string{"source_event", "trace"} {
-		t.Run(target, func(t *testing.T) {
-			p, svc, scope, token := durableMaintenanceFixture(t)
-			ids := []string{"ctx-src"}
-			if target == "trace" {
-				ids = []string{"trace-1"}
+		t.Run(target, func(t *testing.T) { maintenanceTargetParity(t, target) })
+	}
+}
+
+// seedSourceDependencyChain links 70 sources in a context_uses chain back to ctx-src.
+func seedSourceDependencyChain(t *testing.T, p *Postgres, scope Scope) {
+	t.Helper()
+	prior := "ctx-src"
+	for i := 0; i < 70; i++ {
+		id := fmt.Sprintf("dependency-%03d", 69-i)
+		if err := p.Insert(testCtx, "sources", Record{ID: id, Scope: scope, Kind: "document", Status: statusActive, Revision: 1}); err != nil {
+			t.Fatal(err)
+		}
+		if err := p.insertGraphRelation(testCtx, scope, "source_event", id, "source_event", prior, "context_uses"); err != nil {
+			t.Fatal(err)
+		}
+		prior = id
+	}
+}
+
+func maintenanceTargetParity(t *testing.T, target string) {
+	p, svc, scope, token := durableMaintenanceFixture(t)
+	ids := []string{"ctx-src"}
+	if target == "trace" {
+		ids = []string{"trace-1"}
+	}
+	if target == "source_event" {
+		seedSourceDependencyChain(t, p, scope)
+	}
+	want := discoverCompletePrivacyImpact(t, p, scope, target, ids)
+	req := PrivacyDeletionRequest{Scope: scope, TargetType: target, TargetIDs: ids, IdempotencyKey: "targeted-maintenance", Reason: "owner_request", RetentionPolicyRef: retentionSynthetic}
+	st, err := svc.BeginPrivacyMaintenance(testCtx, token, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err = p.AdvanceMemoryMaintenance(testCtx, st.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err = p.CancelMemoryMaintenance(testCtx, st.Revision)
+	if err != nil || st.Active {
+		t.Fatal("safe discovery cancellation failed", st, err)
+	}
+	if _, err = p.Get(testCtx, "sources", scope, "ctx-src"); err != nil {
+		t.Fatal("cancel did not restore original access", err)
+	}
+	st, err = svc.BeginPrivacyMaintenance(testCtx, token, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	drainMaintenanceRefusingUnsafeCancel(t, p, st)
+	job, err := p.Get(testCtx, colJobs, scope, privacyJobID(scope, scope.UserID, req.IdempotencyKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(want, job.PrivacyDeletion.Impact) {
+		t.Fatalf("targeted impact differs\nwant=%+v\ngot=%+v", want, job.PrivacyDeletion.Impact)
+	}
+}
+
+func drainMaintenanceRefusingUnsafeCancel(t *testing.T, p *Postgres, st MemoryMaintenanceStatus) {
+	t.Helper()
+	var err error
+	for i := 0; i < 500 && st.Active; i++ {
+		if st.Phase == "quarantine_records" {
+			if _, err = p.CancelMemoryMaintenance(testCtx, st.Revision); !errors.Is(err, ErrConflict) {
+				t.Fatal("unsafe cancel allowed", err)
 			}
-			if target == "source_event" {
-				prior := "ctx-src"
-				for i := 0; i < 70; i++ {
-					id := fmt.Sprintf("dependency-%03d", 69-i)
-					if err := p.Insert(testCtx, "sources", Record{ID: id, Scope: scope, Kind: "document", Status: statusActive, Revision: 1}); err != nil {
-						t.Fatal(err)
-					}
-					if err := p.insertGraphRelation(testCtx, scope, "source_event", id, "source_event", prior, "context_uses"); err != nil {
-						t.Fatal(err)
-					}
-					prior = id
-				}
-			}
-			var want PrivacyImpact
-			if err := p.Transaction(testCtx, func(ctx context.Context, tx Tx) error {
-				var err error
-				want, err = tx.(*Postgres).DiscoverPrivacyImpactComplete(ctx, scope, target, ids)
-				return err
-			}); err != nil {
-				t.Fatal(err)
-			}
-			req := PrivacyDeletionRequest{Scope: scope, TargetType: target, TargetIDs: ids, IdempotencyKey: "targeted-maintenance", Reason: "owner_request", RetentionPolicyRef: retentionSynthetic}
-			st, err := svc.BeginPrivacyMaintenance(testCtx, token, req)
-			if err != nil {
-				t.Fatal(err)
-			}
-			st, err = p.AdvanceMemoryMaintenance(testCtx, st.Revision)
-			if err != nil {
-				t.Fatal(err)
-			}
-			st, err = p.CancelMemoryMaintenance(testCtx, st.Revision)
-			if err != nil || st.Active {
-				t.Fatal("safe discovery cancellation failed", st, err)
-			}
-			if _, err = p.Get(testCtx, "sources", scope, "ctx-src"); err != nil {
-				t.Fatal("cancel did not restore original access", err)
-			}
-			st, err = svc.BeginPrivacyMaintenance(testCtx, token, req)
-			if err != nil {
-				t.Fatal(err)
-			}
-			for i := 0; i < 500 && st.Active; i++ {
-				if st.Phase == "quarantine_records" {
-					if _, err = p.CancelMemoryMaintenance(testCtx, st.Revision); !errors.Is(err, ErrConflict) {
-						t.Fatal("unsafe cancel allowed", err)
-					}
-				}
-				st, err = p.AdvanceMemoryMaintenance(testCtx, st.Revision)
-				if err != nil {
-					t.Fatal(st, err)
-				}
-			}
-			if st.Active {
-				t.Fatal(st)
-			}
-			job, err := p.Get(testCtx, colJobs, scope, privacyJobID(scope, scope.UserID, req.IdempotencyKey))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !reflect.DeepEqual(want, job.PrivacyDeletion.Impact) {
-				t.Fatalf("targeted impact differs\nwant=%+v\ngot=%+v", want, job.PrivacyDeletion.Impact)
-			}
-		})
+		}
+		st, err = p.AdvanceMemoryMaintenance(testCtx, st.Revision)
+		if err != nil {
+			t.Fatal(st, err)
+		}
+	}
+	if st.Active {
+		t.Fatal(st)
 	}
 }
 

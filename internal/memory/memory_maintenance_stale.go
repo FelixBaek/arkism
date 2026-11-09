@@ -39,27 +39,7 @@ func advanceStaleMaintenance(ctx context.Context, p *Postgres, j *memoryMaintena
 		return false, ErrUnavailable
 	}
 	if j.Phase == len(staleMaintenancePhases) {
-		refs, err := p.MemoryErasureBatch(ctx, j.Scope, j.Mark.Memory.ID, false, j.Cursor, memoryRelationErasureKind)
-		if err != nil {
-			return false, err
-		}
-		for _, ref := range refs {
-			r, err := p.Get(ctx, "memory_relations", j.Scope, ref.ID)
-			if err != nil {
-				return false, err
-			}
-			if r.Kind == GraphSupports && r.Status == statusActive {
-				if err = markStale(ctx, p, "memory_relations", j.Scope, r.ID, j.Mark, j.Actor, nil); err != nil {
-					return false, err
-				}
-			}
-			j.Cursor = ref.ID
-			j.Scanned++
-		}
-		if len(refs) < sourceMemoryErasureBatch {
-			return true, audit(ctx, p, j.Scope, j.Actor, "complete:memory_maintenance", j.ID)
-		}
-		return false, nil
+		return staleMaintenanceRelations(ctx, p, j)
 	}
 	if j.Phase < 0 || j.Phase > len(staleMaintenancePhases) {
 		return false, ErrUnavailable
@@ -72,31 +52,7 @@ func advanceStaleMaintenance(ctx context.Context, p *Postgres, j *memoryMaintena
 	for _, r := range rows {
 		j.Cursor = r.ID
 		j.Scanned++
-		switch phase.col {
-		case colTopicDigests, colUserDigests:
-			if r.Digest == nil || r.Kind == digestKindState || !namesMemory(r.Digest.Members, j.Mark.Memory.ID) {
-				continue
-			}
-			err = markStale(ctx, p, phase.col, j.Scope, r.ID, j.Mark, j.Actor, func(r *Record) { r.Status, r.Text = digestStale, "" })
-			if err == nil && phase.col == colUserDigests {
-				err = requestUserDigest(ctx, p, j.Scope, j.Mark.At)
-			}
-		case colSkillVersions:
-			if r.Kind != proposedSkillKind || !namesMemory(r.Relations, j.Mark.Memory.ID) {
-				continue
-			}
-			err = markStale(ctx, p, phase.col, j.Scope, r.ID, j.Mark, j.Actor, nil)
-		case colObservations:
-			if r.Observation == nil || !namesMemory(r.Observation.SourceMemories, j.Mark.Memory.ID) {
-				continue
-			}
-			err = markStale(ctx, p, phase.col, j.Scope, r.ID, j.Mark, j.Actor, func(r *Record) {
-				o := *r.Observation
-				o.History = appendRevision(o.History, DerivedRevision{Status: obsStale, Action: "stale", Text: r.Text, Citations: o.SourceMemories, Durability: o.Durability, DurabilityReason: o.DurabilityReason, Confidence: r.Confidence, Generator: r.Generator, By: j.Actor, At: j.Mark.At})
-				r.Observation, r.Status = &o, obsStale
-			})
-		}
-		if err != nil {
+		if err = staleMaintenanceRow(ctx, p, j, phase.col, r); err != nil {
 			return false, err
 		}
 	}
@@ -105,4 +61,61 @@ func advanceStaleMaintenance(ctx context.Context, p *Postgres, j *memoryMaintena
 		j.Cursor = ""
 	}
 	return false, nil
+}
+
+// staleMaintenanceRelations marks the next batch of supporting relations of
+// the superseded memory stale; it reports done after the last batch.
+func staleMaintenanceRelations(ctx context.Context, p *Postgres, j *memoryMaintenance) (bool, error) {
+	refs, err := p.MemoryErasureBatch(ctx, j.Scope, j.Mark.Memory.ID, false, j.Cursor, memoryRelationErasureKind)
+	if err != nil {
+		return false, err
+	}
+	for _, ref := range refs {
+		r, err := p.Get(ctx, "memory_relations", j.Scope, ref.ID)
+		if err != nil {
+			return false, err
+		}
+		if r.Kind == GraphSupports && r.Status == statusActive {
+			if err = markStale(ctx, p, "memory_relations", j.Scope, r.ID, j.Mark, j.Actor, nil); err != nil {
+				return false, err
+			}
+		}
+		j.Cursor = ref.ID
+		j.Scanned++
+	}
+	if len(refs) < sourceMemoryErasureBatch {
+		return true, audit(ctx, p, j.Scope, j.Actor, "complete:memory_maintenance", j.ID)
+	}
+	return false, nil
+}
+
+// staleMaintenanceRow marks one dependent row stale when it was derived from
+// the superseded memory.
+func staleMaintenanceRow(ctx context.Context, p *Postgres, j *memoryMaintenance, col string, r Record) error {
+	switch col {
+	case colTopicDigests, colUserDigests:
+		if r.Digest == nil || r.Kind == digestKindState || !namesMemory(r.Digest.Members, j.Mark.Memory.ID) {
+			return nil
+		}
+		err := markStale(ctx, p, col, j.Scope, r.ID, j.Mark, j.Actor, func(r *Record) { r.Status, r.Text = digestStale, "" })
+		if err == nil && col == colUserDigests {
+			err = requestUserDigest(ctx, p, j.Scope, j.Mark.At)
+		}
+		return err
+	case colSkillVersions:
+		if r.Kind != proposedSkillKind || !namesMemory(r.Relations, j.Mark.Memory.ID) {
+			return nil
+		}
+		return markStale(ctx, p, col, j.Scope, r.ID, j.Mark, j.Actor, nil)
+	case colObservations:
+		if r.Observation == nil || !namesMemory(r.Observation.SourceMemories, j.Mark.Memory.ID) {
+			return nil
+		}
+		return markStale(ctx, p, col, j.Scope, r.ID, j.Mark, j.Actor, func(r *Record) {
+			o := *r.Observation
+			o.History = appendRevision(o.History, DerivedRevision{Status: obsStale, Action: "stale", Text: r.Text, Citations: o.SourceMemories, Durability: o.Durability, DurabilityReason: o.DurabilityReason, Confidence: r.Confidence, Generator: r.Generator, By: j.Actor, At: j.Mark.At})
+			r.Observation, r.Status = &o, obsStale
+		})
+	}
+	return nil
 }

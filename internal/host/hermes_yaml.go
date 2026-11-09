@@ -90,22 +90,8 @@ type yamlBlock struct {
 
 func yamlParse(text string) (*yamlBlock, error) {
 	b := &yamlBlock{lines: yamlLines(text), key: -1}
-	content := false
-	for i, l := range b.lines {
-		if strings.HasPrefix(l.text[l.indent:], "\t") {
-			return nil, ErrYAMLLayout // a tab in the indentation
-		}
-		if (l.text == "---" || l.text == "...") && content {
-			return nil, ErrYAMLLayout // a second document
-		}
-		if !l.blank && l.text != "---" {
-			content = true
-		}
-		if l.indent == 0 && !l.blank {
-			if err := b.keyLine(i, l.text); err != nil {
-				return nil, err
-			}
-		}
+	if err := b.topLines(); err != nil {
+		return nil, err
 	}
 	if b.key < 0 {
 		return b, nil
@@ -128,6 +114,28 @@ func yamlParse(text string) (*yamlBlock, error) {
 		return nil, ErrYAMLLayout // "mcp_servers: {}" with children
 	}
 	return b, b.entries()
+}
+
+// topLines refuses tabs in indentation and a second document, and records the mcp_servers key line.
+func (b *yamlBlock) topLines() error {
+	content := false
+	for i, l := range b.lines {
+		if strings.HasPrefix(l.text[l.indent:], "\t") {
+			return ErrYAMLLayout // a tab in the indentation
+		}
+		if (l.text == "---" || l.text == "...") && content {
+			return ErrYAMLLayout // a second document
+		}
+		if !l.blank && l.text != "---" {
+			content = true
+		}
+		if l.indent == 0 && !l.blank {
+			if err := b.keyLine(i, l.text); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // keyLine records a top-level mcp_servers line; a second one, flow style or a scalar is refused.
@@ -259,28 +267,33 @@ func yamlDef(lines []yamlLine) map[string]any {
 			raw[key] = yamlScalarOrFlow(val)
 			continue
 		}
-		var list []any
-		obj := map[string]any{}
-		for i+1 < len(lines) && (lines[i+1].blank || lines[i+1].indent > pi || lines[i+1].indent == pi && strings.HasPrefix(strings.TrimLeft(lines[i+1].text, " "), "- ")) {
-			i++
-			c := lines[i]
-			if c.blank {
-				continue
-			}
-			t := strings.TrimLeft(c.text, " ")
-			if strings.HasPrefix(t, "- ") || t == "-" {
-				list = append(list, yamlScalar(strings.TrimSpace(yamlStripComment(strings.TrimPrefix(t, "-")))))
-			} else if cm := yamlKeyLine.FindStringSubmatch(c.text); cm != nil {
-				obj[yamlUnkey(cm[2])] = yamlScalar(strings.TrimSpace(yamlStripComment(cm[3])))
-			}
-		}
-		if list != nil {
-			raw[key] = list
-		} else {
-			raw[key] = obj
-		}
+		raw[key], i = yamlChildren(lines, i, pi)
 	}
 	return yamlCanon(raw)
+}
+
+// yamlChildren reads the lines under property line i (indent pi) as a list of scalars or a
+// one-level mapping, and returns the index of the last line it took.
+func yamlChildren(lines []yamlLine, i, pi int) (any, int) {
+	var list []any
+	obj := map[string]any{}
+	for i+1 < len(lines) && (lines[i+1].blank || lines[i+1].indent > pi || lines[i+1].indent == pi && strings.HasPrefix(strings.TrimLeft(lines[i+1].text, " "), "- ")) {
+		i++
+		c := lines[i]
+		if c.blank {
+			continue
+		}
+		t := strings.TrimLeft(c.text, " ")
+		if strings.HasPrefix(t, "- ") || t == "-" {
+			list = append(list, yamlScalar(strings.TrimSpace(yamlStripComment(strings.TrimPrefix(t, "-")))))
+		} else if cm := yamlKeyLine.FindStringSubmatch(c.text); cm != nil {
+			obj[yamlUnkey(cm[2])] = yamlScalar(strings.TrimSpace(yamlStripComment(cm[3])))
+		}
+	}
+	if list != nil {
+		return list, i
+	}
+	return obj, i
 }
 
 func yamlCanon(t map[string]any) map[string]any {

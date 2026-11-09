@@ -88,39 +88,42 @@ func (s *Service) editLiveMemory(ctx context.Context, token, id string, scope Sc
 	}
 	var out Record
 	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		out = Record{}
-		r, e := tx.Get(ctx, colMemories, scope, id)
-		if e != nil {
-			return e
-		}
-		if r.PrivacyQuarantined || r.ContentErased {
-			return ErrNotFound
-		}
-		if r.ConflictID != "" || expected > 0 && r.Revision != expected || !live(r) {
-			return ErrConflict
-		}
-		if e = mutate(&r); errors.Is(e, errMemoryUnchanged) {
-			out = r
-			return nil
-		} else if e != nil {
-			return e
-		}
-		prev := r.Revision
-		r.Revision++
-		r.UpdatedAt = time.Now().UTC()
-		if e = tx.Replace(ctx, colMemories, r, prev); e != nil {
-			return e
-		}
-		if e = audit(ctx, tx, scope, actor.PrincipalID, auditAction, id); e != nil {
-			return e
-		}
-		out = r
-		return queueMemoryEvent(ctx, tx, EventMemoryUpdated, colMemories, r)
+		var err error
+		out, err = editLiveMemoryTx(ctx, tx, scope, id, expected, actor.PrincipalID, auditAction, mutate)
+		return err
 	})
 	if e != nil {
 		return Record{}, e
 	}
 	return out, nil
+}
+
+func editLiveMemoryTx(ctx context.Context, tx Tx, scope Scope, id string, expected int64, principal, auditAction string, mutate func(*Record) error) (Record, error) {
+	r, e := tx.Get(ctx, colMemories, scope, id)
+	if e != nil {
+		return Record{}, e
+	}
+	if r.PrivacyQuarantined || r.ContentErased {
+		return Record{}, ErrNotFound
+	}
+	if r.ConflictID != "" || expected > 0 && r.Revision != expected || !live(r) {
+		return Record{}, ErrConflict
+	}
+	if e = mutate(&r); errors.Is(e, errMemoryUnchanged) {
+		return r, nil
+	} else if e != nil {
+		return Record{}, e
+	}
+	prev := r.Revision
+	r.Revision++
+	r.UpdatedAt = time.Now().UTC()
+	if e = tx.Replace(ctx, colMemories, r, prev); e != nil {
+		return Record{}, e
+	}
+	if e = audit(ctx, tx, scope, principal, auditAction, id); e != nil {
+		return Record{}, e
+	}
+	return r, queueMemoryEvent(ctx, tx, EventMemoryUpdated, colMemories, r)
 }
 
 var errMemoryUnchanged = errors.New("memory_unchanged")

@@ -22,32 +22,7 @@ func TestContextDeliveryConversationHTTPAndBudget(t *testing.T) {
 	source := conversationTurn(f, "Avery: the copper valve arrived Friday.")
 	var wireCases []apiContractCase
 	for _, on := range []bool{false, true} {
-		body := map[string]any{"scope": scopeA, "task": "copper valve", "modes": []string{"fts"}, "token_encoding": "cl100k_base", "budget_tokens": 2000, "conversation_context": on}
-		w := httptest.NewRecorder()
-		req := httptest.NewRequest("POST", "/v1/context/build", strings.NewReader(structuredText(body)))
-		req.Header.Set("Authorization", "Bearer "+f.human)
-		Handler(f.svc).ServeHTTP(w, req)
-		var out ContextPack
-		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &out) != nil {
-			t.Fatal(w.Code, w.Body.String())
-		}
-		wireCases = append(wireCases, apiContractCase{Operation: "POST /v1/context/build", Status: w.Code,
-			Body: append(json.RawMessage(nil), w.Body.Bytes()...), Request: json.RawMessage(structuredText(body))})
-		var data ContextBundle
-		if json.Unmarshal([]byte(out.ContextData), &data) != nil {
-			t.Fatal(out.ContextData)
-		}
-		if on && (len(data.Conversation) != 1 || data.Conversation[0].ID != source.ID || data.Conversation[0].Authority != AuthorityDataOnly) {
-			t.Fatal("source did not reach consumed data", out)
-		}
-		if !on && len(data.Conversation) != 0 {
-			t.Fatal("opt-in ignored")
-		}
-		codec, _ := tokenizer.Get(tokenizer.Cl100kBase)
-		n, _ := codec.Count(out.ContextData)
-		if n != out.TokensUsed || n > 2000 {
-			t.Fatal(n, out.TokensUsed)
-		}
+		wireCases = append(wireCases, checkConversationContextBuild(t, f, source, on))
 	}
 	if dest := os.Getenv("ARKISM_CONTEXT_DELIVERY_CASES"); dest != "" {
 		encoded, err := json.Marshal(wireCases)
@@ -68,6 +43,38 @@ func TestContextDeliveryConversationHTTPAndBudget(t *testing.T) {
 	if out := f.search(f.human, q); len(out.Conversation) != 0 {
 		t.Fatal("external source disclosure")
 	}
+}
+
+// checkConversationContextBuild posts one context build and checks the conversation opt-in and token count.
+func checkConversationContextBuild(t *testing.T, f *fixture, source Record, on bool) apiContractCase {
+	t.Helper()
+	body := map[string]any{"scope": scopeA, "task": "copper valve", "modes": []string{"fts"}, "token_encoding": "cl100k_base", "budget_tokens": 2000, "conversation_context": on}
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/v1/context/build", strings.NewReader(structuredText(body)))
+	req.Header.Set("Authorization", "Bearer "+f.human)
+	Handler(f.svc).ServeHTTP(w, req)
+	var out ContextPack
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &out) != nil {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	wireCase := apiContractCase{Operation: "POST /v1/context/build", Status: w.Code,
+		Body: append(json.RawMessage(nil), w.Body.Bytes()...), Request: json.RawMessage(structuredText(body))}
+	var data ContextBundle
+	if json.Unmarshal([]byte(out.ContextData), &data) != nil {
+		t.Fatal(out.ContextData)
+	}
+	if on && (len(data.Conversation) != 1 || data.Conversation[0].ID != source.ID || data.Conversation[0].Authority != AuthorityDataOnly) {
+		t.Fatal("source did not reach consumed data", out)
+	}
+	if !on && len(data.Conversation) != 0 {
+		t.Fatal("opt-in ignored")
+	}
+	codec, _ := tokenizer.Get(tokenizer.Cl100kBase)
+	n, _ := codec.Count(out.ContextData)
+	if n != out.TokensUsed || n > 2000 {
+		t.Fatal(n, out.TokensUsed)
+	}
+	return wireCase
 }
 
 func TestContextDeliveryWholeFactsSurviveCharacterThenTokenBudget(t *testing.T) {

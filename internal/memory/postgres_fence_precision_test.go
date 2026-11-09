@@ -25,80 +25,98 @@ func fenceStorageSnapshot(t *testing.T, p *Postgres, collection, id string) (str
 	return columns, fields
 }
 
+type fencePrecisionCase struct {
+	name, col string
+	fence     func(string, int64) error
+	run       bool
+}
+
 func TestPostgresReadFencePreservesStorageTimestamps(t *testing.T) {
 	p := isolatedPostgres(t)
 	ctx := context.Background()
-	// Insert keeps these microseconds in indexed SQL columns, while the storage
-	// codec represents dates in milliseconds. A fence must not rewrite either.
-	at := time.Date(2026, 11, 8, 1, 2, 3, 123456000, time.UTC)
-	runAt, leaseUntil := at.Add(time.Hour+111*time.Microsecond), at.Add(2*time.Hour+222*time.Microsecond)
-	for _, tc := range []struct {
-		name, col string
-		fence     func(string, int64) error
-		run       bool
-	}{
+	for _, tc := range []fencePrecisionCase{
 		{"source", "sources", func(id string, _ int64) error { return p.FenceSource(ctx, scopeA, id) }, false},
 		{"search", colMemories, func(id string, rev int64) error { return p.FenceSearchRead(ctx, scopeA, colMemories, id, rev) }, false},
 		{"relation", colMemories, func(id string, _ int64) error { return p.FenceRelationMember(ctx, scopeA, colMemories, id) }, false},
 		{"run", "agent_runs", func(id string, rev int64) error { return p.FenceRunCall(ctx, scopeA, id, rev) }, true},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			id := "precision-" + tc.name
-			r := Record{ID: id, Scope: scopeA, Kind: tc.name, Status: statusActive, Revision: 7, Text: "Copper pump inspection", CreatedAt: at, UpdatedAt: at, RunAt: &runAt, LeaseUntil: leaseUntil, LeaseToken: "existing-lease", Attempts: 4, MemoryReferenceFence: 3, RunCallFence: 2}
-			if err := p.Insert(ctx, tc.col, r); err != nil {
-				t.Fatal(err)
-			}
-			_, fields := fenceStorageSnapshot(t, p, tc.col, id)
-			fields["future_payload_field"] = json.RawMessage(`{"nested":["retain",19]}`)
-			raw, err := json.Marshal(fields)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if _, err = p.q().Exec(ctx, `UPDATE memory_records SET payload=$1,doc=$2 WHERE collection=$3 AND id=$4`, raw, json.RawMessage(raw), tc.col, id); err != nil {
-				t.Fatal(err)
-			}
-			before, original := fenceStorageSnapshot(t, p, tc.col, id)
-			for n := 1; n <= 2; n++ {
-				if err := tc.fence(id, 7); err != nil {
-					t.Fatal(err)
-				}
-				after, current := fenceStorageSnapshot(t, p, tc.col, id)
-				if before != after {
-					t.Fatalf("read fence changed indexed state: before=%s after=%s", before, after)
-				}
-				got, err := p.Get(ctx, tc.col, scopeA, id)
-				if err != nil {
-					t.Fatal(err)
-				}
-				wantRun := int64(2)
-				if tc.run {
-					wantRun += int64(n)
-				}
-				if got.Revision != 7 || got.MemoryReferenceFence != 3+int64(n) || got.RunCallFence != wantRun {
-					t.Fatal("counter or revision contract", got.Revision, got.MemoryReferenceFence, got.RunCallFence)
-				}
-				delete(current, "memory_reference_fence")
-				delete(current, "run_call_fence")
-				old := map[string]json.RawMessage{}
-				for k, v := range original {
-					if k != "memory_reference_fence" && k != "run_call_fence" {
-						old[k] = v
-					}
-				}
-				if !reflect.DeepEqual(old, current) {
-					t.Fatal("fence rewrote unrelated payload fields")
-				}
-			}
-			if tc.name == "search" || tc.run {
-				if err := tc.fence(id, 6); !errors.Is(err, ErrConflict) {
-					t.Fatal("stale revision accepted", err)
-				}
-				after, _ := fenceStorageSnapshot(t, p, tc.col, id)
-				if before != after {
-					t.Fatal("failed fence changed columns")
-				}
-			}
-		})
+		t.Run(tc.name, func(t *testing.T) { readFencePreservesStorage(t, p, tc) })
+	}
+}
+
+func readFencePreservesStorage(t *testing.T, p *Postgres, tc fencePrecisionCase) {
+	id := "precision-" + tc.name
+	before, original := seedFencePrecisionRecord(t, p, tc.col, tc.name, id)
+	for n := 1; n <= 2; n++ {
+		if err := tc.fence(id, 7); err != nil {
+			t.Fatal(err)
+		}
+		checkFenceRound(t, p, tc, id, n, before, original)
+	}
+	if tc.name == "search" || tc.run {
+		if err := tc.fence(id, 6); !errors.Is(err, ErrConflict) {
+			t.Fatal("stale revision accepted", err)
+		}
+		after, _ := fenceStorageSnapshot(t, p, tc.col, id)
+		if before != after {
+			t.Fatal("failed fence changed columns")
+		}
+	}
+}
+
+// seedFencePrecisionRecord inserts a record with sub-millisecond timestamps and
+// an unknown payload field, returning its stored columns and payload.
+func seedFencePrecisionRecord(t *testing.T, p *Postgres, col, kind, id string) (string, map[string]json.RawMessage) {
+	t.Helper()
+	ctx := context.Background()
+	// Insert keeps these microseconds in indexed SQL columns, while the storage
+	// codec represents dates in milliseconds. A fence must not rewrite either.
+	at := time.Date(2026, 11, 8, 1, 2, 3, 123456000, time.UTC)
+	runAt, leaseUntil := at.Add(time.Hour+111*time.Microsecond), at.Add(2*time.Hour+222*time.Microsecond)
+	r := Record{ID: id, Scope: scopeA, Kind: kind, Status: statusActive, Revision: 7, Text: "Copper pump inspection", CreatedAt: at, UpdatedAt: at, RunAt: &runAt, LeaseUntil: leaseUntil, LeaseToken: "existing-lease", Attempts: 4, MemoryReferenceFence: 3, RunCallFence: 2}
+	if err := p.Insert(ctx, col, r); err != nil {
+		t.Fatal(err)
+	}
+	_, fields := fenceStorageSnapshot(t, p, col, id)
+	fields["future_payload_field"] = json.RawMessage(`{"nested":["retain",19]}`)
+	raw, err := json.Marshal(fields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = p.q().Exec(ctx, `UPDATE memory_records SET payload=$1,doc=$2 WHERE collection=$3 AND id=$4`, raw, json.RawMessage(raw), col, id); err != nil {
+		t.Fatal(err)
+	}
+	return fenceStorageSnapshot(t, p, col, id)
+}
+
+// checkFenceRound checks the nth fence moved only its counters.
+func checkFenceRound(t *testing.T, p *Postgres, tc fencePrecisionCase, id string, n int, before string, original map[string]json.RawMessage) {
+	t.Helper()
+	after, current := fenceStorageSnapshot(t, p, tc.col, id)
+	if before != after {
+		t.Fatalf("read fence changed indexed state: before=%s after=%s", before, after)
+	}
+	got, err := p.Get(context.Background(), tc.col, scopeA, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantRun := int64(2)
+	if tc.run {
+		wantRun += int64(n)
+	}
+	if got.Revision != 7 || got.MemoryReferenceFence != 3+int64(n) || got.RunCallFence != wantRun {
+		t.Fatal("counter or revision contract", got.Revision, got.MemoryReferenceFence, got.RunCallFence)
+	}
+	delete(current, "memory_reference_fence")
+	delete(current, "run_call_fence")
+	old := map[string]json.RawMessage{}
+	for k, v := range original {
+		if k != "memory_reference_fence" && k != "run_call_fence" {
+			old[k] = v
+		}
+	}
+	if !reflect.DeepEqual(old, current) {
+		t.Fatal("fence rewrote unrelated payload fields")
 	}
 }
 

@@ -145,6 +145,16 @@ func TestConsolidationPerTagMissionPreviewScopesAndDelete(t *testing.T) {
 	if err != nil || len(scopes.Items) != 1 || scopes.Items[0].Proposed != 1 || !slices.Equal(scopes.Items[0].Tags, []string{"proj:deploy"}) {
 		t.Fatalf("scopes %+v %v", scopes, err)
 	}
+	assertObservationBulkDelete(t, f)
+	llm.answers = append(llm.answers, obsAnswer(t, obsDraft("Staging deploys need the staging flag.", ms[0].ID, ms[1].ID)))
+	if out, err := f.consolidate(f.human, false); err != nil || len(out.Proposed) != 1 {
+		t.Fatalf("consolidation proposes again after a delete: %+v %v", out, err)
+	}
+}
+
+// assertObservationBulkDelete deletes the one proposed observation and checks the refusals.
+func assertObservationBulkDelete(t *testing.T, f *fixture) {
+	t.Helper()
 	if _, err := f.svc.DeleteObservations(testCtx, f.agent, ObservationDeleteInput{Scope: scopeA, All: true}); !errors.Is(err, ErrDenied) {
 		t.Fatalf("agent bulk delete: %v", err)
 	}
@@ -165,10 +175,6 @@ func TestConsolidationPerTagMissionPreviewScopesAndDelete(t *testing.T) {
 	}
 	if _, err := f.svc.DeleteObservations(testCtx, f.human, ObservationDeleteInput{Scope: scopeA, All: true, Status: obsDeleted}); !errors.Is(err, ErrInvalid) {
 		t.Fatal("deleted is not a status to delete")
-	}
-	llm.answers = append(llm.answers, obsAnswer(t, obsDraft("Staging deploys need the staging flag.", ms[0].ID, ms[1].ID)))
-	if out, err := f.consolidate(f.human, false); err != nil || len(out.Proposed) != 1 {
-		t.Fatalf("consolidation proposes again after a delete: %+v %v", out, err)
 	}
 }
 
@@ -405,6 +411,16 @@ func TestReflectModelSettingsRoundTrip(t *testing.T) {
 	}
 }
 
+func roundLimitRejections(out ObservationConsolidateResult) int {
+	n := 0
+	for _, r := range out.Rejected {
+		if r.Code == "round_limit" {
+			n++
+		}
+	}
+	return n
+}
+
 // consolidation.max_memories_per_round stops a run once its groups hold that many memories;
 // the group that reaches it still runs, and an empty block hands the cap back (no cap).
 func TestConsolidationMaxMemoriesPerRound(t *testing.T) {
@@ -424,15 +440,7 @@ func TestConsolidationMaxMemoriesPerRound(t *testing.T) {
 		}
 		return out
 	}
-	limits := func(out ObservationConsolidateResult) int {
-		n := 0
-		for _, r := range out.Rejected {
-			if r.Code == "round_limit" {
-				n++
-			}
-		}
-		return n
-	}
+	limits := roundLimitRejections
 	if err := put(&SpaceConsolidation{DefaultScopeMode: "per_tag", BatchSize: 4}); err != nil {
 		t.Fatal(err)
 	}

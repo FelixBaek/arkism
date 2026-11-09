@@ -137,40 +137,10 @@ func (s *Service) applyEntityExtraction(ctx context.Context, scope Scope, actor 
 		if !dryRun {
 			checked = searchReadTx{Tx: tx}
 		}
-		for _, f := range found {
-			current, e := checked.Get(ctx, colMemories, scope, f.Memory.ID)
-			if e != nil {
-				return e
-			}
-			if !validKnowledgeEvidence(current, Ref{Collection: colMemories, ID: f.Memory.ID, Revision: f.Memory.Revision}, scope) {
-				return ErrConflict
-			}
-			if e = checkSources(ctx, checked, current); e != nil {
-				return e
-			}
+		if err = checkEntityEvidence(ctx, checked, scope, found); err != nil {
+			return err
 		}
-		plan := newEntityPlan(g, cfg.EntityResolution)
-		for _, f := range found {
-			// Names found anywhere in the batch exist before weak ones are linked.
-			for _, c := range f.Names {
-				if !c.Weak {
-					plan.entityFor(c, f.Origin)
-				}
-			}
-		}
-		for _, f := range found {
-			item := plan.apply(f)
-			if f.Origin == originInput { // the memory's second pass: stated entities
-				if len(f.Names) == 0 {
-					continue
-				}
-			} else {
-				out.Memories++
-			}
-			if dryRun && len(out.Items) < entityPreviewItems {
-				out.Items = append(out.Items, item)
-			}
-		}
+		plan := planEntityExtraction(g, cfg, found, dryRun, &out)
 		out.NewEntities, out.AddedMentions, out.RemovedMentions = len(plan.created), len(plan.add), len(plan.remove)
 		if dryRun {
 			return nil
@@ -178,6 +148,52 @@ func (s *Service) applyEntityExtraction(ctx context.Context, scope Scope, actor 
 		return plan.write(ctx, tx, store, scope, actor)
 	})
 	return out, err
+}
+
+// checkEntityEvidence requires every found memory to still be the approved
+// revision with readable sources.
+func checkEntityEvidence(ctx context.Context, checked Tx, scope Scope, found []memoryEntities) error {
+	for _, f := range found {
+		current, e := checked.Get(ctx, colMemories, scope, f.Memory.ID)
+		if e != nil {
+			return e
+		}
+		if !validKnowledgeEvidence(current, Ref{Collection: colMemories, ID: f.Memory.ID, Revision: f.Memory.Revision}, scope) {
+			return ErrConflict
+		}
+		if e = checkSources(ctx, checked, current); e != nil {
+			return e
+		}
+	}
+	return nil
+}
+
+// planEntityExtraction resolves the found names into a plan and counts the
+// memories and preview items into out.
+func planEntityExtraction(g *entityGraph, cfg SpaceConfig, found []memoryEntities, dryRun bool, out *EntityExtractResult) *entityPlan {
+	plan := newEntityPlan(g, cfg.EntityResolution)
+	for _, f := range found {
+		// Names found anywhere in the batch exist before weak ones are linked.
+		for _, c := range f.Names {
+			if !c.Weak {
+				plan.entityFor(c, f.Origin)
+			}
+		}
+	}
+	for _, f := range found {
+		item := plan.apply(f)
+		if f.Origin == originInput { // the memory's second pass: stated entities
+			if len(f.Names) == 0 {
+				continue
+			}
+		} else {
+			out.Memories++
+		}
+		if dryRun && len(out.Items) < entityPreviewItems {
+			out.Items = append(out.Items, item)
+		}
+	}
+	return plan
 }
 
 type entityPlan struct {

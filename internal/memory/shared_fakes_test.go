@@ -55,14 +55,29 @@ func (f *fakeRepo) MemoryNeighbors(_ context.Context, _ Scope, seeds []string, l
 			case r.TargetKind == "memory" && r.TargetID == seed:
 				add(r.SourceID, pos)
 			case r.SourceID == seed && r.Kind == "mentions":
-				for _, o := range f.relations {
-					if o.Kind == "mentions" && o.TargetKind == r.TargetKind && o.TargetID == r.TargetID {
-						add(o.SourceID, pos)
-					}
+				for _, id := range f.coMentioners(r) {
+					add(id, pos)
 				}
 			}
 		}
 	}
+	ids := rankedNeighbors(count, first)
+	return ids[:min(limit, len(ids))], nil
+}
+
+// coMentioners are the sources of every mention of r's target, r's own source included (caller holds f.mu).
+func (f *fakeRepo) coMentioners(r fakeRelation) []string {
+	var out []string
+	for _, o := range f.relations {
+		if o.Kind == "mentions" && o.TargetKind == r.TargetKind && o.TargetID == r.TargetID {
+			out = append(out, o.SourceID)
+		}
+	}
+	return out
+}
+
+// rankedNeighbors orders neighbours by link count, then earliest seed, then id.
+func rankedNeighbors(count, first map[string]int) []string {
 	ids := make([]string, 0, len(count))
 	for id := range count {
 		ids = append(ids, id)
@@ -77,7 +92,7 @@ func (f *fakeRepo) MemoryNeighbors(_ context.Context, _ Scope, seeds []string, l
 		}
 		return a < b
 	})
-	return ids[:min(limit, len(ids))], nil
+	return ids
 }
 
 // fakeExtension is the stdio extension program (the test binary, ARKISM_TEST_HELPER=extension).
@@ -148,22 +163,7 @@ func independentOutcomeRows(rows []Record, in MemoryOutcomeQuery) []Record {
 	base := in
 	base.From, base.To = nil, nil
 	ordered := slices.Clone(rows)
-	slices.SortFunc(ordered, func(a, b Record) int {
-		aAt, bAt := a.CreatedAt, b.CreatedAt
-		if a.MemoryOutcomeCompletedAt != nil {
-			aAt = *a.MemoryOutcomeCompletedAt
-		}
-		if b.MemoryOutcomeCompletedAt != nil {
-			bAt = *b.MemoryOutcomeCompletedAt
-		}
-		if n := aAt.Compare(bAt); n != 0 {
-			return n
-		}
-		if n := a.CreatedAt.Compare(b.CreatedAt); n != 0 {
-			return n
-		}
-		return strings.Compare(a.ID, b.ID)
-	})
+	slices.SortFunc(ordered, compareOutcomeCompletion)
 	out := []Record{}
 	seen := map[string]bool{}
 	for _, r := range ordered {
@@ -188,6 +188,25 @@ func independentOutcomeRows(rows []Record, in MemoryOutcomeQuery) []Record {
 		}
 	}
 	return out
+}
+
+// compareOutcomeCompletion orders outcome rows by completion time (creation when
+// not completed), then creation time, then id.
+func compareOutcomeCompletion(a, b Record) int {
+	aAt, bAt := a.CreatedAt, b.CreatedAt
+	if a.MemoryOutcomeCompletedAt != nil {
+		aAt = *a.MemoryOutcomeCompletedAt
+	}
+	if b.MemoryOutcomeCompletedAt != nil {
+		bAt = *b.MemoryOutcomeCompletedAt
+	}
+	if n := aAt.Compare(bAt); n != 0 {
+		return n
+	}
+	if n := a.CreatedAt.Compare(b.CreatedAt); n != 0 {
+		return n
+	}
+	return strings.Compare(a.ID, b.ID)
 }
 
 // signalPolicyHTTPResponses supplies real router responses for the strict API

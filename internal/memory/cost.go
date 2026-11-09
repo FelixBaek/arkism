@@ -178,10 +178,8 @@ func (s *Service) reserveProviderCalls(ctx context.Context, scope Scope, operati
 		rows[i] = Record{ID: ID(), Scope: scope, Kind: providerUsageKind, Status: JobStatusPending, Revision: 1, Cost: &ProviderCost{Operation: operation, Provider: provider, Model: model, Requests: 1}, CreatedAt: now, UpdatedAt: now, CreatedBy: "memoryd", CreatedByType: "service"}
 	}
 	if c.limit == 0 {
-		for _, r := range rows {
-			if err := s.Repo.Insert(ctx, colProviderUsage, r); err != nil {
-				return nil, err
-			}
+		if err := insertProviderRows(ctx, s.Repo.Insert, rows); err != nil {
+			return nil, err
 		}
 		return rows, nil
 	}
@@ -201,13 +199,18 @@ func (s *Service) reserveProviderCalls(ctx context.Context, scope Scope, operati
 		if calls+n > c.limit {
 			return ErrModelBudget
 		}
-		for _, r := range rows {
-			if err = tx.Insert(ctx, colProviderUsage, r); err != nil {
-				return err
-			}
-		}
-		return nil
+		return insertProviderRows(ctx, tx.Insert, rows)
 	})
+}
+
+// insertProviderRows inserts the reserved rows in order, stopping at the first error.
+func insertProviderRows(ctx context.Context, insert func(context.Context, string, Record) error, rows []Record) error {
+	for _, r := range rows {
+		if err := insert(ctx, colProviderUsage, r); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Service) finishProviderCall(ctx context.Context, reserved Record, usage ProviderUsage, success bool) error {

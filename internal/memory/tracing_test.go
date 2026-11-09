@@ -166,6 +166,12 @@ func TestTracingExportsNoContent(t *testing.T) {
 			t.Fatalf("span export leaked %q: %s", leak, all)
 		}
 	}
+	assertSpanAttributesAllowed(t, col.bodies)
+}
+
+// assertSpanAttributesAllowed fails on any exported span attribute outside the fixed allow-list.
+func assertSpanAttributesAllowed(t *testing.T, bodies [][]byte) {
+	t.Helper()
 	allowed := map[string]bool{"service.name": true, "http.request.method": true, "http.route": true, "http.response.status_code": true, "arkism.operation": true, "arkism.collection": true,
 		"gen_ai.operation.name": true, "gen_ai.provider.name": true, "gen_ai.request.model": true, "gen_ai.response.model": true,
 		"gen_ai.usage.input_tokens": true, "gen_ai.usage.output_tokens": true}
@@ -176,20 +182,25 @@ func TestTracingExportsNoContent(t *testing.T) {
 			} `json:"scopeSpans"`
 		} `json:"resourceSpans"`
 	}
-	for _, b := range col.bodies {
+	for _, b := range bodies {
 		if err := json.Unmarshal(b, &payload); err != nil {
 			t.Fatal(err)
 		}
 		for _, rs := range payload.ResourceSpans {
 			for _, ss := range rs.ScopeSpans {
 				for _, s := range ss.Spans {
-					for _, a := range s.Attributes {
-						if !allowed[a.Key] {
-							t.Fatalf("unexpected span attribute %q=%q", a.Key, a.Value.StringValue)
-						}
-					}
+					assertSpanAttributeKeys(t, allowed, s)
 				}
 			}
+		}
+	}
+}
+
+func assertSpanAttributeKeys(t *testing.T, allowed map[string]bool, s otlpSpan) {
+	t.Helper()
+	for _, a := range s.Attributes {
+		if !allowed[a.Key] {
+			t.Fatalf("unexpected span attribute %q=%q", a.Key, a.Value.StringValue)
 		}
 	}
 }

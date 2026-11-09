@@ -62,6 +62,12 @@ func TestDocumentChunksAndHistoryRoutes(t *testing.T) {
 	if items, _ = page["items"].([]any); code != 200 || len(items) != 1 || page["next_cursor"] != "" || items[0].(map[string]any)["candidates_created"] != float64(1) {
 		t.Fatalf("history page 2: %d %v", code, page)
 	}
+	checkDocumentRouteRefusals(t, f, base, q, first.JobID)
+}
+
+// checkDocumentRouteRefusals checks bad paging, missing auth, other scopes and job ids on the document routes.
+func checkDocumentRouteRefusals(t *testing.T, f *fixture, base, q, jobID string) {
+	t.Helper()
 	for _, bad := range []string{base + "/chunks" + q + "&limit=0", base + "/chunks" + q + "&cursor=x", base + "/history" + q + "&limit=999", base + "/chunks?" + "evil=1"} {
 		if code, _ := docGet(t, f, bad, f.human); code != 400 {
 			t.Fatalf("%s: %d", bad, code)
@@ -73,7 +79,7 @@ func TestDocumentChunksAndHistoryRoutes(t *testing.T) {
 	if code, _ := docGet(t, f, base+"/chunks?"+docScopeQuery(Scope{WorkspaceID: "ws-b", ProjectID: "proj-b"}), f.human); code != 404 && code != 403 {
 		t.Fatalf("other scope: %d", code)
 	}
-	if code, _ := docGet(t, f, "/v1/files/memories/documents/"+first.JobID+"/chunks"+q, f.human); code != 404 {
+	if code, _ := docGet(t, f, "/v1/files/memories/documents/"+jobID+"/chunks"+q, f.human); code != 404 {
 		t.Fatalf("a job is not a document: %d", code)
 	}
 }

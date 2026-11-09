@@ -40,31 +40,36 @@ func eraseMemoryFromDigests(ctx context.Context, tx Tx, lister statusLister, sco
 				return err
 			}
 			for _, row := range rows {
-				if row.Digest == nil || !slices.ContainsFunc(row.Digest.Members, func(r Ref) bool { return r.ID == memoryID }) {
-					continue
-				}
-				cur, err := tx.Get(ctx, col, scope, row.ID)
-				if err != nil {
-					return err
-				}
-				if cur.Digest == nil || cur.ContentErased && cur.Text == "" && cur.Digest.Title == "" {
-					continue
-				}
-				d := *cur.Digest
-				d.Title = ""
-				prev := cur.Revision
-				cur.Digest, cur.Text, cur.Summary, cur.Keywords, cur.KeywordsLower = &d, "", "", nil, nil
-				cur.Status, cur.ContentErased, cur.Revision, cur.UpdatedAt = digestStale, true, cur.Revision+1, now
-				if err := tx.Replace(ctx, col, cur, prev); err != nil {
-					return err
-				}
-				if err := audit(ctx, tx, scope, actor, "erase:"+col, cur.ID); err != nil {
+				if err := eraseMemoryFromDigest(ctx, tx, col, row, scope, memoryID, actor, now); err != nil {
 					return err
 				}
 			}
 		}
 	}
 	return nil
+}
+
+// eraseMemoryFromDigest clears one listed digest row when it names memoryID.
+func eraseMemoryFromDigest(ctx context.Context, tx Tx, col string, row Record, scope Scope, memoryID, actor string, now time.Time) error {
+	if row.Digest == nil || !slices.ContainsFunc(row.Digest.Members, func(r Ref) bool { return r.ID == memoryID }) {
+		return nil
+	}
+	cur, err := tx.Get(ctx, col, scope, row.ID)
+	if err != nil {
+		return err
+	}
+	if cur.Digest == nil || cur.ContentErased && cur.Text == "" && cur.Digest.Title == "" {
+		return nil
+	}
+	d := *cur.Digest
+	d.Title = ""
+	prev := cur.Revision
+	cur.Digest, cur.Text, cur.Summary, cur.Keywords, cur.KeywordsLower = &d, "", "", nil, nil
+	cur.Status, cur.ContentErased, cur.Revision, cur.UpdatedAt = digestStale, true, cur.Revision+1, now
+	if err := tx.Replace(ctx, col, cur, prev); err != nil {
+		return err
+	}
+	return audit(ctx, tx, scope, actor, "erase:"+col, cur.ID)
 }
 
 // eraseMemoryFromObservations returns the ids of the observations it erased.
@@ -84,27 +89,32 @@ func eraseMemoryFromObservations(ctx context.Context, tx Tx, lister statusLister
 				return nil, err
 			}
 			erased = append(erased, cur.ID)
-			if cur.Observation == nil || cur.ContentErased && cur.Text == "" {
-				continue
-			}
-			o := *cur.Observation
-			o.History, _ = scrubRevisions(o.History, nil)
-			o.DurabilityReason = ""
-			prev := cur.Revision
-			cur.Observation, cur.Text, cur.Summary, cur.Keywords, cur.KeywordsLower, cur.Embedding = &o, "", "", nil, nil, nil
-			if cur.Status != obsDeleted { // a deleted one stays deleted, so no refresh revives it
-				cur.Status = obsStale
-			}
-			cur.ContentErased, cur.Revision, cur.UpdatedAt = true, cur.Revision+1, now
-			if err := tx.Replace(ctx, colObservations, cur, prev); err != nil {
-				return nil, err
-			}
-			if err := audit(ctx, tx, scope, actor, "erase:"+colObservations, cur.ID); err != nil {
+			if err := eraseObservationText(ctx, tx, scope, cur, actor, now); err != nil {
 				return nil, err
 			}
 		}
 	}
 	return erased, nil
+}
+
+// eraseObservationText blanks one observation's text; one already erased is left alone.
+func eraseObservationText(ctx context.Context, tx Tx, scope Scope, cur Record, actor string, now time.Time) error {
+	if cur.Observation == nil || cur.ContentErased && cur.Text == "" {
+		return nil
+	}
+	o := *cur.Observation
+	o.History, _ = scrubRevisions(o.History, nil)
+	o.DurabilityReason = ""
+	prev := cur.Revision
+	cur.Observation, cur.Text, cur.Summary, cur.Keywords, cur.KeywordsLower, cur.Embedding = &o, "", "", nil, nil, nil
+	if cur.Status != obsDeleted { // a deleted one stays deleted, so no refresh revives it
+		cur.Status = obsStale
+	}
+	cur.ContentErased, cur.Revision, cur.UpdatedAt = true, cur.Revision+1, now
+	if err := tx.Replace(ctx, colObservations, cur, prev); err != nil {
+		return err
+	}
+	return audit(ctx, tx, scope, actor, "erase:"+colObservations, cur.ID)
 }
 
 // scrubRevisions blanks the text of revisions citing any of ids (every revision when ids is nil).
@@ -134,12 +144,8 @@ func eraseFromMentalModels(ctx context.Context, tx Tx, lister statusLister, scop
 		m := *cur.MentalModel
 		changed := false
 		m.History, changed = scrubRevisions(m.History, ids)
-		for _, rev := range []**DerivedRevision{&m.Active, &m.Draft} {
-			if *rev != nil {
-				if _, cited := scrubRevisions([]DerivedRevision{**rev}, ids); cited {
-					*rev, changed = nil, true
-				}
-			}
+		if dropCitedRevisions(&m, ids) {
+			changed = true
 		}
 		if !changed {
 			continue
@@ -154,6 +160,19 @@ func eraseFromMentalModels(ctx context.Context, tx Tx, lister statusLister, scop
 		}
 	}
 	return nil
+}
+
+// dropCitedRevisions clears the active and draft revisions citing any of ids and reports whether one was cleared.
+func dropCitedRevisions(m *MentalModelData, ids []string) bool {
+	changed := false
+	for _, rev := range []**DerivedRevision{&m.Active, &m.Draft} {
+		if *rev != nil {
+			if _, cited := scrubRevisions([]DerivedRevision{**rev}, ids); cited {
+				*rev, changed = nil, true
+			}
+		}
+	}
+	return changed
 }
 
 // eraseCitedFromMentalModels scrubs mental-model text citing a memory or an

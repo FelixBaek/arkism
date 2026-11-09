@@ -555,6 +555,11 @@ func TestLLMRequestKindFilterAndRuns(t *testing.T) {
 	if _, err = f.svc.ListLLMRequests(testCtx, f.human, scopeA, LLMRequestFilter{Run: strings.Repeat("a", 65)}); !errors.Is(err, ErrInvalid) {
 		t.Fatal("bad run", err)
 	}
+	assertLLMCallKinds(t)
+}
+
+func assertLLMCallKinds(t *testing.T) {
+	t.Helper()
 	for op, want := range map[string]string{"embed_query": "embedding", "rerank": "rerank", "recall_rerank": "rerank", "wiki.page": "llm"} {
 		if got := llmCallKind(op); got != want {
 			t.Errorf("llmCallKind(%q) = %q, want %q", op, got, want)
@@ -575,13 +580,8 @@ func TestLLMTraceStoresRedactedContentOnlyWithFlag(t *testing.T) {
 	}
 }
 
-func TestWebhookRequestShapeIsSealedAndSent(t *testing.T) {
-	f := webhookFixture(t)
-	var got *http.Request
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { got = r.Clone(context.Background()) }))
-	t.Cleanup(srv.Close)
-	in := WebhookInput{Scope: scopeA, URL: srv.URL + "/in?keep=1", Events: []string{EventMemoryDeleted}, Secret: testWebhookSecret,
-		Method: http.MethodPut, TimeoutSeconds: 5, Headers: map[string]string{"Authorization": "Bearer hook-token-value"}, QueryParams: map[string]string{"api_key": "q-token-value"}}
+func assertBadWebhookShapesRejected(t *testing.T, f *fixture, in WebhookInput) {
+	t.Helper()
 	for _, bad := range []func(*WebhookInput){
 		func(i *WebhookInput) { i.Method = http.MethodGet },
 		func(i *WebhookInput) { i.TimeoutSeconds = 31 },
@@ -595,6 +595,16 @@ func TestWebhookRequestShapeIsSealedAndSent(t *testing.T) {
 			t.Fatalf("accepted %+v: %v", b, err)
 		}
 	}
+}
+
+func TestWebhookRequestShapeIsSealedAndSent(t *testing.T) {
+	f := webhookFixture(t)
+	var got *http.Request
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { got = r.Clone(context.Background()) }))
+	t.Cleanup(srv.Close)
+	in := WebhookInput{Scope: scopeA, URL: srv.URL + "/in?keep=1", Events: []string{EventMemoryDeleted}, Secret: testWebhookSecret,
+		Method: http.MethodPut, TimeoutSeconds: 5, Headers: map[string]string{"Authorization": "Bearer hook-token-value"}, QueryParams: map[string]string{"api_key": "q-token-value"}}
+	assertBadWebhookShapesRejected(t, f, in)
 	v, err := f.svc.CreateWebhook(testCtx, f.human, in)
 	if err != nil {
 		t.Fatal(err)

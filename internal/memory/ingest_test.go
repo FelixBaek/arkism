@@ -398,6 +398,12 @@ func TestExtractBatchesReserveTheDailyCapAtomically(t *testing.T) {
 	if pending != 1 || budget != 1 || llm.batches != 1 || len(f.repo.rows(colProviderUsage)) != n {
 		t.Fatalf("pending %d budget %d batches %d ledger %d views %+v", pending, budget, llm.batches, len(f.repo.rows(colProviderUsage)), views)
 	}
+	checkCancelledBatchClosesLedger(t, f, ids, views)
+}
+
+// checkCancelledBatchClosesLedger cancels the waiting batch and checks no ledger row stays pending.
+func checkCancelledBatchClosesLedger(t *testing.T, f *fixture, ids []string, views []FileExtractJobView) {
+	t.Helper()
 	// Cancelling the waiting batch closes its reserved rows: none stays pending.
 	for i, v := range views {
 		if extractBatchWaiting(v) {

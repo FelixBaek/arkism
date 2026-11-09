@@ -166,42 +166,13 @@ func (s *Service) completeConversationTurn(ctx context.Context, token string, in
 		return
 	}
 	if store, ok := s.Repo.(conversationNeighborStore); ok {
-		neighbors, err := store.ConversationNeighbors(ctx, r)
-		if err != nil || len(neighbors) > 2 {
-			return
-		}
-		for _, other := range neighbors {
-			if other.ID == r.ID || other.Scope != r.Scope || other.SourceRef != r.SourceRef || other.OriginProduct != r.OriginProduct || !adjacentConversation(r, other) {
-				continue
-			}
-			if _, shown := selected[other.ID]; shown {
-				continue
-			}
-			before := utf8.RuneCountInString(h.Text)
-			s.appendConversationNeighbor(ctx, token, in, h, other, spare)
-			spare -= utf8.RuneCountInString(h.Text) - before
-		}
+		s.appendStoredNeighbors(ctx, token, in, h, r, store, selected, spare)
 		return
 	}
 	if r.ConversationOrder != nil {
 		return
 	} // explicit ordering needs the exact-slot reader, never a time guess
-	end := r.CollectedAt.Add(time.Millisecond)
-	rows, err := s.Repo.ListSources(ctx, SourceListInput{Scope: in.Scope, Kind: conversationSourceKind, OriginProduct: r.OriginProduct, CollectedFrom: r.CollectedAt, CollectedTo: &end, Limit: conversationNeighborScan + 1})
-	// A truncated list cannot say which batch is next; skip rather than guess.
-	if err != nil || len(rows) > conversationNeighborScan {
-		return
-	}
-	rows = slices.DeleteFunc(rows, func(other Record) bool {
-		return other.SourceRef != r.SourceRef || other.OriginProduct != r.OriginProduct || other.ConversationOrder != nil
-	})
-	slices.SortFunc(rows, func(a, b Record) int {
-		if c := a.CreatedAt.Compare(b.CreatedAt); c != 0 {
-			return c
-		}
-		return strings.Compare(a.ID, b.ID)
-	})
-	at := slices.IndexFunc(rows, func(other Record) bool { return other.ID == r.ID })
+	rows, at := s.sameInstantConversationBatches(ctx, in, r)
 	if at < 0 {
 		return
 	}
@@ -213,10 +184,52 @@ func (s *Service) completeConversationTurn(ctx context.Context, token string, in
 		if _, shown := selected[other.ID]; shown {
 			continue
 		}
-		before := utf8.RuneCountInString(h.Text)
-		s.appendConversationNeighbor(ctx, token, in, h, other, spare)
-		spare -= utf8.RuneCountInString(h.Text) - before
+		spare = s.appendNeighborWithin(ctx, token, in, h, other, spare)
 	}
+}
+
+func (s *Service) appendStoredNeighbors(ctx context.Context, token string, in SearchInput, h *Hit, r Record, store conversationNeighborStore, selected map[string]Record, spare int) {
+	neighbors, err := store.ConversationNeighbors(ctx, r)
+	if err != nil || len(neighbors) > 2 {
+		return
+	}
+	for _, other := range neighbors {
+		if other.ID == r.ID || other.Scope != r.Scope || other.SourceRef != r.SourceRef || other.OriginProduct != r.OriginProduct || !adjacentConversation(r, other) {
+			continue
+		}
+		if _, shown := selected[other.ID]; shown {
+			continue
+		}
+		spare = s.appendNeighborWithin(ctx, token, in, h, other, spare)
+	}
+}
+
+// sameInstantConversationBatches lists r's conversation batches captured at its
+// instant in creation order and r's position among them, or -1 when unknown.
+func (s *Service) sameInstantConversationBatches(ctx context.Context, in SearchInput, r Record) ([]Record, int) {
+	end := r.CollectedAt.Add(time.Millisecond)
+	rows, err := s.Repo.ListSources(ctx, SourceListInput{Scope: in.Scope, Kind: conversationSourceKind, OriginProduct: r.OriginProduct, CollectedFrom: r.CollectedAt, CollectedTo: &end, Limit: conversationNeighborScan + 1})
+	// A truncated list cannot say which batch is next; skip rather than guess.
+	if err != nil || len(rows) > conversationNeighborScan {
+		return nil, -1
+	}
+	rows = slices.DeleteFunc(rows, func(other Record) bool {
+		return other.SourceRef != r.SourceRef || other.OriginProduct != r.OriginProduct || other.ConversationOrder != nil
+	})
+	slices.SortFunc(rows, func(a, b Record) int {
+		if c := a.CreatedAt.Compare(b.CreatedAt); c != 0 {
+			return c
+		}
+		return strings.Compare(a.ID, b.ID)
+	})
+	return rows, slices.IndexFunc(rows, func(other Record) bool { return other.ID == r.ID })
+}
+
+// appendNeighborWithin appends neighbor to h and returns the spare room left.
+func (s *Service) appendNeighborWithin(ctx context.Context, token string, in SearchInput, h *Hit, neighbor Record, spare int) int {
+	before := utf8.RuneCountInString(h.Text)
+	s.appendConversationNeighbor(ctx, token, in, h, neighbor, spare)
+	return spare - (utf8.RuneCountInString(h.Text) - before)
 }
 
 func (s *Service) appendConversationNeighbor(ctx context.Context, token string, in SearchInput, h *Hit, neighbor Record, spare int) {

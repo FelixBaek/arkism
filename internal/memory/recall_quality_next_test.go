@@ -127,38 +127,40 @@ func TestLocalSideFailurePreservesOriginalConversation(t *testing.T) {
 
 func TestLocalExpansionNativeKeepsExpandedBaseline(t *testing.T) {
 	for _, mode := range []string{"on", "dynamic"} {
-		t.Run(mode, func(t *testing.T) {
-			runtime := nativeFSRuntime(t, mode, "V3-P1-NOTIME")
-			f, q, _ := nativeFSSearchFixture(t, runtime)
-			cfg, e := f.svc.GetSpaceConfig(testCtx, f.human, scopeA)
-			if e != nil {
-				t.Fatal(e)
-			}
-			_, e = f.svc.PutSpaceConfig(testCtx, f.human, scopeA, SpaceConfigInput{ExpectedRevision: cfg.Revision, RecallQuality: &SpaceRecallQuality{LocalExpand: true}}, false)
-			if e != nil {
-				t.Fatal(e)
-			}
-			q.Query = "What did Rowan and Avery say about the second 설계 candidate?"
-			if len(localRecallQueries(q.Query)) != 2 {
-				t.Fatal("fixture must exercise actual local expansion")
-			}
-			q.IncludeInactive = false
-			now := time.Now().UTC()
-			q.QueryTime = &now
-			baseline, e := f.svc.Search(testCtx, "native", q)
-			if e != nil || len(baseline.Items) == 0 {
-				t.Fatal("expanded baseline must retain real candidates", e, baseline.Items)
-			}
-			f.svc.NativeSearchShadow = runtime
-			out, e := f.svc.Search(testCtx, "native", q)
-			if e != nil {
-				t.Fatal(e)
-			}
-			observed := runtime.Observations()
-			if nativeFSStrip(out) != nativeFSStrip(baseline) || len(observed) != 1 || observed[0].Reason != "unsupported_context" || !observed[0].BaselineReturned || observed[0].Served {
-				t.Fatal(out, observed)
-			}
-		})
+		t.Run(mode, func(t *testing.T) { localExpansionNativeBaseline(t, mode) })
+	}
+}
+
+func localExpansionNativeBaseline(t *testing.T, mode string) {
+	runtime := nativeFSRuntime(t, mode, "V3-P1-NOTIME")
+	f, q, _ := nativeFSSearchFixture(t, runtime)
+	cfg, e := f.svc.GetSpaceConfig(testCtx, f.human, scopeA)
+	if e != nil {
+		t.Fatal(e)
+	}
+	_, e = f.svc.PutSpaceConfig(testCtx, f.human, scopeA, SpaceConfigInput{ExpectedRevision: cfg.Revision, RecallQuality: &SpaceRecallQuality{LocalExpand: true}}, false)
+	if e != nil {
+		t.Fatal(e)
+	}
+	q.Query = "What did Rowan and Avery say about the second 설계 candidate?"
+	if len(localRecallQueries(q.Query)) != 2 {
+		t.Fatal("fixture must exercise actual local expansion")
+	}
+	q.IncludeInactive = false
+	now := time.Now().UTC()
+	q.QueryTime = &now
+	baseline, e := f.svc.Search(testCtx, "native", q)
+	if e != nil || len(baseline.Items) == 0 {
+		t.Fatal("expanded baseline must retain real candidates", e, baseline.Items)
+	}
+	f.svc.NativeSearchShadow = runtime
+	out, e := f.svc.Search(testCtx, "native", q)
+	if e != nil {
+		t.Fatal(e)
+	}
+	observed := runtime.Observations()
+	if nativeFSStrip(out) != nativeFSStrip(baseline) || len(observed) != 1 || observed[0].Reason != "unsupported_context" || !observed[0].BaselineReturned || observed[0].Served {
+		t.Fatal(out, observed)
 	}
 }
 

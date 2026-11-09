@@ -100,10 +100,10 @@ fs.mkdirSync(output,{recursive:true});
     await page.getByRole("tab",{name:"모양",exact:true}).click();await capture("settings");
     // English loads only on demand; original user content survives both language changes. The language switch is in 설정 › 일반.
     await page.getByRole("tab",{name:"일반",exact:true}).click();
-    await page.getByRole("tab",{name:"English",exact:true}).click();
+    const langs=page.locator('select:has(option[value="en"])');await langs.selectOption("en");
     await page.waitForFunction(()=>window.ArkismI18n.lang()==="en");
     assert.equal(requests.some(u=>/i18n-en/.test(u)),true);
-    await page.getByRole("tab",{name:"한국어",exact:true}).click();
+    await langs.selectOption("ko");
     await page.waitForFunction(()=>window.ArkismI18n.lang()==="ko");
     await page.locator('[data-menu="home"]').click();
     await page.locator("button.home-link",{hasText:"기억 보기"}).click();

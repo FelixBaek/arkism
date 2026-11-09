@@ -781,7 +781,9 @@ export class ArkismClient {
   private readonly opts: ClientOptions;
 
   constructor(opts: ClientOptions) {
-    this.opts = { ...opts, baseUrl: opts.baseUrl.replace(/\/+$/, "") };
+    let baseUrl = opts.baseUrl;
+    while (baseUrl.endsWith("/")) baseUrl = baseUrl.slice(0, -1); // a loop, not /\/+$/, which backtracks on long slash runs
+    this.opts = { ...opts, baseUrl };
   }
 
   /** Any route, including ones newer than this client. */

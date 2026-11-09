@@ -87,44 +87,48 @@ func (t *deadlineExtensionTransport) call(ctx context.Context, method string, pa
 
 func TestProcessExtensionTimeoutFollowsFailSetting(t *testing.T) {
 	for _, fail := range []string{"closed", "open"} {
-		t.Run(fail, func(t *testing.T) {
-			f := newFixture(t)
-			cfg := stdioExtension(t, "slow")
-			cfg.Timeout, cfg.Fail = "300ms", fail
-			extensions := loadExtensions(t, f, cfg)
-			extension := extensions.list[0]
-			transport := extension.t.(*stdioTransport)
-			initialPID := transport.cmd.Process.Pid
-			observed := &deadlineExtensionTransport{extTransport: transport}
-			extension.t = observed
-			_, err := f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "sleepy"})
-			if fail == "closed" && !errors.Is(err, ErrExtensionRefused) || fail == "open" && err != nil {
-				t.Fatal(fail, err)
-			}
-			if observed.deadlines == 0 {
-				t.Fatal("sleepy operation did not exercise a transport deadline")
-			}
-			// The 300ms fault budget is intentionally too small for a busy test binary's
-			// cold start. Restart is a separate correctness check, not a latency target.
-			// Give only this test instance a bounded startup budget, then demand a real
-			// reply directly so fail-open cannot hide a broken restarted process.
-			extension.timeout = 5 * time.Second
-			deadlines := observed.deadlines
-			raw, err := extension.ask(testCtx, "describe", nil)
-			var description extDescription
-			if err != nil || json.Unmarshal(raw, &description) != nil || !slices.Contains(description.Operations, OpRecall) {
-				t.Fatal("restart handshake", err, string(raw))
-			}
-			if transport.cmd == nil || transport.cmd.Process.Pid == initialPID {
-				t.Fatal("timed-out process was not replaced")
-			}
-			if _, err = f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "답"}); err != nil {
-				t.Fatal(fail, "after restart", err)
-			}
-			if observed.deadlines != deadlines {
-				t.Fatal("healthy restart operation timed out")
-			}
-		})
+		t.Run(fail, func(t *testing.T) { checkExtensionTimeoutAndRestart(t, fail) })
+	}
+}
+
+// checkExtensionTimeoutAndRestart times out a slow extension under one fail setting and checks it restarts healthy.
+func checkExtensionTimeoutAndRestart(t *testing.T, fail string) {
+	t.Helper()
+	f := newFixture(t)
+	cfg := stdioExtension(t, "slow")
+	cfg.Timeout, cfg.Fail = "300ms", fail
+	extensions := loadExtensions(t, f, cfg)
+	extension := extensions.list[0]
+	transport := extension.t.(*stdioTransport)
+	initialPID := transport.cmd.Process.Pid
+	observed := &deadlineExtensionTransport{extTransport: transport}
+	extension.t = observed
+	_, err := f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "sleepy"})
+	if fail == "closed" && !errors.Is(err, ErrExtensionRefused) || fail == "open" && err != nil {
+		t.Fatal(fail, err)
+	}
+	if observed.deadlines == 0 {
+		t.Fatal("sleepy operation did not exercise a transport deadline")
+	}
+	// The 300ms fault budget is intentionally too small for a busy test binary's
+	// cold start. Restart is a separate correctness check, not a latency target.
+	// Give only this test instance a bounded startup budget, then demand a real
+	// reply directly so fail-open cannot hide a broken restarted process.
+	extension.timeout = 5 * time.Second
+	deadlines := observed.deadlines
+	raw, err := extension.ask(testCtx, "describe", nil)
+	var description extDescription
+	if err != nil || json.Unmarshal(raw, &description) != nil || !slices.Contains(description.Operations, OpRecall) {
+		t.Fatal("restart handshake", err, string(raw))
+	}
+	if transport.cmd == nil || transport.cmd.Process.Pid == initialPID {
+		t.Fatal("timed-out process was not replaced")
+	}
+	if _, err = f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "답"}); err != nil {
+		t.Fatal(fail, "after restart", err)
+	}
+	if observed.deadlines != deadlines {
+		t.Fatal("healthy restart operation timed out")
 	}
 }
 
@@ -402,6 +406,13 @@ func TestExtensionDataStore(t *testing.T) {
 		t.Fatal("generic create wrote extension data", err)
 	}
 
+	checkExtensionDataRoutes(t, f, h)
+	checkExtensionDataEraseAndKeyCap(t, h, f.human, q, body)
+}
+
+// checkExtensionDataRoutes checks a data route reads entries and applies changes with the caller's permission.
+func checkExtensionDataRoutes(t *testing.T, f *fixture, h http.Handler) {
+	t.Helper()
 	// A data route reads its entries and its answer's changes are applied with the caller's permission.
 	post := `{"scope":{"workspace_id":"ws-a","project_id":"proj-a"},"input":{}}`
 	for want := 0; want < 2; want++ {
@@ -417,12 +428,16 @@ func TestExtensionDataStore(t *testing.T) {
 	if rec := extRequest(t, h, f.agent, http.MethodPost, "/v1/extensions/house/routes/count", post); rec.Code != 403 {
 		t.Fatal("an extension wrote data the caller may not write", rec.Code, rec.Body)
 	}
+}
 
+// checkExtensionDataEraseAndKeyCap deletes an entry and checks the per-extension key cap.
+func checkExtensionDataEraseAndKeyCap(t *testing.T, h http.Handler, human, q string, body func(string) string) {
+	t.Helper()
 	// Removing an entry is the erasure path; the key count is bounded.
-	if rec := extRequest(t, h, f.human, http.MethodPost, "/v1/extensions/house/data", body(`[{"op":"delete","key":"color"}]`)); rec.Code != 200 {
+	if rec := extRequest(t, h, human, http.MethodPost, "/v1/extensions/house/data", body(`[{"op":"delete","key":"color"}]`)); rec.Code != 200 {
 		t.Fatal("delete", rec.Code, rec.Body)
 	}
-	if rec := extRequest(t, h, f.human, http.MethodGet, "/v1/extensions/house/data/color"+q, ""); rec.Code != 404 {
+	if rec := extRequest(t, h, human, http.MethodGet, "/v1/extensions/house/data/color"+q, ""); rec.Code != 404 {
 		t.Fatal("deleted entry still served", rec.Code)
 	}
 	for i := 0; i < extDataDefaultKeys; i += 25 {
@@ -434,7 +449,7 @@ func TestExtensionDataStore(t *testing.T) {
 		if i+25 > extDataDefaultKeys-1 { // "n" from the data route already holds one key
 			want = 400
 		}
-		if rec := extRequest(t, h, f.human, http.MethodPost, "/v1/extensions/house/data", body("["+strings.Join(changes, ",")+"]")); rec.Code != want {
+		if rec := extRequest(t, h, human, http.MethodPost, "/v1/extensions/house/data", body("["+strings.Join(changes, ",")+"]")); rec.Code != want {
 			t.Fatal("key cap", i, rec.Code, rec.Body)
 		}
 	}

@@ -213,45 +213,11 @@ func (s *Service) recallLanes(ctx context.Context, in SearchInput, collection st
 		return lists, trace, nil
 	}
 	if windows := in.timeWindows(s.recallClock(in)); len(windows) > 0 && spaceLaneOn(in.space, "temporal", true) {
-		combined := []Hit{}
-		seen := map[string]bool{}
-		for _, w := range windows {
-			start := time.Now()
-			hits, err := s.Repo.SearchMemoriesInWindow(ctx, in, w.From, w.To)
-			trace.clock.since("temporal", start)
-			if optionalLaneUnavailable(ctx, in, err) {
-				if !slices.Contains(trace.degraded, "temporal") {
-					trace.degraded = append(trace.degraded, "temporal")
-				}
-				continue
-			}
-			if err != nil {
-				return nil, nil, err
-			}
-			hits, err = clean(hits)
-			if err != nil {
-				return nil, nil, err
-			}
-			trace.windows = append(trace.windows, w)
-			for _, h := range hits {
-				if !seen[hitKey(h)] {
-					seen[hitKey(h)] = true
-					combined = append(combined, h)
-				}
-			}
+		combined, err := s.temporalLane(ctx, in, windows, trace, clean)
+		if err != nil {
+			return nil, nil, err
 		}
 		if len(trace.windows) > 0 {
-			if len(in.TemporalWindows) == 0 {
-				trace.window = &trace.windows[0]
-			} else {
-				sort.SliceStable(combined, func(i, j int) bool {
-					a, b := hitEventTime(combined[i], recallLocation(in.Timezone)), hitEventTime(combined[j], recallLocation(in.Timezone))
-					if a.Equal(b) {
-						return combined[i].ID < combined[j].ID
-					}
-					return a.After(b)
-				})
-			}
 			lists, trace.lanes = append(lists, combined), append(trace.lanes, "temporal")
 		}
 	}
@@ -259,7 +225,58 @@ func (s *Service) recallLanes(ctx context.Context, in SearchInput, collection st
 	if len(in.Modes) > 0 && !in.spaceModes {
 		return lists, trace, nil
 	}
+	return s.appendNeighborLanes(ctx, in, lists, trace, clean)
+}
 
+// temporalLane unions the memories found in each time window; trace.windows
+// records the windows that were actually searched.
+func (s *Service) temporalLane(ctx context.Context, in SearchInput, windows []timeWindow, trace *recallTrace, clean func([]Hit) ([]Hit, error)) ([]Hit, error) {
+	combined := []Hit{}
+	seen := map[string]bool{}
+	for _, w := range windows {
+		start := time.Now()
+		hits, err := s.Repo.SearchMemoriesInWindow(ctx, in, w.From, w.To)
+		trace.clock.since("temporal", start)
+		if optionalLaneUnavailable(ctx, in, err) {
+			if !slices.Contains(trace.degraded, "temporal") {
+				trace.degraded = append(trace.degraded, "temporal")
+			}
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		hits, err = clean(hits)
+		if err != nil {
+			return nil, err
+		}
+		trace.windows = append(trace.windows, w)
+		for _, h := range hits {
+			if !seen[hitKey(h)] {
+				seen[hitKey(h)] = true
+				combined = append(combined, h)
+			}
+		}
+	}
+	if len(trace.windows) == 0 {
+		return combined, nil
+	}
+	if len(in.TemporalWindows) == 0 {
+		trace.window = &trace.windows[0]
+		return combined, nil
+	}
+	sort.SliceStable(combined, func(i, j int) bool {
+		a, b := hitEventTime(combined[i], recallLocation(in.Timezone)), hitEventTime(combined[j], recallLocation(in.Timezone))
+		if a.Equal(b) {
+			return combined[i].ID < combined[j].ID
+		}
+		return a.After(b)
+	})
+	return combined, nil
+}
+
+// appendNeighborLanes adds one lane per enabled neighbor source, seeded from the lanes so far.
+func (s *Service) appendNeighborLanes(ctx context.Context, in SearchInput, lists [][]Hit, trace *recallTrace, clean func([]Hit) ([]Hit, error)) ([][]Hit, *recallTrace, error) {
 	sources := []neighborSource{}
 	if spaceLaneOn(in.space, "graph", s.RecallGraph) {
 		sources = append(sources, neighborSource{reasonGraph, s.Repo.MemoryNeighbors})
@@ -391,15 +408,11 @@ func (s *Service) neighborLanes(ctx context.Context, in SearchInput, top []Score
 			}
 			hits, err := s.neighborStep(ctx, in, frontier, src, budget, seen, clean)
 			if err != nil {
-				var readErr *optionalNeighborError
-				if errors.As(err, &readErr) && optionalLaneUnavailable(ctx, in, readErr.err) {
-					failed[i] = true
-					if in.optionalFailures != nil {
-						*in.optionalFailures = append(*in.optionalFailures, src.reason)
-					}
-					continue
+				if !optionalNeighborSkipped(ctx, in, err, src.reason) {
+					return nil, err
 				}
-				return nil, err
+				failed[i] = true
+				continue
 			}
 			for _, h := range hits[:min(len(hits), budget-len(lanes[i]))] {
 				h.graphHops = hop
@@ -409,6 +422,19 @@ func (s *Service) neighborLanes(ctx context.Context, in SearchInput, top []Score
 		frontier = next
 	}
 	return lanes, nil
+}
+
+// optionalNeighborSkipped reports whether a neighbour lane's failed read may drop the
+// lane (best effort, storage unavailable), recording reason as an optional failure.
+func optionalNeighborSkipped(ctx context.Context, in SearchInput, err error, reason string) bool {
+	var readErr *optionalNeighborError
+	if !errors.As(err, &readErr) || !optionalLaneUnavailable(ctx, in, readErr.err) {
+		return false
+	}
+	if in.optionalFailures != nil {
+		*in.optionalFailures = append(*in.optionalFailures, reason)
+	}
+	return true
 }
 
 // neighborStep reads and cleans the unseen memories one src step from frontier.
@@ -541,11 +567,9 @@ func (t *recallTrace) laneHits(lists [][]Hit) map[string][]Ref {
 	return out
 }
 
-// annotate attaches the explain trace to out when the caller asked for it.
-func (t *recallTrace) annotate(out *ContextBundle, lists [][]Hit) {
-	if !t.explain {
-		return
-	}
+// laneRanks gives each hit its first 1-based position in every lane, and its
+// fewest graph hops over the lanes that reached it through the graph.
+func (t *recallTrace) laneRanks(lists [][]Hit) (map[string]map[string]int, map[string]int) {
 	ranks, hops := map[string]map[string]int{}, map[string]int{}
 	for lane, list := range lists {
 		for pos, h := range list {
@@ -561,6 +585,15 @@ func (t *recallTrace) annotate(out *ContextBundle, lists [][]Hit) {
 			}
 		}
 	}
+	return ranks, hops
+}
+
+// annotate attaches the explain trace to out when the caller asked for it.
+func (t *recallTrace) annotate(out *ContextBundle, lists [][]Hit) {
+	if !t.explain {
+		return
+	}
+	ranks, hops := t.laneRanks(lists)
 	for i := range out.Items {
 		k := hitKey(out.Items[i])
 		e := &HitExplain{LaneRanks: ranks[k], FusedScore: t.fused[k], GraphHops: hops[k], ModelRank: t.modelRank[k]}

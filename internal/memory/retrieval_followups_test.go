@@ -69,57 +69,7 @@ func TestRetrievalGraphHubOrderIndependentOfInsertion(t *testing.T) {
 		t.Run(branch, func(t *testing.T) {
 			var results [][]string
 			for _, reverse := range []bool{false, true} {
-				scope := Scope{WorkspaceID: "graph-order", ProjectID: branch + fmt.Sprint(reverse)}
-				for _, kind := range []string{"memory", "topic"} {
-					if _, err := p.pool.Exec(testCtx, `INSERT INTO entities(organization_id,project_id,kind,external_id) SELECT $1,$2,$3,'n'||lpad(i::text,3,'0') FROM generate_series(0,60) i`, scope.WorkspaceID, scope.ProjectID, kind); err != nil {
-						t.Fatal(err)
-					}
-				}
-				link := func(source, targetKind, target, relation string) {
-					t.Helper()
-					if _, err := p.pool.Exec(testCtx, `INSERT INTO relations(organization_id,project_id,source_kind,source_id,target_kind,target_id,relation_kind) VALUES($1,$2,'memory',$3,$4,$5,$6)`, scope.WorkspaceID, scope.ProjectID, source, targetKind, target, relation); err != nil {
-						t.Fatal(err)
-					}
-				}
-				if branch == "shared_topic" {
-					link("n000", "topic", "n000", "mentions")
-				}
-				for n := 1; n <= 60; n++ {
-					i := n
-					if reverse {
-						i = 61 - n
-					}
-					id := fmt.Sprintf("n%03d", i)
-					switch branch {
-					case "outgoing":
-						link("n000", "memory", id, "relates")
-					case "incoming":
-						link(id, "memory", "n000", "relates")
-					case "shared_topic":
-						link(id, "topic", "n000", "mentions")
-					case "topic_fanout":
-						link("n000", "topic", id, "mentions")
-						link(id, "topic", id, "mentions")
-					}
-				}
-				var got []string
-				err := p.Transaction(testCtx, func(ctx context.Context, tx Tx) error {
-					pg := tx.(*Postgres)
-					if _, e := pg.q().Exec(ctx, `SET LOCAL enable_indexscan=off; SET LOCAL enable_bitmapscan=off`); e != nil {
-						return e
-					}
-					var e error
-					got, e = pg.MemoryNeighbors(ctx, scope, []string{"n000"}, 30)
-					return e
-				})
-				expected := graphFanOut
-				if branch == "shared_topic" {
-					expected--
-				} // The seed consumes one shared-topic slot, then is excluded.
-				if err != nil || len(got) != expected {
-					t.Fatal(got, err)
-				}
-				results = append(results, got)
+				results = append(results, graphHubNeighbors(t, p, branch, reverse))
 			}
 			if !slices.Equal(results[0], results[1]) || results[0][0] != "n001" || results[0][len(results[0])-1] != fmt.Sprintf("n%03d", len(results[0])) {
 				t.Fatal("hub limit is physical-order dependent", results)
@@ -128,7 +78,68 @@ func TestRetrievalGraphHubOrderIndependentOfInsertion(t *testing.T) {
 	}
 }
 
-func TestRetrievalNFCQueryDocumentAndResumableBackfill(t *testing.T) {
+// graphHubNeighbors builds a 60-edge hub around n000 for one branch, inserting
+// edges in forward or reverse order, and returns its neighbors without index scans.
+func graphHubNeighbors(t *testing.T, p *Postgres, branch string, reverse bool) []string {
+	t.Helper()
+	scope := Scope{WorkspaceID: "graph-order", ProjectID: branch + fmt.Sprint(reverse)}
+	for _, kind := range []string{"memory", "topic"} {
+		if _, err := p.pool.Exec(testCtx, `INSERT INTO entities(organization_id,project_id,kind,external_id) SELECT $1,$2,$3,'n'||lpad(i::text,3,'0') FROM generate_series(0,60) i`, scope.WorkspaceID, scope.ProjectID, kind); err != nil {
+			t.Fatal(err)
+		}
+	}
+	link := func(source, targetKind, target, relation string) {
+		t.Helper()
+		if _, err := p.pool.Exec(testCtx, `INSERT INTO relations(organization_id,project_id,source_kind,source_id,target_kind,target_id,relation_kind) VALUES($1,$2,'memory',$3,$4,$5,$6)`, scope.WorkspaceID, scope.ProjectID, source, targetKind, target, relation); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if branch == "shared_topic" {
+		link("n000", "topic", "n000", "mentions")
+	}
+	for n := 1; n <= 60; n++ {
+		i := n
+		if reverse {
+			i = 61 - n
+		}
+		linkGraphHubEdge(link, branch, fmt.Sprintf("n%03d", i))
+	}
+	var got []string
+	err := p.Transaction(testCtx, func(ctx context.Context, tx Tx) error {
+		pg := tx.(*Postgres)
+		if _, e := pg.q().Exec(ctx, `SET LOCAL enable_indexscan=off; SET LOCAL enable_bitmapscan=off`); e != nil {
+			return e
+		}
+		var e error
+		got, e = pg.MemoryNeighbors(ctx, scope, []string{"n000"}, 30)
+		return e
+	})
+	expected := graphFanOut
+	if branch == "shared_topic" {
+		expected--
+	} // The seed consumes one shared-topic slot, then is excluded.
+	if err != nil || len(got) != expected {
+		t.Fatal(got, err)
+	}
+	return got
+}
+
+func linkGraphHubEdge(link func(source, targetKind, target, relation string), branch, id string) {
+	switch branch {
+	case "outgoing":
+		link("n000", "memory", id, "relates")
+	case "incoming":
+		link(id, "memory", "n000", "relates")
+	case "shared_topic":
+		link(id, "topic", "n000", "mentions")
+	case "topic_fanout":
+		link("n000", "topic", id, "mentions")
+		link(id, "topic", id, "mentions")
+	}
+}
+
+func assertSearchTokensNFC(t *testing.T) {
+	t.Helper()
 	for _, text := range []string{"café résumé", "서버를 배포한다", "किताब समीक्षा"} {
 		if !slices.Equal(SearchTokens(text), SearchTokens(norm.NFD.String(text))) {
 			t.Fatal("canonically equal text differs", text)
@@ -137,6 +148,10 @@ func TestRetrievalNFCQueryDocumentAndResumableBackfill(t *testing.T) {
 	if slices.Equal(SearchTokens("resume"), SearchTokens("résumé")) {
 		t.Fatal("distinct accents collapsed")
 	}
+}
+
+func TestRetrievalNFCQueryDocumentAndResumableBackfill(t *testing.T) {
+	assertSearchTokensNFC(t)
 	p, scope := openPostgresListsTest(t)
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	for i := 0; i < 510; i++ {

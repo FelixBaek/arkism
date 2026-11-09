@@ -239,7 +239,20 @@ func TestChangingFactCategoryWalk(t *testing.T) {
 	if hitByID(f.search(f.agent, query).Items, old.ID) != nil {
 		t.Fatal("a closed fact is still recalled as current")
 	}
-	// Bitemporal: valid time picks the fact true then; record time picks what was known then.
+	assertBitemporalFact(t, f, held, old, newer, beforeMove)
+
+	// The space opts in: approving the next change closes the old fact at once.
+	setRecallQuality(t, f, SpaceRecallQuality{AutoCloseOnCorrection: true})
+	held2, item2 := heldCorrection(t, f, "deploy-day", "배포는 금요일에 한다", "이제 배포는 화요일에 한다")
+	reviewCorrection(t, f, held2, item2, "keep_both")
+	if auto := f.get(f.human, colMemories, scopeA, held2.ID); auto.ExpiresAt == nil || auto.ValidToProposal != nil {
+		t.Fatal("auto-close did not end the old fact", auto.ExpiresAt, auto.ValidToProposal)
+	}
+}
+
+// assertBitemporalFact: valid time picks the fact true then; record time picks what was known then.
+func assertBitemporalFact(t *testing.T, f *fixture, held, old, newer Record, beforeMove time.Time) {
+	t.Helper()
 	now := time.Now().UTC()
 	at := func(asOf, validAt time.Time) []string {
 		page, err := f.svc.MemoriesAt(testCtx, f.human, MemoryAtInput{Scope: scopeA, AsOf: asOf, ValidAt: &validAt, Query: "Felix", Limit: 10})
@@ -264,14 +277,6 @@ func TestChangingFactCategoryWalk(t *testing.T) {
 	}
 	if got := at(beforeMove, beforeMove); slices.Contains(got, newer.ID) || !slices.Contains(got, old.ID) {
 		t.Fatal("record time before approval knew the new fact", got)
-	}
-
-	// The space opts in: approving the next change closes the old fact at once.
-	setRecallQuality(t, f, SpaceRecallQuality{AutoCloseOnCorrection: true})
-	held2, item2 := heldCorrection(t, f, "deploy-day", "배포는 금요일에 한다", "이제 배포는 화요일에 한다")
-	reviewCorrection(t, f, held2, item2, "keep_both")
-	if auto := f.get(f.human, colMemories, scopeA, held2.ID); auto.ExpiresAt == nil || auto.ValidToProposal != nil {
-		t.Fatal("auto-close did not end the old fact", auto.ExpiresAt, auto.ValidToProposal)
 	}
 }
 

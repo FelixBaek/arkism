@@ -51,47 +51,52 @@ func (s *Service) runApprovedEntities(ctx context.Context, token string, job Rec
 	}
 	summarySettings := s.autoDeriveSettingsFor(ctx, r.Scope)
 	return s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		// Match extraction: acquire the scope entity lock before fencing memory
-		// and source rows, so the two writers cannot form a lock-order cycle.
-		store, e := entityTx(tx)
-		if e != nil {
-			return e
-		}
-		if e = store.LockNamedEntities(ctx, job.Scope); e != nil {
-			return e
-		}
-		checked := searchReadTx{Tx: tx}
-		current, e := checked.Get(ctx, colMemories, job.Scope, r.ID)
-		if e != nil {
-			return e
-		}
-		if !validKnowledgeEvidence(current, *job.Target, job.Scope) {
-			return ErrConflict
-		}
-		if e = checkSources(ctx, checked, current); e != nil {
-			return e
-		}
-
-		edges, e := approvedEntityRelations(ctx, store, current)
-		if e != nil {
-			return e
-		}
-		graph, ok := tx.(knowledgeGraphStore)
-		if len(edges) > 0 && !ok {
-			return ErrUnavailable
-		}
-		for _, edge := range edges {
-			edge.AssertedBy = job.CreatedBy
-			if edge.AssertedBy == "" {
-				return ErrInvalid
-			}
-			if e = graph.PutKnowledgeRelation(ctx, edge); e != nil {
-				return e
-			}
-		}
-		if s.Wiki != nil && summarySettings.Enabled {
-			return recoverSummarySchedule(ctx, tx, store, current, summarySettings, job.CreatedBy)
-		}
-		return nil
+		return s.storeApprovedEntities(ctx, tx, job, r, summarySettings)
 	})
+}
+
+// storeApprovedEntities fences the approved memory and stores its relations.
+func (s *Service) storeApprovedEntities(ctx context.Context, tx Tx, job Record, r Record, summarySettings autoDeriveSettings) error {
+	// Match extraction: acquire the scope entity lock before fencing memory
+	// and source rows, so the two writers cannot form a lock-order cycle.
+	store, e := entityTx(tx)
+	if e != nil {
+		return e
+	}
+	if e = store.LockNamedEntities(ctx, job.Scope); e != nil {
+		return e
+	}
+	checked := searchReadTx{Tx: tx}
+	current, e := checked.Get(ctx, colMemories, job.Scope, r.ID)
+	if e != nil {
+		return e
+	}
+	if !validKnowledgeEvidence(current, *job.Target, job.Scope) {
+		return ErrConflict
+	}
+	if e = checkSources(ctx, checked, current); e != nil {
+		return e
+	}
+
+	edges, e := approvedEntityRelations(ctx, store, current)
+	if e != nil {
+		return e
+	}
+	graph, ok := tx.(knowledgeGraphStore)
+	if len(edges) > 0 && !ok {
+		return ErrUnavailable
+	}
+	for _, edge := range edges {
+		edge.AssertedBy = job.CreatedBy
+		if edge.AssertedBy == "" {
+			return ErrInvalid
+		}
+		if e = graph.PutKnowledgeRelation(ctx, edge); e != nil {
+			return e
+		}
+	}
+	if s.Wiki != nil && summarySettings.Enabled {
+		return recoverSummarySchedule(ctx, tx, store, current, summarySettings, job.CreatedBy)
+	}
+	return nil
 }

@@ -46,7 +46,20 @@ func TestLLMTraceJobHierarchyWithTracingOff(t *testing.T) {
 	if len(items) != 3 {
 		t.Fatal("traces", items)
 	}
-	job := ctx.Value(llmJobKey{}).(llmJob)
+	inJob := countJobTraces(t, items, ctx.Value(llmJobKey{}).(llmJob), "job-42")
+	if inJob != 2 {
+		t.Fatal("job calls", inJob)
+	}
+	// The ledger row is still written for each call.
+	rows, _ := f.repo.ListRecords(testCtx, scopeA, colProviderUsage, 10)
+	if len(rows) != 3 {
+		t.Fatal("ledger rows", len(rows))
+	}
+}
+
+// countJobTraces checks every trace's ids and parentage, returning how many ran under jobID.
+func countJobTraces(t *testing.T, items []LLMRequestView, job llmJob, jobID string) int {
+	t.Helper()
 	inJob, spans := 0, map[string]bool{}
 	for _, it := range items {
 		r := it.Request
@@ -54,7 +67,7 @@ func TestLLMTraceJobHierarchyWithTracingOff(t *testing.T) {
 			t.Fatalf("ids %+v", r)
 		}
 		spans[r.SpanID] = true
-		if r.JobID == "job-42" {
+		if r.JobID == jobID {
 			inJob++
 			if r.TraceID != job.traceID || r.ParentSpanID != job.spanID {
 				t.Fatalf("job call not under the job span %+v", r)
@@ -66,14 +79,7 @@ func TestLLMTraceJobHierarchyWithTracingOff(t *testing.T) {
 			t.Fatalf("provider/model %+v", r)
 		}
 	}
-	if inJob != 2 {
-		t.Fatal("job calls", inJob)
-	}
-	// The ledger row is still written for each call.
-	rows, _ := f.repo.ListRecords(testCtx, scopeA, colProviderUsage, 10)
-	if len(rows) != 3 {
-		t.Fatal("ledger rows", len(rows))
-	}
+	return inJob
 }
 
 // With tracing on, the trace row carries the exported span's own ids.

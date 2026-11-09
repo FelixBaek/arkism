@@ -55,13 +55,18 @@ func htmlText(src string) (string, error) {
 		}
 		i = next
 	}
+	return htmlParagraphs(out.String()), nil
+}
+
+// htmlParagraphs collapses spaces and drops lines holding only marks, one blank line between paragraphs.
+func htmlParagraphs(text string) string {
 	lines := []string{}
-	for _, line := range strings.Split(out.String(), "\n") {
+	for _, line := range strings.Split(text, "\n") {
 		if line = strings.Join(strings.Fields(line), " "); line != "" && strings.Trim(line, "|#->") != "" {
 			lines = append(lines, line)
 		}
 	}
-	return strings.Join(lines, "\n\n"), nil
+	return strings.Join(lines, "\n\n")
 }
 
 // htmlTag reads the tag at src[i] ('<') and returns the index after it, its
@@ -145,19 +150,7 @@ func (b *emlBody) read(contentType, encoding, disposition string, r io.Reader, d
 		if depth >= 3 || params["boundary"] == "" {
 			return ErrInvalid
 		}
-		mr := multipart.NewReader(r, params["boundary"])
-		for {
-			p, err := mr.NextRawPart()
-			if errors.Is(err, io.EOF) {
-				return nil
-			}
-			if err != nil {
-				return ErrInvalid
-			}
-			if err = b.read(p.Header.Get("Content-Type"), p.Header.Get("Content-Transfer-Encoding"), p.Header.Get("Content-Disposition"), p, depth+1); err != nil {
-				return err
-			}
-		}
+		return b.readParts(multipart.NewReader(r, params["boundary"]), depth)
 	}
 	name := params["name"]
 	if _, d, e := mime.ParseMediaType(disposition); e == nil && d["filename"] != "" {
@@ -178,6 +171,22 @@ func (b *emlBody) read(contentType, encoding, disposition string, r io.Reader, d
 		b.html += text
 	}
 	return nil
+}
+
+// readParts reads every part of one multipart body, one level below depth.
+func (b *emlBody) readParts(mr *multipart.Reader, depth int) error {
+	for {
+		p, err := mr.NextRawPart()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return ErrInvalid
+		}
+		if err = b.read(p.Header.Get("Content-Type"), p.Header.Get("Content-Transfer-Encoding"), p.Header.Get("Content-Disposition"), p, depth+1); err != nil {
+			return err
+		}
+	}
 }
 
 // emlDecode undoes the transfer encoding; only UTF-8 and ASCII text is kept.

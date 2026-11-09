@@ -3,8 +3,6 @@ package memory
 import (
 	"context"
 	"math"
-
-	"github.com/jackc/pgx/v5"
 )
 
 // dynamicsLedgerRecoveryLimit bounds terminal history read in one offline pass.
@@ -23,34 +21,20 @@ func (p *Postgres) ReconcileDynamicsLoadRecovery(ctx context.Context, source *Po
 	if p == nil || source == nil || p == source || p.pool == nil || source.pool == nil || p.tx != nil || source.tx != nil || !validScope(scope) || !sourceHashPattern.MatchString(sourceGeneration) {
 		return ErrInvalid
 	}
-	lease, err := source.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable, AccessMode: pgx.ReadWrite})
+	current, release, err := source.maintenanceSnapshot(ctx)
 	if err != nil {
-		return pgErr(err)
-	}
-	defer func() { _ = lease.Rollback(ctx) }() // Source is read-only; no cross-database commit is asserted.
-	if _, err = lease.Exec(ctx, `SELECT arkism.check_maintenance_access()`); err != nil {
-		return pgErr(err)
-	}
-	if err = disableSnapshotRowSecurity(ctx, lease); err != nil {
 		return err
 	}
-	current := &Postgres{pool: source.pool, tx: lease}
+	defer release() // Source is read-only; no cross-database commit is asserted.
 	sourceIdentity, want, err := dynamicsRecoverySourceLedger(ctx, current, scope, sourceGeneration)
 	if err != nil {
 		return err
 	}
-	tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable, AccessMode: pgx.ReadWrite})
+	restored, rollback, err := p.maintenanceSnapshot(ctx)
 	if err != nil {
-		return pgErr(err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err = tx.Exec(ctx, `SELECT arkism.check_maintenance_access()`); err != nil {
-		return pgErr(err)
-	}
-	if err = disableSnapshotRowSecurity(ctx, tx); err != nil {
 		return err
 	}
-	restored := &Postgres{pool: p.pool, tx: tx}
+	defer rollback()
 	identity, err := dynamicsRecoveryRestoredMatch(ctx, restored, scope, sourceIdentity, want)
 	if err != nil {
 		return err
@@ -62,7 +46,7 @@ func (p *Postgres) ReconcileDynamicsLoadRecovery(ctx context.Context, source *Po
 	if err = dynamicsRebindTx(ctx, restored, scope, identity); err != nil {
 		return err
 	}
-	return pgErr(tx.Commit(ctx))
+	return pgErr(restored.tx.Commit(ctx))
 }
 
 // dynamicsRecoverySourceLedger reads the paused original's identity and ledger digest.

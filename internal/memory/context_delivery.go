@@ -56,14 +56,10 @@ func boundConversationContext(out *ContextBundle, maxChars int) {
 	out.Conversation = kept
 }
 
-// Source records are checked inside the search's final transaction, including
-// neighbours appended to an excerpt. Never return stale text after revocation.
-func verifyConversationContext(ctx context.Context, tx Tx, scope Scope, out ContextBundle) error {
-	if len(out.Conversation) == 0 {
-		return nil
-	}
+// conversationSourcesUsed names the source records the excerpts show, neighbours included.
+func conversationSourcesUsed(hits []Hit) map[string]bool {
 	used := map[string]bool{}
-	for _, h := range out.Conversation {
+	for _, h := range hits {
 		used[h.ID] = true
 		for _, source := range h.Sources {
 			if source.Locator == "conversation_neighbor" {
@@ -71,6 +67,16 @@ func verifyConversationContext(ctx context.Context, tx Tx, scope Scope, out Cont
 			}
 		}
 	}
+	return used
+}
+
+// Source records are checked inside the search's final transaction, including
+// neighbours appended to an excerpt. Never return stale text after revocation.
+func verifyConversationContext(ctx context.Context, tx Tx, scope Scope, out ContextBundle) error {
+	if len(out.Conversation) == 0 {
+		return nil
+	}
+	used := conversationSourcesUsed(out.Conversation)
 	for ref, original := range out.conversationRecords {
 		if !used[ref.ID] {
 			continue

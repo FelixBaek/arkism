@@ -489,21 +489,26 @@ func (d *pdfDoc) expandObjectStreams() {
 		if !okData || first > len(data) {
 			continue
 		}
-		head := &pdfLexer{b: data[:first]}
-		for n := 0; n < count; n++ {
-			num, ok1 := head.value()
-			off, ok2 := head.value()
-			nf, isNum := pdfInt(num)
-			of, isOff := pdfInt(off)
-			if !ok1 || !ok2 || !isNum || !isOff || first+of > len(data) {
-				break
-			}
-			if _, exists := d.objs[nf]; exists {
-				continue
-			}
-			if obj, ok := (&pdfLexer{b: data, i: first + of}).value(); ok {
-				d.objs[nf] = obj
-			}
+		d.addStreamObjects(data, first, count)
+	}
+}
+
+// addStreamObjects adds the count objects of one decoded object stream; objects already known win.
+func (d *pdfDoc) addStreamObjects(data []byte, first, count int) {
+	head := &pdfLexer{b: data[:first]}
+	for n := 0; n < count; n++ {
+		num, ok1 := head.value()
+		off, ok2 := head.value()
+		nf, isNum := pdfInt(num)
+		of, isOff := pdfInt(off)
+		if !ok1 || !ok2 || !isNum || !isOff || first+of > len(data) {
+			break
+		}
+		if _, exists := d.objs[nf]; exists {
+			continue
+		}
+		if obj, ok := (&pdfLexer{b: data, i: first + of}).value(); ok {
+			d.objs[nf] = obj
 		}
 	}
 }
@@ -770,24 +775,31 @@ func (f *pdfFont) readRanges(args []any) {
 		// codes cannot wrap).
 		last = min(last, first+pdfMaxCMap-1)
 		for c := first; c <= last && len(f.cmap) < pdfMaxCMap; c++ {
-			key := pdfCodeBytes(c, len(lo))
-			switch dst := args[i+2].(type) {
-			case string:
-				if len(dst) > pdfMaxCMapDst {
-					continue
-				}
-				u := []rune(pdfUTF16(dst))
-				if len(u) > 0 {
-					u[len(u)-1] += rune(c - first)
-					f.cmap[key] = string(u)
-				}
-			case []any:
-				if s, ok := pdfArg(dst, int(c-first)); ok && len(s) <= pdfMaxCMapDst {
-					f.cmap[key] = pdfUTF16(s)
-				}
+			if u, ok := pdfRangeText(args[i+2], c-first); ok {
+				f.cmap[pdfCodeBytes(c, len(lo))] = u
 			}
 		}
 	}
+}
+
+// pdfRangeText is the text of the code at offset in a bfrange destination: an incremented string or an array entry.
+func pdfRangeText(dst any, offset uint64) (string, bool) {
+	switch dst := dst.(type) {
+	case string:
+		if len(dst) > pdfMaxCMapDst {
+			return "", false
+		}
+		u := []rune(pdfUTF16(dst))
+		if len(u) > 0 {
+			u[len(u)-1] += rune(offset)
+			return string(u), true
+		}
+	case []any:
+		if s, ok := pdfArg(dst, int(offset)); ok && len(s) <= pdfMaxCMapDst {
+			return pdfUTF16(s), true
+		}
+	}
+	return "", false
 }
 
 func pdfCode(s string) uint64 {

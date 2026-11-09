@@ -168,42 +168,12 @@ func approvedEntityRelations(ctx context.Context, store namedEntityStore, r Reco
 		return nil, ErrUnavailable
 	}
 	var edges []KnowledgeRelation
-	// A name alone must identify exactly one live endpoint. A unique explicit
-	// type supplied by the approved memory can narrow it; never choose by order.
-	node := func(name string) (GraphEntity, bool, error) {
-		types := map[string]bool{}
-		for _, e := range r.Entities {
-			if entityKey(e.Name) == entityKey(name) && e.Type != "" && e.Type != entityTypeConcept {
-				types[e.Type] = true
-			}
-		}
-		// Extraction can reuse a pre-existing generic concept for a stated
-		// type. Prefer exact typed nodes; otherwise preserve only an unambiguous
-		// generic match, as the extraction resolver already does.
-		exact := false
-		for _, c := range g.byKey[entityKey(name)] {
-			if !c.Deleted && types[c.Type] {
-				exact = true
-			}
-		}
-		var found GraphEntity
-		for _, c := range g.byKey[entityKey(name)] {
-			if c.Deleted || len(types) == 1 && (exact && !types[c.Type] || !exact && c.Type != entityTypeConcept) {
-				continue
-			}
-			if found.ID != "" && found.ID != c.ID {
-				return GraphEntity{}, false, ErrConflict
-			}
-			found = GraphEntity{Kind: namedEntityKind, ID: c.ID}
-		}
-		return found, found.ID != "", nil
-	}
 	for _, rel := range r.EntityRelations {
-		src, okS, e := node(rel.Source)
+		src, okS, e := approvedEntityNode(g, r, rel.Source)
 		if e != nil {
 			return nil, e
 		}
-		dst, okT, e := node(rel.Target)
+		dst, okT, e := approvedEntityNode(g, r, rel.Target)
 		if e != nil {
 			return nil, e
 		}
@@ -215,4 +185,36 @@ func approvedEntityRelations(ctx context.Context, store namedEntityStore, r Reco
 		edges = append(edges, edge)
 	}
 	return edges, nil
+}
+
+// approvedEntityNode resolves a relation endpoint name. A name alone must
+// identify exactly one live endpoint. A unique explicit type supplied by the
+// approved memory can narrow it; never choose by order.
+func approvedEntityNode(g *entityGraph, r Record, name string) (GraphEntity, bool, error) {
+	types := map[string]bool{}
+	for _, e := range r.Entities {
+		if entityKey(e.Name) == entityKey(name) && e.Type != "" && e.Type != entityTypeConcept {
+			types[e.Type] = true
+		}
+	}
+	// Extraction can reuse a pre-existing generic concept for a stated
+	// type. Prefer exact typed nodes; otherwise preserve only an unambiguous
+	// generic match, as the extraction resolver already does.
+	exact := false
+	for _, c := range g.byKey[entityKey(name)] {
+		if !c.Deleted && types[c.Type] {
+			exact = true
+		}
+	}
+	var found GraphEntity
+	for _, c := range g.byKey[entityKey(name)] {
+		if c.Deleted || len(types) == 1 && (exact && !types[c.Type] || !exact && c.Type != entityTypeConcept) {
+			continue
+		}
+		if found.ID != "" && found.ID != c.ID {
+			return GraphEntity{}, false, ErrConflict
+		}
+		found = GraphEntity{Kind: namedEntityKind, ID: c.ID}
+	}
+	return found, found.ID != "", nil
 }

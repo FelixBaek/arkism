@@ -256,29 +256,35 @@ func (s *Service) ReviewCausalLink(ctx context.Context, token, id string, in Cau
 	}
 	var out Record
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		r, e := tx.Get(ctx, colMemoryRelations, in.Scope, id)
-		if e != nil {
-			return e
-		}
-		if !isCausal(r) {
-			return ErrNotFound
-		}
-		if r.Revision != in.ExpectedRevision {
-			return ErrConflict
-		}
-		if e = decideCausal(ctx, tx, &r, in.Action, d.PrincipalID); e != nil {
-			return e
-		}
-		if e = tx.Replace(ctx, colMemoryRelations, r, in.ExpectedRevision); e != nil {
-			return e
-		}
-		out = r
-		return audit(ctx, tx, in.Scope, d.PrincipalID, "review:causal_link:"+in.Action, id)
+		var e error
+		out, e = reviewCausalTx(ctx, tx, id, in, d.PrincipalID)
+		return e
 	})
 	if err != nil {
 		return CausalLink{}, err
 	}
 	return causalView(out), nil
+}
+
+// reviewCausalTx applies the review inside the transaction and returns the stored link.
+func reviewCausalTx(ctx context.Context, tx Tx, id string, in CausalReviewInput, actor string) (Record, error) {
+	r, e := tx.Get(ctx, colMemoryRelations, in.Scope, id)
+	if e != nil {
+		return Record{}, e
+	}
+	if !isCausal(r) {
+		return Record{}, ErrNotFound
+	}
+	if r.Revision != in.ExpectedRevision {
+		return Record{}, ErrConflict
+	}
+	if e = decideCausal(ctx, tx, &r, in.Action, actor); e != nil {
+		return Record{}, e
+	}
+	if e = tx.Replace(ctx, colMemoryRelations, r, in.ExpectedRevision); e != nil {
+		return Record{}, e
+	}
+	return r, audit(ctx, tx, in.Scope, actor, "review:causal_link:"+in.Action, id)
 }
 
 func decideCausal(ctx context.Context, tx Tx, r *Record, action, actor string) error {

@@ -230,24 +230,25 @@ func TestExtractionSchemasUseOnlyStructuredOutputKeywords(t *testing.T) {
 		if err := json.Unmarshal([]byte(schema), &v); err != nil {
 			t.Fatal(name, err)
 		}
-		var walk func(any)
-		walk = func(n any) {
-			switch x := n.(type) {
-			case map[string]any:
-				for _, k := range []string{"maxItems", "uniqueItems", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"} {
-					if _, bad := x[k]; bad {
-						t.Errorf("%s schema uses %s", name, k)
-					}
-				}
-				for _, c := range x {
-					walk(c)
-				}
-			case []any:
-				for _, c := range x {
-					walk(c)
-				}
+		checkStructuredOutputKeywords(t, name, v)
+	}
+}
+
+func checkStructuredOutputKeywords(t *testing.T, name string, n any) {
+	t.Helper()
+	switch x := n.(type) {
+	case map[string]any:
+		for _, k := range []string{"maxItems", "uniqueItems", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"} {
+			if _, bad := x[k]; bad {
+				t.Errorf("%s schema uses %s", name, k)
 			}
 		}
-		walk(v)
+		for _, c := range x {
+			checkStructuredOutputKeywords(t, name, c)
+		}
+	case []any:
+		for _, c := range x {
+			checkStructuredOutputKeywords(t, name, c)
+		}
 	}
 }

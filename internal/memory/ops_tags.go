@@ -183,16 +183,7 @@ func (s *Service) RenameTag(ctx context.Context, token string, in TagRenameInput
 			if changed = slices.Contains(m.Tags, in.From); !changed {
 				return errMemoryUnchanged
 			}
-			next := []string{}
-			for _, t := range m.Tags {
-				if t == in.From {
-					t = in.To
-				}
-				if !slices.Contains(next, t) {
-					next = append(next, t)
-				}
-			}
-			m.Tags = next
+			m.Tags = renamedTags(m.Tags, in.From, in.To)
 			return nil
 		})
 		switch {
@@ -209,4 +200,18 @@ func (s *Service) RenameTag(ctx context.Context, token string, in TagRenameInput
 	// operator. Upgrade to a returned keyset cursor if such rows ever fill a batch.
 	out.More = more && out.Renamed > 0
 	return out, nil
+}
+
+// renamedTags replaces from with to, keeping order and dropping a duplicate the rename creates.
+func renamedTags(tags []string, from, to string) []string {
+	next := []string{}
+	for _, t := range tags {
+		if t == from {
+			t = to
+		}
+		if !slices.Contains(next, t) {
+			next = append(next, t)
+		}
+	}
+	return next
 }

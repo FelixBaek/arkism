@@ -12,136 +12,160 @@ import (
 
 func TestPostgresJobClaimRechecksCommittedLease(t *testing.T) {
 	for _, change := range []string{"lease", "due_reschedule", "future_reschedule", "unscheduled"} {
-		t.Run(change, func(t *testing.T) {
-			p := isolatedPostgres(t)
-			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-			defer cancel()
-			now := time.Now().UTC().Truncate(time.Millisecond)
-			past := now.Add(-time.Hour)
-			for _, id := range []string{"a", "b"} {
-				queueTestJob(t, p, id, "embedding", JobStatusPending, &past, time.Time{})
-			}
-			// Pause after the statement snapshot exists but before LockRows. Another
-			// transaction commits a lease or reschedule against the old candidate.
-			schemaExec(t, p, `CREATE FUNCTION queue_claim_pause() RETURNS boolean LANGUAGE plpgsql VOLATILE AS $$
+		t.Run(change, func(t *testing.T) { jobClaimCommittedLeaseRace(t, change) })
+	}
+}
+
+func jobClaimCommittedLeaseRace(t *testing.T, change string) {
+	p := isolatedPostgres(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	past := now.Add(-time.Hour)
+	for _, id := range []string{"a", "b"} {
+		queueTestJob(t, p, id, "embedding", JobStatusPending, &past, time.Time{})
+	}
+	// Pause after the statement snapshot exists but before LockRows. Another
+	// transaction commits a lease or reschedule against the old candidate.
+	schemaExec(t, p, `CREATE FUNCTION queue_claim_pause() RETURNS boolean LANGUAGE plpgsql VOLATILE AS $$
    BEGIN PERFORM pg_advisory_xact_lock(710005); RETURN true; END $$`)
-			barrier, err := p.pool.Begin(ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer barrier.Rollback(context.Background())
-			if _, err = barrier.Exec(ctx, "SELECT pg_advisory_xact_lock(710005)"); err != nil {
-				t.Fatal(err)
-			}
-			conn, err := p.pool.Acquire(ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer conn.Release()
-			pid := conn.Conn().PgConn().PID()
-			result := make(chan []any, 1)
-			failure := make(chan error, 1)
-			done := make(chan struct{})
-			query := strings.Replace(claimJobSelectSQL(1), "AND job.kind=", "AND queue_claim_pause() AND job.kind=", 1)
-			go func() {
-				defer close(done)
-				rows, err := conn.Query(ctx, query, []string{"embedding"}, now)
-				if err != nil {
-					failure <- err
-					return
-				}
-				defer rows.Close()
-				if !rows.Next() {
-					failure <- rows.Err()
-					return
-				}
-				values, err := rows.Values()
-				if err != nil {
-					failure <- err
-					return
-				}
-				result <- values
-			}()
-			defer func() { cancel(); <-done }()
-			for {
-				var waiting bool
-				if err = p.pool.QueryRow(ctx, "SELECT COALESCE(wait_event='advisory',false) FROM pg_stat_activity WHERE pid=$1", pid).Scan(&waiting); err != nil {
-					t.Fatal(err)
-				}
-				if waiting {
-					break
-				}
-				select {
-				case err := <-failure:
-					t.Fatalf("query stopped before barrier: %v", err)
-				case <-ctx.Done():
-					t.Fatal("query never reached barrier")
-				case <-time.After(time.Millisecond):
-				}
-			}
-			if change == "lease" {
-				claimed, err := p.ClaimJob(ctx, now, time.Minute)
-				if err != nil || claimed.ID != "a" {
-					t.Fatalf("concurrent commit claim %s: %v", claimed.ID, err)
-				}
-			} else {
-				r, err := p.Get(ctx, colJobs, scopeA, "a")
-				if err != nil {
-					t.Fatal(err)
-				}
-				next := now.Add(-30 * time.Minute)
-				if change == "future_reschedule" {
-					next = now.Add(time.Hour)
-				}
-				r.RunAt = &next
-				if change == "unscheduled" {
-					r.RunAt = nil
-				}
-				previous := r.Revision
-				r.Revision++
-				if err = p.Replace(ctx, colJobs, r, previous); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if err = barrier.Commit(ctx); err != nil {
-				t.Fatal(err)
-			}
-			var values []any
-			select {
-			case values = <-result:
-			case err := <-failure:
-				t.Fatalf("candidate recheck: %v", err)
-			case <-ctx.Done():
-				t.Fatal(ctx.Err())
-			}
-			if change == "lease" || change == "future_reschedule" {
-				if values[0] != "b" {
-					t.Fatalf("ineligible stale candidate selected: %s", values[0])
-				}
-			} else {
-				if values[0] != "a" {
-					t.Fatalf("reschedule race did not expose its old candidate: %v", values[0])
-				}
-				optionalTime := func(value any) *time.Time {
-					if value == nil {
-						return nil
-					}
-					v := value.(time.Time)
-					return &v
-				}
-				var retry transientTransactionError
-				if err = checkJobClaimPriority(optionalTime(values[10]), optionalTime(values[11])); !errors.As(err, &retry) {
-					t.Fatalf("reschedule did not require a fresh snapshot: %v", err)
-				}
-				// The query has released its lock without mutating the candidate. A retry
-				// must choose b at its current priority, not lease a at its old position.
-				<-done
-				claimed, err := p.ClaimJob(ctx, now, time.Minute)
-				if err != nil || claimed.ID != "b" {
-					t.Fatalf("fresh priority %s: %v", claimed.ID, err)
-				}
-			}
-		})
+	barrier, err := p.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer barrier.Rollback(context.Background())
+	if _, err = barrier.Exec(ctx, "SELECT pg_advisory_xact_lock(710005)"); err != nil {
+		t.Fatal(err)
+	}
+	conn, err := p.pool.Acquire(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Release()
+	pid := conn.Conn().PgConn().PID()
+	result := make(chan []any, 1)
+	failure := make(chan error, 1)
+	done := make(chan struct{})
+	query := strings.Replace(claimJobSelectSQL(1), "AND job.kind=", "AND queue_claim_pause() AND job.kind=", 1)
+	go func() {
+		defer close(done)
+		firstClaimRow(ctx, conn.Conn(), query, now, result, failure)
+	}()
+	defer func() { cancel(); <-done }()
+	waitClaimAtAdvisoryBarrier(t, p, ctx, pid, failure)
+	commitClaimRaceChange(t, p, ctx, change, now)
+	if err = barrier.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var values []any
+	select {
+	case values = <-result:
+	case err := <-failure:
+		t.Fatalf("candidate recheck: %v", err)
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	checkClaimRaceCandidate(t, p, ctx, change, now, values, done)
+}
+
+// firstClaimRow runs the paused claim query and sends its first row or the failure.
+func firstClaimRow(ctx context.Context, conn *pgx.Conn, query string, now time.Time, result chan<- []any, failure chan<- error) {
+	rows, err := conn.Query(ctx, query, []string{"embedding"}, now)
+	if err != nil {
+		failure <- err
+		return
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		failure <- rows.Err()
+		return
+	}
+	values, err := rows.Values()
+	if err != nil {
+		failure <- err
+		return
+	}
+	result <- values
+}
+
+func waitClaimAtAdvisoryBarrier(t *testing.T, p *Postgres, ctx context.Context, pid uint32, failure <-chan error) {
+	t.Helper()
+	for {
+		var waiting bool
+		if err := p.pool.QueryRow(ctx, "SELECT COALESCE(wait_event='advisory',false) FROM pg_stat_activity WHERE pid=$1", pid).Scan(&waiting); err != nil {
+			t.Fatal(err)
+		}
+		if waiting {
+			return
+		}
+		select {
+		case err := <-failure:
+			t.Fatalf("query stopped before barrier: %v", err)
+		case <-ctx.Done():
+			t.Fatal("query never reached barrier")
+		case <-time.After(time.Millisecond):
+		}
+	}
+}
+
+// commitClaimRaceChange commits a lease on job a, or reschedules it, while the claim query is paused.
+func commitClaimRaceChange(t *testing.T, p *Postgres, ctx context.Context, change string, now time.Time) {
+	t.Helper()
+	if change == "lease" {
+		claimed, err := p.ClaimJob(ctx, now, time.Minute)
+		if err != nil || claimed.ID != "a" {
+			t.Fatalf("concurrent commit claim %s: %v", claimed.ID, err)
+		}
+		return
+	}
+	r, err := p.Get(ctx, colJobs, scopeA, "a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := now.Add(-30 * time.Minute)
+	if change == "future_reschedule" {
+		next = now.Add(time.Hour)
+	}
+	r.RunAt = &next
+	if change == "unscheduled" {
+		r.RunAt = nil
+	}
+	previous := r.Revision
+	r.Revision++
+	if err = p.Replace(ctx, colJobs, r, previous); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func optionalClaimTime(value any) *time.Time {
+	if value == nil {
+		return nil
+	}
+	v := value.(time.Time)
+	return &v
+}
+
+func checkClaimRaceCandidate(t *testing.T, p *Postgres, ctx context.Context, change string, now time.Time, values []any, done <-chan struct{}) {
+	t.Helper()
+	if change == "lease" || change == "future_reschedule" {
+		if values[0] != "b" {
+			t.Fatalf("ineligible stale candidate selected: %s", values[0])
+		}
+		return
+	}
+	if values[0] != "a" {
+		t.Fatalf("reschedule race did not expose its old candidate: %v", values[0])
+	}
+	var retry transientTransactionError
+	if err := checkJobClaimPriority(optionalClaimTime(values[10]), optionalClaimTime(values[11])); !errors.As(err, &retry) {
+		t.Fatalf("reschedule did not require a fresh snapshot: %v", err)
+	}
+	// The query has released its lock without mutating the candidate. A retry
+	// must choose b at its current priority, not lease a at its old position.
+	<-done
+	claimed, err := p.ClaimJob(ctx, now, time.Minute)
+	if err != nil || claimed.ID != "b" {
+		t.Fatalf("fresh priority %s: %v", claimed.ID, err)
 	}
 }
 
@@ -232,8 +256,25 @@ func TestPostgresJobClaimPlanPreferenceRestoredAndCachedPlanBypassed(t *testing.
 	// Deliberately retain a named generic plan created with sorting enabled.
 	// Production must neither reuse nor replan that cached statement.
 	sql := claimJobSelectSQL(len(kinds))
+	warmGenericClaimPlan(t, conn.Conn(), sql, kinds, now)
+	var before int64
+	if err = conn.QueryRow(ctx, "SELECT generic_plans FROM pg_prepared_statements WHERE statement=$1", sql).Scan(&before); err != nil || before < 6 {
+		t.Fatalf("generic warmup=%d: %v", before, err)
+	}
+	for _, setting := range []string{"on", "off"} {
+		t.Run(setting, func(t *testing.T) { claimRestoresPlanSetting(t, p, conn.Conn(), now, setting) })
+	}
+	var after int64
+	if err = conn.QueryRow(ctx, "SELECT generic_plans FROM pg_prepared_statements WHERE statement=$1", sql).Scan(&after); err != nil || after != before {
+		t.Fatalf("claim reused named generic plan: %d -> %d: %v", before, after, err)
+	}
+}
+
+// warmGenericClaimPlan runs the claim query six times so the connection caches a named generic plan.
+func warmGenericClaimPlan(t *testing.T, conn *pgx.Conn, sql string, kinds []string, now time.Time) {
+	t.Helper()
 	for i := 0; i < 6; i++ {
-		rows, err := conn.Query(ctx, sql, kinds, now)
+		rows, err := conn.Query(context.Background(), sql, kinds, now)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -244,43 +285,35 @@ func TestPostgresJobClaimPlanPreferenceRestoredAndCachedPlanBypassed(t *testing.
 			t.Fatal(err)
 		}
 	}
-	var before int64
-	if err = conn.QueryRow(ctx, "SELECT generic_plans FROM pg_prepared_statements WHERE statement=$1", sql).Scan(&before); err != nil || before < 6 {
-		t.Fatalf("generic warmup=%d: %v", before, err)
+}
+
+func claimRestoresPlanSetting(t *testing.T, p *Postgres, conn *pgx.Conn, now time.Time, setting string) {
+	ctx := context.Background()
+	tx, err := conn.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, setting := range []string{"on", "off"} {
-		t.Run(setting, func(t *testing.T) {
-			tx, err := conn.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer tx.Rollback(ctx)
-			if _, err = tx.Exec(ctx, "SELECT set_config('enable_sort',$1,true)", setting); err != nil {
-				t.Fatal(err)
-			}
-			child := &Postgres{pool: p.pool, tx: tx}
-			got, err := child.ClaimJob(ctx, now, time.Minute)
-			if err != nil || got.ID != "a" {
-				t.Fatalf("claim %s: %v", got.ID, err)
-			}
-			for _, wantError := range []bool{false, true} {
-				if wantError {
-					if _, err = child.ClaimJob(ctx, now, time.Minute); !errors.Is(err, ErrNotFound) {
-						t.Fatalf("empty claim: %v", err)
-					}
-				}
-				var actual string
-				if err = tx.QueryRow(ctx, "SELECT current_setting('enable_sort')").Scan(&actual); err != nil || actual != setting {
-					t.Fatalf("setting leaked: %s want %s: %v", actual, setting, err)
-				}
-			}
-			// Rollback restores the same pending job for the other original setting.
-		})
+	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, "SELECT set_config('enable_sort',$1,true)", setting); err != nil {
+		t.Fatal(err)
 	}
-	var after int64
-	if err = conn.QueryRow(ctx, "SELECT generic_plans FROM pg_prepared_statements WHERE statement=$1", sql).Scan(&after); err != nil || after != before {
-		t.Fatalf("claim reused named generic plan: %d -> %d: %v", before, after, err)
+	child := &Postgres{pool: p.pool, tx: tx}
+	got, err := child.ClaimJob(ctx, now, time.Minute)
+	if err != nil || got.ID != "a" {
+		t.Fatalf("claim %s: %v", got.ID, err)
 	}
+	for _, wantError := range []bool{false, true} {
+		if wantError {
+			if _, err = child.ClaimJob(ctx, now, time.Minute); !errors.Is(err, ErrNotFound) {
+				t.Fatalf("empty claim: %v", err)
+			}
+		}
+		var actual string
+		if err = tx.QueryRow(ctx, "SELECT current_setting('enable_sort')").Scan(&actual); err != nil || actual != setting {
+			t.Fatalf("setting leaked: %s want %s: %v", actual, setting, err)
+		}
+	}
+	// Rollback restores the same pending job for the other original setting.
 }
 
 func TestPostgresJobClaimPlanPreferenceCancelledContext(t *testing.T) {

@@ -62,6 +62,16 @@ func (s *Service) expandRecall(ctx context.Context, token string, in *SearchInpu
 	if queries == nil {
 		return
 	}
+	if s.searchExpansions(ctx, token, in, d, collection, run, out, queries) != nil {
+		in.expandStatus = "failed"
+		return
+	}
+	in.expandQueries = queries
+}
+
+// searchExpansions runs every sub-query through the lanes and keeps its lists and vector in in.expanded.
+// On an error in.expanded is dropped and the error returned.
+func (s *Service) searchExpansions(ctx context.Context, token string, in *SearchInput, d Decision, collection string, run *Ref, out *ContextBundle, queries []string) error {
 	vectors, space := s.expansionVectors(ctx, token, *in, d, queries)
 	for i, q := range queries {
 		sub := *in
@@ -71,12 +81,12 @@ func (s *Service) expandRecall(ctx context.Context, token string, in *SearchInpu
 			err = s.cleanSearchLanes(ctx, token, sub, d, collection, Record{}, run, -1, vectors[i], space, map[string]Record{}, out, lists)
 		}
 		if err != nil {
-			in.expanded, in.expandStatus = nil, "failed"
-			return
+			in.expanded = nil
+			return err
 		}
-		in.expanded = append(in.expanded, expandedQuery{query: q, lists: lists})
+		in.expanded = append(in.expanded, expandedQuery{query: q, lists: lists, vector: vectors[i], space: space})
 	}
-	in.expandQueries = queries
+	return nil
 }
 
 // expansionQueries asks the model once and returns the outcome and, when applied, the sub-queries.

@@ -67,6 +67,9 @@ type DigestPlan struct {
 	Authority string           `json:"authority"`
 }
 
+// maxDiffLines bounds each side of diffLines so its table stays small (1000² ints is 8 MB).
+const maxDiffLines = 1000
+
 // diffLines is a line diff (longest common subsequence) of two short bodies.
 func diffLines(before, after string) []DigestDiffLine {
 	split := func(s string) []string {
@@ -77,6 +80,17 @@ func diffLines(before, after string) []DigestDiffLine {
 	}
 	a, b := split(before), split(after)
 	n, m := len(a), len(b)
+	if n > maxDiffLines || m > maxDiffLines {
+		// The table below is n·m ints; past the cap the bodies show as replaced whole.
+		out := []DigestDiffLine{}
+		for _, l := range a {
+			out = append(out, DigestDiffLine{"-", l})
+		}
+		for _, l := range b {
+			out = append(out, DigestDiffLine{"+", l})
+		}
+		return out
+	}
 	lcs := make([][]int, n+1)
 	for i := range lcs {
 		lcs[i] = make([]int, m+1)

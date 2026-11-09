@@ -17,8 +17,8 @@ type costlyExtractLLM struct {
 	tokens int64
 }
 
-func (l *costlyExtractLLM) Complete(ctx context.Context, system, user string, max int) (string, ProviderUsage, error) {
-	text, u, e := l.fakeWikiLLM.Complete(ctx, system, user, max)
+func (l *costlyExtractLLM) Complete(ctx context.Context, system, user string, maxTokens int) (string, ProviderUsage, error) {
+	text, u, e := l.fakeWikiLLM.Complete(ctx, system, user, maxTokens)
 	u.TotalTokens = l.tokens
 	return text, u, e
 }
@@ -75,51 +75,53 @@ func TestApprovedRelationAmbiguityDoesNotGuess(t *testing.T) {
 
 func TestApprovedSummaryScheduleRecoversWithoutModelCall(t *testing.T) {
 	for _, enabled := range []string{"on", "off"} {
-		t.Run(enabled, func(t *testing.T) {
-			t.Setenv("MEMORY_AUTO_DERIVE", enabled)
-			f := newFixture(t)
-			repo := &approvalRecoveryRepo{entityTestRepo: newEntityTestRepo(f.repo), relations: map[string]KnowledgeRelation{}}
-			f.svc.Repo = repo
-			llm := &fakeWikiLLM{}
-			f.svc.Wiki = llm
-			f.auth.actors[f.work] = actor("worker-1", "service", true, "read", "write", "embed", "search", "context")
-			claim := CaptureClaim{Subject: "person", Text: "Mira owns the release checklist", Kind: "semantic", Basis: "explicit_user", Reason: "stated fact", Entities: []EntityInput{{Name: "Mira", Type: "person"}}}
-			id := oneCandidate(t, f.capture(f.human, captureInput(scopeA, "summary-recovery", claim)))
-			repo.fail = errors.New("store unavailable")
-			f.approveCandidate(id)
-			repo.fail = nil
-			delete(f.repo.store[colJobs], recKey(scopeA, autoDeriveJobID(scopeA))) // interrupted best-effort scheduling
-			var job Record
-			for _, r := range f.repo.rows(colJobs) {
-				if r.Kind == approvedEntitiesJobKind {
-					job = r
-				}
-			}
-			if e := f.svc.runApprovedEntities(testCtx, f.work, job); e != nil {
-				t.Fatal(e)
-			}
-			derived, e := f.repo.Get(testCtx, colJobs, scopeA, autoDeriveJobID(scopeA))
-			if enabled == "off" {
-				if !errors.Is(e, ErrNotFound) {
-					t.Fatal("disabled scheduling", e)
-				}
-				return
-			}
-			if e != nil || derived.AutoDerive == nil || len(derived.AutoDerive.Entities) != 1 || derived.Status != JobStatusPending {
-				t.Fatal("summary schedule lost", derived.AutoDerive, e)
-			}
-			if len(llm.prompts) != 0 {
-				t.Fatal("recovery called model")
-			}
-			snapshot := structuredText(derived)
-			if e = f.svc.runApprovedEntities(testCtx, f.work, job); e != nil {
-				t.Fatal(e)
-			}
-			derived, _ = f.repo.Get(testCtx, colJobs, scopeA, autoDeriveJobID(scopeA))
-			if structuredText(derived) != snapshot {
-				t.Fatal("replay rescheduled summary")
-			}
-		})
+		t.Run(enabled, func(t *testing.T) { approvedSummaryScheduleRecovery(t, enabled) })
+	}
+}
+
+func approvedSummaryScheduleRecovery(t *testing.T, enabled string) {
+	t.Setenv("MEMORY_AUTO_DERIVE", enabled)
+	f := newFixture(t)
+	repo := &approvalRecoveryRepo{entityTestRepo: newEntityTestRepo(f.repo), relations: map[string]KnowledgeRelation{}}
+	f.svc.Repo = repo
+	llm := &fakeWikiLLM{}
+	f.svc.Wiki = llm
+	f.auth.actors[f.work] = actor("worker-1", "service", true, "read", "write", "embed", "search", "context")
+	claim := CaptureClaim{Subject: "person", Text: "Mira owns the release checklist", Kind: "semantic", Basis: "explicit_user", Reason: "stated fact", Entities: []EntityInput{{Name: "Mira", Type: "person"}}}
+	id := oneCandidate(t, f.capture(f.human, captureInput(scopeA, "summary-recovery", claim)))
+	repo.fail = errors.New("store unavailable")
+	f.approveCandidate(id)
+	repo.fail = nil
+	delete(f.repo.store[colJobs], recKey(scopeA, autoDeriveJobID(scopeA))) // interrupted best-effort scheduling
+	var job Record
+	for _, r := range f.repo.rows(colJobs) {
+		if r.Kind == approvedEntitiesJobKind {
+			job = r
+		}
+	}
+	if e := f.svc.runApprovedEntities(testCtx, f.work, job); e != nil {
+		t.Fatal(e)
+	}
+	derived, e := f.repo.Get(testCtx, colJobs, scopeA, autoDeriveJobID(scopeA))
+	if enabled == "off" {
+		if !errors.Is(e, ErrNotFound) {
+			t.Fatal("disabled scheduling", e)
+		}
+		return
+	}
+	if e != nil || derived.AutoDerive == nil || len(derived.AutoDerive.Entities) != 1 || derived.Status != JobStatusPending {
+		t.Fatal("summary schedule lost", derived.AutoDerive, e)
+	}
+	if len(llm.prompts) != 0 {
+		t.Fatal("recovery called model")
+	}
+	snapshot := structuredText(derived)
+	if e = f.svc.runApprovedEntities(testCtx, f.work, job); e != nil {
+		t.Fatal(e)
+	}
+	derived, _ = f.repo.Get(testCtx, colJobs, scopeA, autoDeriveJobID(scopeA))
+	if structuredText(derived) != snapshot {
+		t.Fatal("replay rescheduled summary")
 	}
 }
 
@@ -132,21 +134,7 @@ func TestPostgresStaleCascadeVisitsBeyondFirstPage(t *testing.T) {
 	e := p.Transaction(testCtx, func(ctx context.Context, tx Tx) error {
 		for i := 0; i < total; i++ {
 			for _, col := range []string{colTopicDigests, colSkillVersions, colObservations} {
-				r := Record{ID: fmt.Sprintf("dependent-%04d", i), Scope: scopeA, Status: statusActive, Revision: 1, Text: "old derived text", ApprovedBy: "human", CreatedBy: "human", Sources: old.Sources, CreatedAt: time.Now(), UpdatedAt: time.Now()}
-				switch col {
-				case colTopicDigests:
-					r.Kind = digestKindTopic
-					r.Digest = &DigestData{Members: memRefs(old)}
-				case colSkillVersions:
-					r.Kind = proposedSkillKind
-					r.Status = "candidate"
-					r.SkillID = "skill"
-					r.Relations = memRefs(old)
-				case colObservations:
-					r.Kind = observationKind
-					r.Observation = &ObservationData{SourceMemories: memRefs(old)}
-				}
-				if e := tx.Insert(ctx, col, r); e != nil {
+				if e := tx.Insert(ctx, col, staleCascadeDependent(col, i, old)); e != nil {
 					return e
 				}
 			}
@@ -171,6 +159,25 @@ func TestPostgresStaleCascadeVisitsBeyondFirstPage(t *testing.T) {
 			t.Fatalf("%s marked %d/%d", col, n, total)
 		}
 	}
+}
+
+// staleCascadeDependent builds the i-th active row in col that derives from old.
+func staleCascadeDependent(col string, i int, old Record) Record {
+	r := Record{ID: fmt.Sprintf("dependent-%04d", i), Scope: scopeA, Status: statusActive, Revision: 1, Text: "old derived text", ApprovedBy: "human", CreatedBy: "human", Sources: old.Sources, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	switch col {
+	case colTopicDigests:
+		r.Kind = digestKindTopic
+		r.Digest = &DigestData{Members: memRefs(old)}
+	case colSkillVersions:
+		r.Kind = proposedSkillKind
+		r.Status = "candidate"
+		r.SkillID = "skill"
+		r.Relations = memRefs(old)
+	case colObservations:
+		r.Kind = observationKind
+		r.Observation = &ObservationData{SourceMemories: memRefs(old)}
+	}
+	return r
 }
 
 func TestPostgresExpiredLinkedRulesReleaseActiveCapacity(t *testing.T) {
@@ -215,19 +222,7 @@ func TestPostgresConversationEpochOrderSurvivesReverseCapture(t *testing.T) {
 	f := newFixture(t)
 	f.svc.Repo = p
 	setCaptureDensity(t, f, captureDensityConversation)
-	rows := map[int]Record{}
-	inputs := map[int]CreateInput{}
-	for _, i := range []int{4, 2, 1, 3} {
-		at := time.Now().Add(time.Duration(-10+i) * time.Second)
-		in := sourceInput(CreateInput{Scope: scopeA, Kind: conversationSourceKind, Text: "repeated conversation text", ConversationOrder: &ConversationOrder{Epoch: "capture-a", Index: i, Total: 4}})
-		if i == 2 {
-			in.Text = "anchor copper valve"
-		}
-		in.SourceRef = "same-session"
-		in.CollectedAt = &at
-		inputs[i] = in
-		rows[i] = f.create(f.human, "sources", in)
-	}
+	rows, inputs := captureConversationReversed(f)
 	if rows[1].ID == rows[3].ID {
 		t.Fatal("same-text chunks collapsed")
 	}
@@ -235,24 +230,7 @@ func TestPostgresConversationEpochOrderSurvivesReverseCapture(t *testing.T) {
 	if e != nil || len(neighbors) != 2 {
 		t.Fatal("explicit neighbors absent", neighbors, e)
 	}
-	got := map[int]bool{}
-	for _, r := range neighbors {
-		got[r.ConversationOrder.Index] = true
-	}
-	if !got[1] || !got[3] {
-		t.Fatal("capture time used as order", got)
-	}
-	bundle, e := f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "copper valve", Modes: []string{"fts"}, ConversationContext: true, BudgetTokens: 3000, TokenEncoding: "cl100k_base"})
-	if e != nil || len(bundle.Conversation) != 1 || bundle.Conversation[0].ID != rows[2].ID {
-		t.Fatal("ordered service recall", bundle.Conversation, e)
-	}
-	evidence := map[string]bool{}
-	for _, ref := range bundle.Conversation[0].Sources {
-		evidence[ref.SourceID] = true
-	}
-	if !evidence[rows[1].ID] || !evidence[rows[3].ID] || evidence[rows[4].ID] {
-		t.Fatal("service recall used wrong neighbors", evidence)
-	}
+	checkConversationNeighborOrder(t, f, neighbors, rows)
 	repeat := f.create(f.human, "sources", inputs[2])
 	if repeat.ID != rows[2].ID {
 		t.Fatal("recapture duplicated slot")
@@ -288,6 +266,46 @@ func TestPostgresConversationEpochOrderSurvivesReverseCapture(t *testing.T) {
 	changed.Revision++
 	if e = p.Replace(testCtx, "sources", changed, changed.Revision-1); !errors.Is(e, ErrConflict) {
 		t.Fatal("source order was mutable", e)
+	}
+}
+
+// captureConversationReversed captures a four-chunk conversation newest index first.
+func captureConversationReversed(f *fixture) (map[int]Record, map[int]CreateInput) {
+	rows := map[int]Record{}
+	inputs := map[int]CreateInput{}
+	for _, i := range []int{4, 2, 1, 3} {
+		at := time.Now().Add(time.Duration(-10+i) * time.Second)
+		in := sourceInput(CreateInput{Scope: scopeA, Kind: conversationSourceKind, Text: "repeated conversation text", ConversationOrder: &ConversationOrder{Epoch: "capture-a", Index: i, Total: 4}})
+		if i == 2 {
+			in.Text = "anchor copper valve"
+		}
+		in.SourceRef = "same-session"
+		in.CollectedAt = &at
+		inputs[i] = in
+		rows[i] = f.create(f.human, "sources", in)
+	}
+	return rows, inputs
+}
+
+func checkConversationNeighborOrder(t *testing.T, f *fixture, neighbors []Record, rows map[int]Record) {
+	t.Helper()
+	got := map[int]bool{}
+	for _, r := range neighbors {
+		got[r.ConversationOrder.Index] = true
+	}
+	if !got[1] || !got[3] {
+		t.Fatal("capture time used as order", got)
+	}
+	bundle, e := f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "copper valve", Modes: []string{"fts"}, ConversationContext: true, BudgetTokens: 3000, TokenEncoding: "cl100k_base"})
+	if e != nil || len(bundle.Conversation) != 1 || bundle.Conversation[0].ID != rows[2].ID {
+		t.Fatal("ordered service recall", bundle.Conversation, e)
+	}
+	evidence := map[string]bool{}
+	for _, ref := range bundle.Conversation[0].Sources {
+		evidence[ref.SourceID] = true
+	}
+	if !evidence[rows[1].ID] || !evidence[rows[3].ID] || evidence[rows[4].ID] {
+		t.Fatal("service recall used wrong neighbors", evidence)
 	}
 }
 
@@ -586,19 +604,7 @@ func TestPostgresSummaryBusyDoesNotSpendRecoveryAttempts(t *testing.T) {
 	}
 	jobID := "approved-entities-" + ContentHash(structuredText(Ref{Collection: colMemories, ID: r.ID, Revision: r.Revision}))
 	for i := 0; i < maxJobAttempts+2; i++ {
-		if e = f.svc.WorkOnce(testCtx, f.work); e != nil {
-			t.Fatal("normal busy failed", e)
-		}
-		job, e := p.Get(testCtx, colJobs, scopeA, jobID)
-		if e != nil || job.Status != JobStatusPending || job.Attempts != 0 || job.LeaseToken != "" || job.RunAt == nil || !job.RunAt.After(time.Now()) {
-			t.Fatal("busy spent retry", job, e)
-		}
-		due := time.Now().Add(-time.Second)
-		job.RunAt = &due
-		job.Revision++
-		if e = p.Replace(testCtx, colJobs, job, job.Revision-1); e != nil {
-			t.Fatal(e)
-		}
+		busyRoundKeepsAttempts(t, f, p, jobID)
 	}
 	after, e := p.Get(testCtx, colJobs, scopeA, running.ID)
 	if e != nil || structuredText(after) != structuredText(running) {
@@ -617,5 +623,23 @@ func TestPostgresSummaryBusyDoesNotSpendRecoveryAttempts(t *testing.T) {
 	after, e = p.Get(testCtx, colJobs, scopeA, running.ID)
 	if e != nil || len(after.AutoDerive.Entities) != 1 || after.Status != JobStatusPending {
 		t.Fatal("same person lost after running summary", after, e)
+	}
+}
+
+// busyRoundKeepsAttempts runs one worker pass against a busy summary and makes the deferred job due again.
+func busyRoundKeepsAttempts(t *testing.T, f *fixture, p *Postgres, jobID string) {
+	t.Helper()
+	if e := f.svc.WorkOnce(testCtx, f.work); e != nil {
+		t.Fatal("normal busy failed", e)
+	}
+	job, e := p.Get(testCtx, colJobs, scopeA, jobID)
+	if e != nil || job.Status != JobStatusPending || job.Attempts != 0 || job.LeaseToken != "" || job.RunAt == nil || !job.RunAt.After(time.Now()) {
+		t.Fatal("busy spent retry", job, e)
+	}
+	due := time.Now().Add(-time.Second)
+	job.RunAt = &due
+	job.Revision++
+	if e = p.Replace(testCtx, colJobs, job, job.Revision-1); e != nil {
+		t.Fatal(e)
 	}
 }

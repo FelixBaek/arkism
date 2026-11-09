@@ -31,12 +31,7 @@ func TestPrivacyLargeSubjectPagesAndDurablePurgeResume(t *testing.T) {
 	if len(status.PrivacyDeletion.Impact.SourceEventIDs) != 1008 || len(status.PrivacyDeletion.Impact.Records) < 1008 {
 		t.Fatal("truncated impact", len(status.PrivacyDeletion.Impact.SourceEventIDs), len(status.PrivacyDeletion.Impact.Records))
 	}
-	for _, id := range []string{"large-0000", "large-1004"} {
-		r, e := p.Get(testCtx, "sources", scope, id)
-		if e != nil || !r.PrivacyQuarantined {
-			t.Fatal("tail not quarantined", id, e)
-		}
-	}
+	checkPrivacyQuarantined(t, p, scope, "large-0000", "large-1004")
 	if n, e := svc.RunPrivacyRuntimeStep(testCtx, "worker"); e != nil || n != 1 {
 		t.Fatal(n, e)
 	}
@@ -53,20 +48,7 @@ func TestPrivacyLargeSubjectPagesAndDurablePurgeResume(t *testing.T) {
 	}
 	// No process-local cursor survives; a fresh service resumes persisted progress.
 	fresh := &Service{Repo: p, Auth: svc.Auth}
-	for i := 0; i < 40 && status.PrivacyDeletion.State == privacyPurgingDerived; i++ {
-		status, err = fresh.GetPrivacyDeletion(testCtx, "owner", status.ID, scope)
-		if err != nil {
-			t.Fatal(err)
-		}
-		before := status.PrivacyDeletion.PurgeSourceOffset + status.PrivacyDeletion.PurgeRecordOffset
-		status, err = fresh.AdvancePrivacyDeletion(testCtx, "worker", status.ID, PrivacyRevisionInput{Scope: scope, ExpectedRevision: status.Revision})
-		if err == nil && status.PrivacyDeletion.PurgeSourceOffset+status.PrivacyDeletion.PurgeRecordOffset-before > 100 {
-			t.Fatal("source/record boundary exceeded shared batch budget")
-		}
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
+	status = resumePrivacyPurgeInBatches(t, fresh, scope, status)
 	if status.PrivacyDeletion.State != privacyVerifying || status.PrivacyDeletion.PurgeSourceOffset != 1008 || status.PrivacyDeletion.PurgeRecordOffset != len(status.PrivacyDeletion.Impact.Records) {
 		t.Fatal("resume incomplete")
 	}
@@ -83,6 +65,38 @@ func TestPrivacyLargeSubjectPagesAndDurablePurgeResume(t *testing.T) {
 	if status.PrivacyDeletion.State == privacyCompleted {
 		t.Fatal("pending child erasures reported complete")
 	}
+}
+
+func checkPrivacyQuarantined(t *testing.T, p *Postgres, scope Scope, ids ...string) {
+	t.Helper()
+	for _, id := range ids {
+		r, e := p.Get(testCtx, "sources", scope, id)
+		if e != nil || !r.PrivacyQuarantined {
+			t.Fatal("tail not quarantined", id, e)
+		}
+	}
+}
+
+// resumePrivacyPurgeInBatches re-reads persisted progress before every step and
+// checks each step stays within the shared source/record batch budget.
+func resumePrivacyPurgeInBatches(t *testing.T, fresh *Service, scope Scope, status PrivacyDeletionStatus) PrivacyDeletionStatus {
+	t.Helper()
+	var err error
+	for i := 0; i < 40 && status.PrivacyDeletion.State == privacyPurgingDerived; i++ {
+		status, err = fresh.GetPrivacyDeletion(testCtx, "owner", status.ID, scope)
+		if err != nil {
+			t.Fatal(err)
+		}
+		before := status.PrivacyDeletion.PurgeSourceOffset + status.PrivacyDeletion.PurgeRecordOffset
+		status, err = fresh.AdvancePrivacyDeletion(testCtx, "worker", status.ID, PrivacyRevisionInput{Scope: scope, ExpectedRevision: status.Revision})
+		if err == nil && status.PrivacyDeletion.PurgeSourceOffset+status.PrivacyDeletion.PurgeRecordOffset-before > 100 {
+			t.Fatal("source/record boundary exceeded shared batch budget")
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	return status
 }
 
 func TestPrivacyCompleteDiscoveryFollowsMoreThan64Edges(t *testing.T) {

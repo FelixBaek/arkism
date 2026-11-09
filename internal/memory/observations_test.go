@@ -199,7 +199,25 @@ func TestObservationStalenessAndRefreshHistory(t *testing.T) {
 	if _, err := f.svc.ReviewObservation(testCtx, f.human, p.ID, ObservationReviewInput{Scope: scopeA, ExpectedRevision: refreshed.Revision, Action: "edit", Content: "Staging deploys need the stage flag set."}); err != nil {
 		t.Fatal(err)
 	}
-	hist, err := f.svc.ObservationHistory(testCtx, f.human, scopeA, p.ID)
+	checkObservationEditHistory(t, f, p.ID)
+	// A source rejected later is caught by the next run's sweep.
+	cur := f.repo.rows(colMemories)
+	m2 := cur[slices.IndexFunc(cur, func(r Record) bool { return r.ID == ms[1].ID })]
+	f.transition(f.human, colMemories, m2.ID, ChangeInput{Scope: scopeA, ExpectedRevision: m2.Revision, Status: "rejected"})
+	// The refresh (and the new group of the remaining and replacement memories) get unusable answers.
+	llm.answers = append(llm.answers, "not json", "not json")
+	out, err = f.consolidate(f.human, false)
+	if err != nil || out.StaleMarked != 1 || len(out.Rejected) != 2 || out.Rejected[0].Code != "invalid_model_output" || out.Calls != 2 {
+		t.Fatalf("%+v %v", out, err)
+	}
+	if v, _ := f.svc.GetObservation(testCtx, f.human, scopeA, p.ID); v.Status != obsStale {
+		t.Fatalf("status %s", v.Status)
+	}
+}
+
+func checkObservationEditHistory(t *testing.T, f *fixture, id string) {
+	t.Helper()
+	hist, err := f.svc.ObservationHistory(testCtx, f.human, scopeA, id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,19 +231,6 @@ func TestObservationStalenessAndRefreshHistory(t *testing.T) {
 	last := hist.Revisions[4].Diff
 	if !slices.Contains(last, DigestDiffLine{Op: "+", Text: "Staging deploys need the stage flag set."}) || !slices.Contains(last, DigestDiffLine{Op: "-", Text: "Staging deploys need the stage flag."}) {
 		t.Fatalf("edit diff %+v", last)
-	}
-	// A source rejected later is caught by the next run's sweep.
-	cur := f.repo.rows(colMemories)
-	m2 := cur[slices.IndexFunc(cur, func(r Record) bool { return r.ID == ms[1].ID })]
-	f.transition(f.human, colMemories, m2.ID, ChangeInput{Scope: scopeA, ExpectedRevision: m2.Revision, Status: "rejected"})
-	// The refresh (and the new group of the remaining and replacement memories) get unusable answers.
-	llm.answers = append(llm.answers, "not json", "not json")
-	out, err = f.consolidate(f.human, false)
-	if err != nil || out.StaleMarked != 1 || len(out.Rejected) != 2 || out.Rejected[0].Code != "invalid_model_output" || out.Calls != 2 {
-		t.Fatalf("%+v %v", out, err)
-	}
-	if v, _ := f.svc.GetObservation(testCtx, f.human, scopeA, p.ID); v.Status != obsStale {
-		t.Fatalf("status %s", v.Status)
 	}
 }
 
@@ -277,23 +282,8 @@ func TestMentalModelRefreshReviewAndHistory(t *testing.T) {
 	if _, err := f.svc.RefreshMentalModel(testCtx, f.agent, mm.ID, MentalModelRefreshInput{Scope: scopeA}); !errors.Is(err, ErrDenied) {
 		t.Fatalf("agent refresh: %v", err)
 	}
-	approve := func(want int) MentalModelView {
-		t.Helper()
-		v, err := f.svc.RefreshMentalModel(testCtx, f.human, mm.ID, MentalModelRefreshInput{Scope: scopeA})
-		if err != nil || v.Draft == nil {
-			t.Fatalf("%+v %v", v, err)
-		}
-		if _, err := f.svc.ReviewMentalModel(testCtx, f.agent, mm.ID, MentalModelReviewInput{Scope: scopeA, ExpectedRevision: v.Revision, Action: mmReviewApprove}); !errors.Is(err, ErrDenied) {
-			t.Fatalf("agent approve: %v", err)
-		}
-		v, err = f.svc.ReviewMentalModel(testCtx, f.human, mm.ID, MentalModelReviewInput{Scope: scopeA, ExpectedRevision: v.Revision, Action: mmReviewApprove})
-		if err != nil || v.Active == nil || v.Draft != nil || v.Active.Version != want {
-			t.Fatalf("%+v %v", v, err)
-		}
-		return v
-	}
-	approve(2)
-	v := approve(5)
+	approveMentalModelRefresh(t, f, mm.ID, 2)
+	v := approveMentalModelRefresh(t, f, mm.ID, 5)
 	if v.Active.Text != "Staging needs the flag.\nEvery deploy script sets it." {
 		t.Fatal(v.Active.Text)
 	}
@@ -323,6 +313,23 @@ func TestMentalModelRefreshReviewAndHistory(t *testing.T) {
 	if err := f.svc.DeleteMentalModel(testCtx, f.human, scopeA, mm.ID, after.Revision); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// approveMentalModelRefresh refreshes, checks an agent cannot approve, then approves as the human.
+func approveMentalModelRefresh(t *testing.T, f *fixture, id string, want int) MentalModelView {
+	t.Helper()
+	v, err := f.svc.RefreshMentalModel(testCtx, f.human, id, MentalModelRefreshInput{Scope: scopeA})
+	if err != nil || v.Draft == nil {
+		t.Fatalf("%+v %v", v, err)
+	}
+	if _, err := f.svc.ReviewMentalModel(testCtx, f.agent, id, MentalModelReviewInput{Scope: scopeA, ExpectedRevision: v.Revision, Action: mmReviewApprove}); !errors.Is(err, ErrDenied) {
+		t.Fatalf("agent approve: %v", err)
+	}
+	v, err = f.svc.ReviewMentalModel(testCtx, f.human, id, MentalModelReviewInput{Scope: scopeA, ExpectedRevision: v.Revision, Action: mmReviewApprove})
+	if err != nil || v.Active == nil || v.Draft != nil || v.Active.Version != want {
+		t.Fatalf("%+v %v", v, err)
+	}
+	return v
 }
 
 func (f *fixture) editRecord(col, id string, change func(*Record)) Record {
@@ -420,24 +427,7 @@ func TestSourceErasureClearsMentalModelText(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	approved := func(title string, cites ...string) MentalModelView {
-		t.Helper()
-		mm, err := f.svc.CreateMentalModel(testCtx, f.human, MentalModelInput{Scope: scopeA, Title: title, Query: "staging flag", Refresh: MentalModelRefresh{Mode: mmRefreshManual}})
-		if err != nil {
-			t.Fatal(err)
-		}
-		answer, _ := json.Marshal(mentalModelAnswer{Summary: title + " needs the flag.", Citations: cites})
-		llm.answers = append(llm.answers, string(answer))
-		v, err := f.svc.RefreshMentalModel(testCtx, f.human, mm.ID, MentalModelRefreshInput{Scope: scopeA})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if v, err = f.svc.ReviewMentalModel(testCtx, f.human, mm.ID, MentalModelReviewInput{Scope: scopeA, ExpectedRevision: v.Revision, Action: mmReviewApprove}); err != nil || v.Active == nil {
-			t.Fatal(v, err)
-		}
-		return v
-	}
-	viaObservation, viaMemory := approved("Observed", obs.ID), approved("Direct", ms[0].ID)
+	viaObservation, viaMemory := approvedMentalModel(t, f, llm, "Observed", obs.ID), approvedMentalModel(t, f, llm, "Direct", ms[0].ID)
 	// Quarantine is not erasure: the text is withheld from readers at once.
 	f.editRecord(colMemories, ms[0].ID, func(r *Record) { r.PrivacyQuarantined = true })
 	if v, _ := f.svc.GetMentalModel(testCtx, f.human, scopeA, viaMemory.ID); v.Active == nil || v.Active.Text != "" || !v.Active.Withheld {
@@ -458,7 +448,31 @@ func TestSourceErasureClearsMentalModelText(t *testing.T) {
 	if _, err := f.repo.Get(testCtx, colObservations, scopeA, obs.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("the observation survived the erasure of its source", err)
 	}
-	for _, id := range []string{viaObservation.ID, viaMemory.ID} {
+	checkMentalModelsErased(t, f, viaObservation.ID, viaMemory.ID)
+}
+
+// approvedMentalModel creates a manual mental model whose approved summary cites cites.
+func approvedMentalModel(t *testing.T, f *fixture, llm *fakeWikiLLM, title string, cites ...string) MentalModelView {
+	t.Helper()
+	mm, err := f.svc.CreateMentalModel(testCtx, f.human, MentalModelInput{Scope: scopeA, Title: title, Query: "staging flag", Refresh: MentalModelRefresh{Mode: mmRefreshManual}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	answer, _ := json.Marshal(mentalModelAnswer{Summary: title + " needs the flag.", Citations: cites})
+	llm.answers = append(llm.answers, string(answer))
+	v, err := f.svc.RefreshMentalModel(testCtx, f.human, mm.ID, MentalModelRefreshInput{Scope: scopeA})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, err = f.svc.ReviewMentalModel(testCtx, f.human, mm.ID, MentalModelReviewInput{Scope: scopeA, ExpectedRevision: v.Revision, Action: mmReviewApprove}); err != nil || v.Active == nil {
+		t.Fatal(v, err)
+	}
+	return v
+}
+
+func checkMentalModelsErased(t *testing.T, f *fixture, ids ...string) {
+	t.Helper()
+	for _, id := range ids {
 		m := f.repo.store[colMentalModels][recKey(scopeA, id)].MentalModel
 		if m.Active != nil {
 			t.Fatalf("mental model %s kept text citing erased data: %+v", id, m.Active)

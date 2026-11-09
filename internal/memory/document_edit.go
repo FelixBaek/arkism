@@ -409,25 +409,8 @@ func (s *Service) DeleteExtractDocument(ctx context.Context, token, id string, i
 	if job.Status != JobStatusDone && job.Status != JobStatusFailed {
 		return out, ErrConflict
 	}
-	for _, cid := range documentCandidateIDs(*job.FileExtract) {
-		cand, err := s.Repo.Get(ctx, "memory_candidates", in.Scope, cid)
-		if errors.Is(err, ErrNotFound) {
-			continue
-		}
-		if err != nil {
-			return out, err
-		}
-		switch cand.Status {
-		case "approved":
-			out.Kept++
-		case "candidate":
-			_, err = s.ReviewCandidate(ctx, token, cid, CandidateReviewInput{Scope: in.Scope, ExpectedRevision: cand.Revision, Action: "reject", Reason: "document deleted"})
-			if err == nil {
-				out.Rejected++
-			} else if !errors.Is(err, ErrConflict) {
-				return out, err
-			}
-		}
+	if err := s.rejectDocumentCandidates(ctx, token, in.Scope, documentCandidateIDs(*job.FileExtract), &out); err != nil {
+		return out, err
 	}
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		out.Jobs = 0
@@ -438,22 +421,8 @@ func (s *Service) DeleteExtractDocument(ctx context.Context, token, id string, i
 		if cur.Target == nil || cur.Target.ID != job.ID {
 			return ErrConflict // a new upload arrived meanwhile
 		}
-		for next, n := job.ID, 0; next != "" && n < documentJobChainMax; n++ {
-			r, e := s.extractJob(ctx, tx, in.Scope, next)
-			if errors.Is(e, ErrNotFound) {
-				break
-			}
-			if e != nil {
-				return e
-			}
-			if r.FileExtract.Document != id {
-				break
-			}
-			if e = tx.Delete(ctx, "jobs", in.Scope, r.ID, r.Revision); e != nil {
-				return e
-			}
-			out.Jobs++
-			next = r.FileExtract.Previous
+		if out.Jobs, e = s.deleteDocumentJobChain(ctx, tx, in.Scope, id, job.ID); e != nil {
+			return e
 		}
 		if e = tx.Delete(ctx, "jobs", in.Scope, id, cur.Revision); e != nil {
 			return e
@@ -461,4 +430,54 @@ func (s *Service) DeleteExtractDocument(ctx context.Context, token, id string, i
 		return audit(ctx, tx, in.Scope, d.PrincipalID, "delete:file_extract_document", id)
 	})
 	return out, err
+}
+
+// rejectDocumentCandidates rejects the document's waiting candidates and counts
+// the approved ones it keeps. A candidate reviewed meanwhile is skipped.
+func (s *Service) rejectDocumentCandidates(ctx context.Context, token string, scope Scope, ids []string, out *DocumentDeleteResult) error {
+	for _, cid := range ids {
+		cand, err := s.Repo.Get(ctx, "memory_candidates", scope, cid)
+		if errors.Is(err, ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		switch cand.Status {
+		case "approved":
+			out.Kept++
+		case "candidate":
+			_, err = s.ReviewCandidate(ctx, token, cid, CandidateReviewInput{Scope: scope, ExpectedRevision: cand.Revision, Action: "reject", Reason: "document deleted"})
+			if err == nil {
+				out.Rejected++
+			} else if !errors.Is(err, ErrConflict) {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// deleteDocumentJobChain deletes the upload jobs of document id, newest first,
+// and returns how many it deleted.
+func (s *Service) deleteDocumentJobChain(ctx context.Context, tx Tx, scope Scope, id, jobID string) (int, error) {
+	deleted := 0
+	for next, n := jobID, 0; next != "" && n < documentJobChainMax; n++ {
+		r, e := s.extractJob(ctx, tx, scope, next)
+		if errors.Is(e, ErrNotFound) {
+			break
+		}
+		if e != nil {
+			return deleted, e
+		}
+		if r.FileExtract.Document != id {
+			break
+		}
+		if e = tx.Delete(ctx, "jobs", scope, r.ID, r.Revision); e != nil {
+			return deleted, e
+		}
+		deleted++
+		next = r.FileExtract.Previous
+	}
+	return deleted, nil
 }

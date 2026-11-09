@@ -1,5 +1,6 @@
 // Production search component with synthetic scoped HTTP, no model or external traffic.
-const fs=require("node:fs"),path=require("node:path"),assert=require("node:assert/strict");
+const fs=require("node:fs"),os=require("node:os"),path=require("node:path"),assert=require("node:assert/strict");
+const shots=fs.mkdtempSync(path.join(os.tmpdir(),"arkism-memory-context-options-")); // a private screenshot folder, not a fixed shared /tmp name
 const {chromium}=require(process.env.PLAYWRIGHT_CORE_PATH||path.resolve(__dirname,"../frontend/node_modules/playwright-core"));
 (async()=>{const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});try{
  const page=await browser.newPage({viewport:{width:1000,height:900},locale:"ko-KR"});await page.route("**/*",r=>r.abort());const errors=[];page.on("pageerror",e=>errors.push(e.message));
@@ -21,6 +22,6 @@ const {chromium}=require(process.env.PLAYWRIGHT_CORE_PATH||path.resolve(__dirnam
  await page.getByLabel("결과 전체 토큰 한도 (1~64000)",{exact:true}).fill("3000");await page.getByRole("button",{name:"찾아보기",exact:true}).focus();await page.keyboard.press("Enter");await page.getByText("최종 문맥 미리보기",{exact:true}).waitFor();
  const sent=await page.evaluate(()=>window.calls[0]);assert.equal(sent.path,"/v1/search");assert.deepEqual(sent.body.scope,{workspace_id:"work",project_id:"project"});for(const k of ["conversation_context","whole_items","best_effort_lanes"])assert.equal(sent.body[k],true);
  assert.equal(await page.locator("#table pre").first().textContent(),await page.evaluate(()=>window.packet));assert.equal(await page.locator("#table b").count(),0);
- await page.locator("#table").screenshot({path:"/tmp/arkism-memory-context-options.png"});await page.setViewportSize({width:390,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(errors,[]);
+ await page.locator("#table").screenshot({path:path.join(shots,"context-options.png")});await page.setViewportSize({width:390,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(errors,[]);
  console.log("PASS: default-off options, keyboard toggles, explicit budget validation, scoped request, exact final data preview and no HTML execution");
 }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

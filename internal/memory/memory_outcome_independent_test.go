@@ -73,19 +73,7 @@ func TestIndependentOutcomePostgresParity(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	hashes := map[string]string{"m": "content"}
 	for i := 0; i < 6; i++ {
-		r := Record{ID: fmt.Sprintf("r%d", i), Scope: scopeA, Kind: memoryOutcomeKind, Status: "active", Revision: 1, CreatedAt: now.Add(time.Duration(i-6) * time.Hour), Target: &Ref{Collection: colMemories, ID: "m", Revision: 1}, Tags: []string{"dimension:work_task"}, Passed: i != 0, MemoryOutcomeContentHash: "content", Relations: []Ref{{Collection: "execution_traces", ID: "task", Revision: 1}}}
-		if i == 2 {
-			r.Relations[0].ID = "another-task"
-		}
-		if i == 3 {
-			r.Tags = []string{"dimension:personal_compliance"}
-		}
-		if i == 4 {
-			r.MemoryOutcomeContentHash = "old"
-		}
-		if i == 5 {
-			r.Relations = nil
-		}
+		r := independentOutcomeRow(i, now)
 		if e := p.Insert(testCtx, "evaluations", r); e != nil {
 			t.Fatal(e)
 		}
@@ -112,6 +100,22 @@ func TestIndependentOutcomePostgresParity(t *testing.T) {
 	if e != nil || count[0].Total != 6 {
 		t.Fatal(count, e)
 	}
+}
+
+// independentOutcomeRow is the i-th outcome; rows 2-5 each differ in one dedup or filter key.
+func independentOutcomeRow(i int, now time.Time) Record {
+	r := Record{ID: fmt.Sprintf("r%d", i), Scope: scopeA, Kind: memoryOutcomeKind, Status: "active", Revision: 1, CreatedAt: now.Add(time.Duration(i-6) * time.Hour), Target: &Ref{Collection: colMemories, ID: "m", Revision: 1}, Tags: []string{"dimension:work_task"}, Passed: i != 0, MemoryOutcomeContentHash: "content", Relations: []Ref{{Collection: "execution_traces", ID: "task", Revision: 1}}}
+	switch i {
+	case 2:
+		r.Relations[0].ID = "another-task"
+	case 3:
+		r.Tags = []string{"dimension:personal_compliance"}
+	case 4:
+		r.MemoryOutcomeContentHash = "old"
+	case 5:
+		r.Relations = nil
+	}
+	return r
 }
 
 type visibleBatchRepo struct {

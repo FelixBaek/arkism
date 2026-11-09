@@ -137,6 +137,25 @@ func (p *Postgres) exportRecoverySnapshotMode(ctx context.Context, restored bool
 	return encoded, nil
 }
 
+// maintenanceSnapshot opens a serializable maintenance transaction on p that reads every scope.
+// The caller defers rollback; only an explicit view.tx.Commit makes anything durable.
+func (p *Postgres) maintenanceSnapshot(ctx context.Context) (view *Postgres, rollback func(), err error) {
+	tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable, AccessMode: pgx.ReadWrite})
+	if err != nil {
+		return nil, nil, pgErr(err)
+	}
+	rollback = func() { _ = tx.Rollback(ctx) }
+	if _, err = tx.Exec(ctx, `SELECT arkism.check_maintenance_access()`); err != nil {
+		rollback()
+		return nil, nil, pgErr(err)
+	}
+	if err = disableSnapshotRowSecurity(ctx, tx); err != nil {
+		rollback()
+		return nil, nil, err
+	}
+	return &Postgres{pool: p.pool, tx: tx}, rollback, nil
+}
+
 // disableSnapshotRowSecurity lets a privileged role read every scope inside
 // the snapshot transaction.
 func disableSnapshotRowSecurity(ctx context.Context, tx pgx.Tx) error {

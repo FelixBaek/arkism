@@ -176,39 +176,44 @@ func (s *Service) changeOperation(ctx context.Context, token, id string, in Oper
 	}
 	var out Record
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		r, err := tx.Get(ctx, colJobs, in.Scope, id)
-		if err != nil {
-			return err
-		}
-		if !ownsJob(d, r) {
-			return ErrNotFound
-		}
-		if !operableJobKinds[r.Kind] {
-			return ErrInvalid
-		}
-		if in.ExpectedRevision > 0 && r.Revision != in.ExpectedRevision {
-			return ErrConflict
-		}
-		prev := r.Revision
-		remove, err := apply(&r)
-		if err != nil {
-			return err
-		}
-		if remove {
-			err = tx.Delete(ctx, colJobs, in.Scope, id, prev)
-		} else {
-			r.Revision++
-			r.UpdatedAt = time.Now().UTC()
-			err = tx.Replace(ctx, colJobs, r, prev)
-		}
-		if err != nil {
-			return err
-		}
-		out = r
-		return audit(ctx, tx, in.Scope, d.PrincipalID, auditAction, id)
+		var err error
+		out, err = changeOperationTx(ctx, tx, d, id, in, auditAction, apply)
+		return err
 	})
 	if err != nil {
 		return OperationView{}, err
 	}
 	return viewOperation(out), nil
+}
+
+func changeOperationTx(ctx context.Context, tx Tx, d Decision, id string, in OperationChangeInput, auditAction string, apply func(*Record) (bool, error)) (Record, error) {
+	r, err := tx.Get(ctx, colJobs, in.Scope, id)
+	if err != nil {
+		return Record{}, err
+	}
+	if !ownsJob(d, r) {
+		return Record{}, ErrNotFound
+	}
+	if !operableJobKinds[r.Kind] {
+		return Record{}, ErrInvalid
+	}
+	if in.ExpectedRevision > 0 && r.Revision != in.ExpectedRevision {
+		return Record{}, ErrConflict
+	}
+	prev := r.Revision
+	remove, err := apply(&r)
+	if err != nil {
+		return Record{}, err
+	}
+	if remove {
+		err = tx.Delete(ctx, colJobs, in.Scope, id, prev)
+	} else {
+		r.Revision++
+		r.UpdatedAt = time.Now().UTC()
+		err = tx.Replace(ctx, colJobs, r, prev)
+	}
+	if err != nil {
+		return Record{}, err
+	}
+	return r, audit(ctx, tx, in.Scope, d.PrincipalID, auditAction, id)
 }

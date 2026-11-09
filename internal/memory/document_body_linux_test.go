@@ -63,9 +63,24 @@ func TestDocumentsZipRoundTripAndConflicts(t *testing.T) {
 	if _, err = f.svc.ExportDocuments(testCtx, f.agent, DocumentsExportInput{Scope: scopeA, DocumentIDs: []string{a.DocumentID}}); err == nil {
 		t.Fatal("an agent exported documents")
 	}
+	checkDocumentImportConflicts(t, f, zipped.ContentBase64)
+
+	// A space export can carry only the picked documents.
+	bundle := exportBundle(t, f, scopeA, SpaceExportInput{Parts: []string{spaceSectionDocuments}, DocumentIDs: []string{a.DocumentID}})
+	if !strings.Contains(bundle, "가 문서") || strings.Contains(bundle, "나 문서") {
+		t.Fatalf("picked export:\n%s", bundle)
+	}
+	if validSpaceExport(SpaceExportInput{Parts: []string{"data"}, DocumentIDs: []string{a.DocumentID}}) {
+		t.Fatal("a pick without the documents part")
+	}
+}
+
+// checkDocumentImportConflicts imports one exported zip into scopeB under every conflict mode.
+func checkDocumentImportConflicts(t *testing.T, f *fixture, zipBase64 string) {
+	t.Helper()
 	imp := func(conflict string) SpaceReport {
 		t.Helper()
-		r, err := f.svc.ImportDocuments(testCtx, f.human, DocumentsImportInput{Scope: scopeB, ZipBase64: zipped.ContentBase64, Conflict: conflict})
+		r, err := f.svc.ImportDocuments(testCtx, f.human, DocumentsImportInput{Scope: scopeB, ZipBase64: zipBase64, Conflict: conflict})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -92,17 +107,8 @@ func TestDocumentsZipRoundTripAndConflicts(t *testing.T) {
 	if r := imp(docConflictNewID); r.Imported != 1 || docCount() != 2 {
 		t.Fatalf("new_id %+v (%d documents)", r, docCount())
 	}
-	if _, err = f.svc.ImportDocuments(testCtx, f.human, DocumentsImportInput{Scope: scopeB, ZipBase64: zipped.ContentBase64, Conflict: "merge"}); !errors.Is(err, ErrInvalid) {
+	if _, err := f.svc.ImportDocuments(testCtx, f.human, DocumentsImportInput{Scope: scopeB, ZipBase64: zipBase64, Conflict: "merge"}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("unknown conflict: %v", err)
-	}
-
-	// A space export can carry only the picked documents.
-	bundle := exportBundle(t, f, scopeA, SpaceExportInput{Parts: []string{spaceSectionDocuments}, DocumentIDs: []string{a.DocumentID}})
-	if !strings.Contains(bundle, "가 문서") || strings.Contains(bundle, "나 문서") {
-		t.Fatalf("picked export:\n%s", bundle)
-	}
-	if validSpaceExport(SpaceExportInput{Parts: []string{"data"}, DocumentIDs: []string{a.DocumentID}}) {
-		t.Fatal("a pick without the documents part")
 	}
 }
 

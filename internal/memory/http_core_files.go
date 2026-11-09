@@ -190,14 +190,7 @@ func (s *Service) ExtractFileBatch(ctx context.Context, token string, in FileBat
 		if total += int64(len(file.Raw)); i >= s.Files.batchFiles() || total > s.Files.batchBytes() {
 			return out, errBlobTooLarge
 		}
-		item := FileBatchItem{Parsers: in.Parsers}
-		if i < len(in.Files) {
-			item.MIME = in.Files[i].MIME
-			if len(in.Files[i].Parsers) > 0 {
-				item.Parsers = in.Files[i].Parsers
-			}
-		}
-		result, err := s.extractBatchFile(ctx, token, d, plan, in, item, file)
+		result, err := s.extractBatchFile(ctx, token, d, plan, in, in.item(i), file)
 		if errors.Is(err, ErrDenied) || errors.Is(err, ErrModelBudget) {
 			return out, err
 		}
@@ -207,6 +200,18 @@ func (s *Service) ExtractFileBatch(ctx context.Context, token string, in FileBat
 		return out, ErrInvalid
 	}
 	return out, nil
+}
+
+// item is the i-th file's MIME type and parsers; a file without its own parsers uses the batch's.
+func (in FileBatchInput) item(i int) FileBatchItem {
+	item := FileBatchItem{Parsers: in.Parsers}
+	if i < len(in.Files) {
+		item.MIME = in.Files[i].MIME
+		if len(in.Files[i].Parsers) > 0 {
+			item.Parsers = in.Files[i].Parsers
+		}
+	}
+	return item
 }
 
 func (s *Service) extractBatchFile(ctx context.Context, token string, d Decision, plan FileExtractJob, in FileBatchInput, item FileBatchItem, file batchFile) (FileMemoriesResult, error) {

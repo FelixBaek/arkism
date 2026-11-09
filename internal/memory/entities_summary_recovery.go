@@ -50,14 +50,8 @@ func recoverSummarySchedule(ctx context.Context, tx Tx, store namedEntityStore, 
 		return errSummaryScheduleBusy
 	}
 	state := *job.AutoDerive
-	state.Entities = slices.Clone(state.Entities)
-	for _, id := range ids {
-		if !slices.Contains(state.Entities, id) {
-			if len(state.Entities) >= autoDeriveEntitiesMax {
-				return ErrConflict
-			}
-			state.Entities = append(state.Entities, id)
-		}
+	if state.Entities, e = queueSummaryEntities(state.Entities, ids); e != nil {
+		return e
 	}
 	if len(state.Entities) != len(job.AutoDerive.Entities) {
 		prev := job.Revision
@@ -69,6 +63,21 @@ func recoverSummarySchedule(ctx context.Context, tx Tx, store namedEntityStore, 
 		}
 	}
 	return tx.Insert(ctx, colJobs, Record{ID: receiptID, Scope: r.Scope, Kind: "approved_summary_receipt", Status: JobStatusDone, Revision: 1, Target: &Ref{Collection: colMemories, ID: r.ID, Revision: r.Revision}, CreatedBy: actor, CreatedAt: now, UpdatedAt: now})
+}
+
+// queueSummaryEntities returns a copy of queued with each of ids added once, or
+// ErrConflict when the queue would pass autoDeriveEntitiesMax.
+func queueSummaryEntities(queued, ids []string) ([]string, error) {
+	out := slices.Clone(queued)
+	for _, id := range ids {
+		if !slices.Contains(out, id) {
+			if len(out) >= autoDeriveEntitiesMax {
+				return nil, ErrConflict
+			}
+			out = append(out, id)
+		}
+	}
+	return out, nil
 }
 
 // deferClaimedJob puts a claimed job back to pending after delay and refunds

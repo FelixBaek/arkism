@@ -725,24 +725,13 @@ func sessionProjectKey() string {
 // recall reads current memories by id (from the SessionStart index) or query.
 // opts carries the search-only options explain and expand_causal (bool) and timezone (IANA name).
 func recall(query, idsArg, relatedTo any, opts map[string]any) (host.Obj, error) {
-	all, err := pyIter(idsArg)
+	ids, err := recallIDs(idsArg)
 	if err != nil {
 		return nil, err
 	}
-	var ids []string
-	for _, i := range all {
-		if s := pyStr(i); pyStrip(s) != "" {
-			ids = append(ids, s)
-		}
-	}
-	ids = ids[:min(len(ids), 10)]
 	q, isStr := query.(string)
-	if relatedTo != nil {
-		if len(ids) > 0 || !validAnchor(relatedTo) {
-			return nil, errors.New("related_to requires an exact collection/id/revision and cannot be combined with ids")
-		}
-	} else if len(ids) == 0 && !(isStr && pyStrip(q) != "") {
-		return nil, errors.New("ids, query or related_to is required")
+	if err := recallTarget(len(ids) > 0, isStr && pyStrip(q) != "", relatedTo); err != nil {
+		return nil, err
 	}
 	search, err := recallSearchOptions(opts)
 	if err != nil {
@@ -774,14 +763,47 @@ func recall(query, idsArg, relatedTo any, opts map[string]any) (host.Obj, error)
 		}
 		out = append(out, packed...)
 	}
-	if len(memories) == 0 && len(ids) == 0 && relatedTo == nil && !(search["conversation_context"] == true && len(asList(res["conversation"])) > 0) {
+	return append(out, recallTail(len(memories) == 0 && len(ids) == 0, relatedTo, search, res)...), nil
+}
+
+// recallIDs is the first 10 non-blank ids.
+func recallIDs(idsArg any) ([]string, error) {
+	all, err := pyIter(idsArg)
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for _, i := range all {
+		if s := pyStr(i); pyStrip(s) != "" {
+			ids = append(ids, s)
+		}
+	}
+	return ids[:min(len(ids), 10)], nil
+}
+
+// recallTarget checks that exactly one of ids, query or related_to names what to recall.
+func recallTarget(hasIDs, hasQuery bool, relatedTo any) error {
+	if relatedTo != nil {
+		if hasIDs || !validAnchor(relatedTo) {
+			return errors.New("related_to requires an exact collection/id/revision and cannot be combined with ids")
+		}
+	} else if !hasIDs && !hasQuery {
+		return errors.New("ids, query or related_to is required")
+	}
+	return nil
+}
+
+// recallTail is the no-memory result of an empty search and the related_to note.
+func recallTail(none bool, relatedTo any, search, res map[string]any) host.Obj {
+	var out host.Obj
+	if none && relatedTo == nil && !(search["conversation_context"] == true && len(asList(res["conversation"])) > 0) {
 		out = append(out, host.KV{Key: "result", Value: host.NoRelatedMemory})
 	}
 	if relatedTo != nil {
 		out = append(out, host.KV{Key: "related_to", Value: relatedTo},
 			host.KV{Key: "relation_note", Value: "저장된 직접 관계의 활성 기억만 최대6개 반환합니다. 전체 관계 목록이 아니며 없는 관계를 추정하지 않습니다."})
 	}
-	return out, nil
+	return out
 }
 
 // searchExtras is the search's degraded lanes and explain trace, when it returned them.
@@ -847,16 +869,26 @@ func recallSearchOptions(opts map[string]any) (map[string]any, error) {
 	if err := objectArgs(opts, out, "lane_weights", "temporal_window", "min_scores", "rerank_options", "include_options"); err != nil {
 		return nil, err
 	}
-	if v, ok := opts["timezone"]; ok && v != nil {
-		tz, isStr := v.(string)
-		if !isStr || len(tz) > 64 || strings.Trim(tz, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/_+-") != "" {
-			return nil, errors.New("timezone must be an IANA name such as Asia/Seoul")
-		}
-		if tz != "" {
-			out["timezone"] = tz
-		}
+	if err := recallTimezoneOption(opts, out); err != nil {
+		return nil, err
 	}
 	return out, nil
+}
+
+// recallTimezoneOption checks timezone (an IANA name) into out; empty is left out.
+func recallTimezoneOption(opts, out map[string]any) error {
+	v, ok := opts["timezone"]
+	if !ok || v == nil {
+		return nil
+	}
+	tz, isStr := v.(string)
+	if !isStr || len(tz) > 64 || strings.Trim(tz, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/_+-") != "" {
+		return errors.New("timezone must be an IANA name such as Asia/Seoul")
+	}
+	if tz != "" {
+		out["timezone"] = tz
+	}
+	return nil
 }
 
 // recallAnchorOptions checks query_time (RFC3339), rerank (bool, false is kept, or "model"),

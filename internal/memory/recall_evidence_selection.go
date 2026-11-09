@@ -158,58 +158,13 @@ func (s *Service) selectRecallEvidence(ctx context.Context, token string, in Sea
 	if err != nil || d.PrincipalID != actor.PrincipalID || d.Role != actor.Role || !d.ExternalTransfer || !d.ContentSafe || !safeTransfer(in.Query) || hasPrivateMarker(in.Query) {
 		return "denied"
 	}
-	prompt := evidenceSelectionPrompt{Query: in.Query, MemoryLimit: in.Limit, MemoryCharacters: in.MaxChars, ConversationLimit: conversationLaneHits, ConversationCharacters: conversationLaneHits * sessionLaneRunes,
-		Memories: []evidenceSelectionText{}, Conversations: []evidenceSelectionText{}}
-	var memories, conversations []Hit
-	floor := max(in.MinScore, in.floor().Final)
-	for _, row := range rows {
-		if row.Score < floor || in.space.recallQuality().ConflictPending == conflictPendingExclude && row.conflictID != "" {
-			continue
-		}
-		h := row.Hit
-		h.Score, h.Lanes = row.Score, hitLanes(h.Reasons)
-		if !s.evidenceSelectionReadable(ctx, token, in, actor, h, nil) {
-			return "candidate_denied"
-		}
-		memories = append(memories, h)
-		prompt.Memories = append(prompt.Memories, evidenceSelectionText{len(memories), h.Text, h.Summary})
+	prompt, memories, conversations, status := s.evidenceSelectionCandidates(ctx, token, in, actor, rows, sources)
+	if status != "" {
+		return status
 	}
-	for _, row := range sources.rows {
-		h := row.Hit
-		r := sources.records[h.ID]
-		if !s.evidenceSelectionReadable(ctx, token, in, actor, h, &r) {
-			return "candidate_denied"
-		}
-		conversations = append(conversations, h)
-		prompt.Conversations = append(prompt.Conversations, evidenceSelectionText{len(conversations), h.Text, h.Summary})
-	}
-	if len(memories)+len(conversations) == 0 {
-		return "nothing_to_select"
-	}
-	body, err := json.Marshal(prompt)
-	if err != nil || utf8.RuneCount(body)+utf8.RuneCountInString(evidenceSelectionSystem) > evidenceSelectionPromptRunes {
-		return "prompt_too_large" // never silently truncate a candidate
-	}
-	// The existing trace schema retains at most 64 memory IDs and one source
-	// document. This is a bounded audit link, not full 200-candidate lineage.
-	var sent []string
-	for _, h := range memories {
-		sent = append(sent, h.ID)
-	}
-	document := ""
-	if len(conversations) > 0 {
-		document = conversations[0].ID
-	}
-	ctx, _ = withLLMNote(ctx, document, sent)
-	response, _, err := s.modelCall(ctx, projectScope(in.Scope), evidenceSelectionOperation, evidenceSelectionSystem, string(body), evidenceSelectionOutputTokens)
-	if errors.Is(err, ErrModelBudget) {
-		return "budget_exceeded"
-	}
-	if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return "timeout"
-	}
-	if err != nil || ctx.Err() != nil {
-		return "failed"
+	ctx, response, status := s.callEvidenceSelection(ctx, in, prompt, memories, conversations)
+	if status != "" {
+		return status
 	}
 	answer, ok := parseEvidenceSelection(response, len(memories), len(conversations), in.Limit)
 	if !ok {
@@ -230,12 +185,86 @@ func (s *Service) selectRecallEvidence(ctx context.Context, token string, in Sea
 	if evidenceSelectionChars(selected.Conversation) > len(chosen)*sessionLaneRunes {
 		return "character_budget"
 	}
-	// Preserve correction labels on newly chosen hits without repeating the
-	// provisional search or changing its already-produced baseline lane.
+	if status := s.labelSelectedCorrections(ctx, token, in, &selected); status != "" {
+		return status
+	}
+	out.Items, out.Conversation, out.conversationRecords = selected.Items, selected.Conversation, selected.conversationRecords
+	out.Degraded = selected.Degraded
+	return "applied"
+}
+
+// evidenceSelectionCandidates numbers the readable memory and conversation
+// candidates for the prompt; a non-empty status ends the selection.
+func (s *Service) evidenceSelectionCandidates(ctx context.Context, token string, in SearchInput, actor Decision, rows []ScoredHit, sources *conversationCandidatePool) (evidenceSelectionPrompt, []Hit, []Hit, string) {
+	prompt := evidenceSelectionPrompt{Query: in.Query, MemoryLimit: in.Limit, MemoryCharacters: in.MaxChars, ConversationLimit: conversationLaneHits, ConversationCharacters: conversationLaneHits * sessionLaneRunes,
+		Memories: []evidenceSelectionText{}, Conversations: []evidenceSelectionText{}}
+	var memories, conversations []Hit
+	floor := max(in.MinScore, in.floor().Final)
+	for _, row := range rows {
+		if row.Score < floor || in.space.recallQuality().ConflictPending == conflictPendingExclude && row.conflictID != "" {
+			continue
+		}
+		h := row.Hit
+		h.Score, h.Lanes = row.Score, hitLanes(h.Reasons)
+		if !s.evidenceSelectionReadable(ctx, token, in, actor, h, nil) {
+			return prompt, nil, nil, "candidate_denied"
+		}
+		memories = append(memories, h)
+		prompt.Memories = append(prompt.Memories, evidenceSelectionText{len(memories), h.Text, h.Summary})
+	}
+	for _, row := range sources.rows {
+		h := row.Hit
+		r := sources.records[h.ID]
+		if !s.evidenceSelectionReadable(ctx, token, in, actor, h, &r) {
+			return prompt, nil, nil, "candidate_denied"
+		}
+		conversations = append(conversations, h)
+		prompt.Conversations = append(prompt.Conversations, evidenceSelectionText{len(conversations), h.Text, h.Summary})
+	}
+	if len(memories)+len(conversations) == 0 {
+		return prompt, nil, nil, "nothing_to_select"
+	}
+	return prompt, memories, conversations, ""
+}
+
+// callEvidenceSelection sends the prompt; it returns the context carrying the
+// model-call note, which the rest of the selection keeps using.
+func (s *Service) callEvidenceSelection(ctx context.Context, in SearchInput, prompt evidenceSelectionPrompt, memories, conversations []Hit) (context.Context, string, string) {
+	body, err := json.Marshal(prompt)
+	if err != nil || utf8.RuneCount(body)+utf8.RuneCountInString(evidenceSelectionSystem) > evidenceSelectionPromptRunes {
+		return ctx, "", "prompt_too_large" // never silently truncate a candidate
+	}
+	// The existing trace schema retains at most 64 memory IDs and one source
+	// document. This is a bounded audit link, not full 200-candidate lineage.
+	var sent []string
+	for _, h := range memories {
+		sent = append(sent, h.ID)
+	}
+	document := ""
+	if len(conversations) > 0 {
+		document = conversations[0].ID
+	}
+	ctx, _ = withLLMNote(ctx, document, sent)
+	response, _, err := s.modelCall(ctx, projectScope(in.Scope), evidenceSelectionOperation, evidenceSelectionSystem, string(body), evidenceSelectionOutputTokens)
+	if errors.Is(err, ErrModelBudget) {
+		return ctx, "", "budget_exceeded"
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return ctx, "", "timeout"
+	}
+	if err != nil || ctx.Err() != nil {
+		return ctx, "", "failed"
+	}
+	return ctx, response, ""
+}
+
+// labelSelectedCorrections preserves correction labels on newly chosen hits
+// without repeating the provisional search or changing its already-produced baseline lane.
+func (s *Service) labelSelectedCorrections(ctx context.Context, token string, in SearchInput, selected *ContextBundle) string {
 	readCandidates := s.probeAllowed(ctx, token, "read:memory_candidates", in.Scope)
 	for i := range selected.Items {
 		if selected.Items[i].conflictID != "" {
-			selected.Items[i].PendingCorrection = s.pendingCorrection(ctx, token, in, &selected, selected.Items[i].conflictID, readCandidates)
+			selected.Items[i].PendingCorrection = s.pendingCorrection(ctx, token, in, selected, selected.Items[i].conflictID, readCandidates)
 		}
 	}
 	if ctx.Err() != nil {
@@ -244,7 +273,5 @@ func (s *Service) selectRecallEvidence(ctx context.Context, token string, in Sea
 		}
 		return "failed"
 	}
-	out.Items, out.Conversation, out.conversationRecords = selected.Items, selected.Conversation, selected.conversationRecords
-	out.Degraded = selected.Degraded
-	return "applied"
+	return ""
 }

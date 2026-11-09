@@ -61,16 +61,9 @@ func parseOptions(args []string) (options, bool, error) {
 	fs.Int64Var(&o.revision, "expected-revision", 0, "current maintenance revision")
 	fs.BoolVar(&o.downtime, "allow-global-downtime", false, "acknowledge global downtime, updated clients, older clients stopped and no direct SQL writes")
 	fs.DurationVar(&o.timeout, "timeout", 30*time.Second, "bounded operation timeout")
-	// Repeated options are mistakes, not last-value-wins administrative requests.
-	seen := map[string]bool{}
-	for _, arg := range args[1:] {
-		if strings.HasPrefix(arg, "-") {
-			name, _, _ := strings.Cut(strings.TrimLeft(arg, "-"), "=")
-			if seen[name] {
-				return o, false, errInput
-			}
-			seen[name] = true
-		}
+	seen, ok := seenFlags(args[1:])
+	if !ok {
+		return o, false, errInput
 	}
 	if e := fs.Parse(args[1:]); e != nil {
 		if e == flag.ErrHelp {
@@ -81,27 +74,42 @@ func parseOptions(args []string) (options, bool, error) {
 	if fs.NArg() != 0 || o.timeout < time.Second || o.timeout > 15*time.Minute {
 		return o, false, errInput
 	}
-	begin := o.command == "begin-privacy" || o.command == "begin-supersede"
-	if begin {
-		if !o.downtime || o.request == "" || seen["expected-revision"] {
-			return o, false, errInput
-		}
-		if (o.command == "begin-supersede") != (o.memoryID != "") {
-			return o, false, errInput
-		}
-	} else {
-		if seen["request"] || seen["memory-id"] || seen["token-file"] || seen["allow-global-downtime"] {
-			return o, false, errInput
-		}
-		if o.command == "status" {
-			if seen["expected-revision"] {
-				return o, false, errInput
-			}
-		} else if o.revision < 1 {
-			return o, false, errInput
-		}
+	if !commandFlagsValid(o, seen) {
+		return o, false, errInput
 	}
 	return o, false, nil
+}
+
+// seenFlags names each option given; repeated options are mistakes, not last-value-wins administrative requests.
+func seenFlags(args []string) (map[string]bool, bool) {
+	seen := map[string]bool{}
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "-") {
+			name, _, _ := strings.Cut(strings.TrimLeft(arg, "-"), "=")
+			if seen[name] {
+				return nil, false
+			}
+			seen[name] = true
+		}
+	}
+	return seen, true
+}
+
+// commandFlagsValid checks which options the command needs and which it refuses.
+func commandFlagsValid(o options, seen map[string]bool) bool {
+	if o.command == "begin-privacy" || o.command == "begin-supersede" {
+		if !o.downtime || o.request == "" || seen["expected-revision"] {
+			return false
+		}
+		return (o.command == "begin-supersede") == (o.memoryID != "")
+	}
+	if seen["request"] || seen["memory-id"] || seen["token-file"] || seen["allow-global-downtime"] {
+		return false
+	}
+	if o.command == "status" {
+		return !seen["expected-revision"]
+	}
+	return o.revision >= 1
 }
 
 // Check the opened inode, not just a path that might have changed meanwhile.

@@ -721,29 +721,37 @@ func (s *Service) refreshStaleObservations(ctx context.Context, token string, d 
 			out.Plan.StaleObservations = append(out.Plan.StaleObservations, r.ID)
 			continue
 		}
-		drafts, err := s.askObservations(ctx, in, job, members, r.Text)
-		if err != nil {
-			if errors.Is(err, errModelAnswer) {
-				out.Rejected = append(out.Rejected, ObservationRejection{Group: out.Groups, Code: errModelAnswer.Error(), Target: r.ID})
-				continue
-			}
+		if err := s.refreshStaleObservation(ctx, d, in, job, r, members, out); err != nil {
 			return err
 		}
-		if len(drafts) != 1 {
-			out.Rejected = append(out.Rejected, ObservationRejection{Group: out.Groups, Code: "expected_one_observation", Target: r.ID})
-			continue
-		}
-		refs, code := validObservationDraft(drafts[0], groupRefs(members))
-		if code != "" {
-			out.Rejected = append(out.Rejected, ObservationRejection{Group: out.Groups, Code: code, Target: r.ID})
-			continue
-		}
-		v, err := s.storeObservation(ctx, d, in, r, drafts[0], refs, members)
-		if err != nil {
-			return err
-		}
-		out.Refreshed = append(out.Refreshed, v)
 	}
+	return nil
+}
+
+// refreshStaleObservation asks the model to rewrite one stale observation; an unusable answer is a rejection, not an error.
+func (s *Service) refreshStaleObservation(ctx context.Context, d Decision, in ObservationConsolidateInput, job *WikiJob, r Record, members []Record, out *ObservationConsolidateResult) error {
+	drafts, err := s.askObservations(ctx, in, job, members, r.Text)
+	if err != nil {
+		if errors.Is(err, errModelAnswer) {
+			out.Rejected = append(out.Rejected, ObservationRejection{Group: out.Groups, Code: errModelAnswer.Error(), Target: r.ID})
+			return nil
+		}
+		return err
+	}
+	if len(drafts) != 1 {
+		out.Rejected = append(out.Rejected, ObservationRejection{Group: out.Groups, Code: "expected_one_observation", Target: r.ID})
+		return nil
+	}
+	refs, code := validObservationDraft(drafts[0], groupRefs(members))
+	if code != "" {
+		out.Rejected = append(out.Rejected, ObservationRejection{Group: out.Groups, Code: code, Target: r.ID})
+		return nil
+	}
+	v, err := s.storeObservation(ctx, d, in, r, drafts[0], refs, members)
+	if err != nil {
+		return err
+	}
+	out.Refreshed = append(out.Refreshed, v)
 	return nil
 }
 
@@ -815,39 +823,44 @@ func (s *Service) proposeObservations(ctx context.Context, token string, d Decis
 	}
 	block, asks, asked := settings.Consolidation, []obsAsk{}, 0
 	for _, sc := range block.partition(members) {
-		mine := inScope(existing, sc.tags)
-		count := liveObservations(mine)
-		for _, group := range clusterMemories(sc.members) {
-			group = sc.trim(group[:min(len(group), obsSourcesMax)])
-			if asked >= in.MaxGroups || observationsCover(mine, group) {
-				continue
-			}
-			if sc.limit >= 0 && count >= sc.limit {
-				out.Rejected = append(out.Rejected, ObservationRejection{Group: out.Groups, Code: "scope_limit", Target: strings.Join(sc.tags, ",")})
-				break
-			}
-			if out.Plan == nil && s.settledByDecision(ctx, token, in.Scope, settings, mine, group, out.Groups, out) {
-				continue
-			}
-			if in.roundFull(len(group), out) {
-				break
-			}
-			count, asked = count+1, asked+1
-			out.Groups++
-			if out.Plan != nil {
-				out.Plan.Groups = append(out.Plan.Groups, recordIDs(group))
-				continue
-			}
-			scoped := in
-			scoped.scopeTags, scoped.mission = sc.tags, sc.mission
-			asks = append(asks, obsAsk{in: scoped, group: group, n: out.Groups})
-		}
+		asks = s.scopeObservationAsks(ctx, token, in, settings, sc, inScope(existing, sc.tags), &asked, asks, out)
 	}
 	parallel := 1
 	if block != nil {
 		parallel = block.Parallel
 	}
 	return s.runObservationAsks(ctx, d, job, asks, parallel, out)
+}
+
+// scopeObservationAsks appends the groups of one consolidation scope that still need a model ask (or plans them in a dry run).
+func (s *Service) scopeObservationAsks(ctx context.Context, token string, in ObservationConsolidateInput, settings SpaceConfig, sc obsScope, mine []Record, asked *int, asks []obsAsk, out *ObservationConsolidateResult) []obsAsk {
+	count := liveObservations(mine)
+	for _, group := range clusterMemories(sc.members) {
+		group = sc.trim(group[:min(len(group), obsSourcesMax)])
+		if *asked >= in.MaxGroups || observationsCover(mine, group) {
+			continue
+		}
+		if sc.limit >= 0 && count >= sc.limit {
+			out.Rejected = append(out.Rejected, ObservationRejection{Group: out.Groups, Code: "scope_limit", Target: strings.Join(sc.tags, ",")})
+			break
+		}
+		if out.Plan == nil && s.settledByDecision(ctx, token, in.Scope, settings, mine, group, out.Groups, out) {
+			continue
+		}
+		if in.roundFull(len(group), out) {
+			break
+		}
+		count, *asked = count+1, *asked+1
+		out.Groups++
+		if out.Plan != nil {
+			out.Plan.Groups = append(out.Plan.Groups, recordIDs(group))
+			continue
+		}
+		scoped := in
+		scoped.scopeTags, scoped.mission = sc.tags, sc.mission
+		asks = append(asks, obsAsk{in: scoped, group: group, n: out.Groups})
+	}
+	return asks
 }
 
 // observationsCover: a group is not asked about again while every member is cited by one observation (any status but stale).

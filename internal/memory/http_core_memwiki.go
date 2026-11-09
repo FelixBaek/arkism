@@ -37,32 +37,7 @@ func registerMemwikiCoreHTTP(mux routeRegistrar, s *Service, _ *requestMetrics) 
 		out, e := s.WikiTree(r.Context(), bearer(r), scope)
 		respond(w, out, e)
 	})
-	mux.HandleFunc("POST /v1/wiki/folders", func(w http.ResponseWriter, r *http.Request) {
-		var in WikiFolderInput
-		if !decode(w, r, &in) {
-			return
-		}
-		out, e := s.CreateWikiFolder(r.Context(), bearer(r), in)
-		respond(w, out, e)
-	})
-	mux.HandleFunc("PATCH /v1/wiki/folders", func(w http.ResponseWriter, r *http.Request) {
-		var in WikiFolderMoveInput
-		if !decode(w, r, &in) {
-			return
-		}
-		out, e := s.MoveWikiFolder(r.Context(), bearer(r), in)
-		respond(w, out, e)
-	})
-	mux.HandleFunc("DELETE /v1/wiki/folders", func(w http.ResponseWriter, r *http.Request) {
-		scope, q, e := parseWikiQuery(r.URL.RawQuery, "path", "recursive")
-		recursive := q.Get("recursive")
-		if e != nil || recursive != "" && recursive != "true" && recursive != "false" {
-			respond(w, nil, ErrInvalid)
-			return
-		}
-		out, e := s.DeleteWikiFolder(r.Context(), bearer(r), WikiFolderDeleteInput{Scope: scope, Path: q.Get("path"), Recursive: recursive == "true"})
-		respond(w, out, e)
-	})
+	registerWikiFolderHTTP(mux, s)
 	mux.HandleFunc("DELETE /v1/wiki/pages/{id}", func(w http.ResponseWriter, r *http.Request) {
 		scope, q, e := parseWikiQuery(r.URL.RawQuery, "expected_revision")
 		rev, err := strconv.ParseInt(q.Get("expected_revision"), 10, 64)
@@ -93,5 +68,35 @@ func registerMemwikiCoreHTTP(mux routeRegistrar, s *Service, _ *requestMetrics) 
 			return
 		}
 		writeAttachment(w, out.ContentType, out.Filename, out.Data)
+	})
+}
+
+// registerWikiFolderHTTP adds the folder create, move and delete routes.
+func registerWikiFolderHTTP(mux routeRegistrar, s *Service) {
+	mux.HandleFunc("POST /v1/wiki/folders", func(w http.ResponseWriter, r *http.Request) {
+		var in WikiFolderInput
+		if !decode(w, r, &in) {
+			return
+		}
+		out, e := s.CreateWikiFolder(r.Context(), bearer(r), in)
+		respond(w, out, e)
+	})
+	mux.HandleFunc("PATCH /v1/wiki/folders", func(w http.ResponseWriter, r *http.Request) {
+		var in WikiFolderMoveInput
+		if !decode(w, r, &in) {
+			return
+		}
+		out, e := s.MoveWikiFolder(r.Context(), bearer(r), in)
+		respond(w, out, e)
+	})
+	mux.HandleFunc("DELETE /v1/wiki/folders", func(w http.ResponseWriter, r *http.Request) {
+		scope, q, e := parseWikiQuery(r.URL.RawQuery, "path", "recursive")
+		recursive := q.Get("recursive")
+		if e != nil || recursive != "" && recursive != "true" && recursive != "false" {
+			respond(w, nil, ErrInvalid)
+			return
+		}
+		out, e := s.DeleteWikiFolder(r.Context(), bearer(r), WikiFolderDeleteInput{Scope: scope, Path: q.Get("path"), Recursive: recursive == "true"})
+		respond(w, out, e)
 	})
 }

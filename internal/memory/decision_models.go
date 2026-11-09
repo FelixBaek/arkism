@@ -227,11 +227,7 @@ func (s *Service) decisionFilter(ctx context.Context, token string, scope Scope,
 		}
 		key := "h" + strconv.Itoa(len(items))
 		items[key] = map[string]any{"text": h.Text, "stated_on": hitContentTime(h).UTC().Format(time.DateOnly)}
-		for _, q := range qs {
-			if !q.later || len(items) > 1 {
-				questions[key+q.suffix] = map[string]any{"type": "choice", "instructions": strings.Replace(q.instructions, "this item of state.items", "state.items."+key, 1), "criteria": q.criteria}
-			}
-		}
+		addDecisionQuestions(questions, key, qs, len(items))
 		asked[h.Collection+"/"+h.ID] = key
 	}
 	if len(items) == 0 {
@@ -258,6 +254,15 @@ func (s *Service) decisionFilter(ctx context.Context, token string, scope Scope,
 		return false
 	})
 	return kept, answers, stages
+}
+
+// addDecisionQuestions asks each of qs about item key, the n-th item; later questions skip the first item.
+func addDecisionQuestions(questions map[string]any, key string, qs []decisionQuestion, n int) {
+	for _, q := range qs {
+		if !q.later || n > 1 {
+			questions[key+q.suffix] = map[string]any{"type": "choice", "instructions": strings.Replace(q.instructions, "this item of state.items", "state.items."+key, 1), "criteria": q.criteria}
+		}
+	}
 }
 
 // decisionReflect (task reflect) drops retrieved records that do not bear on the question and,

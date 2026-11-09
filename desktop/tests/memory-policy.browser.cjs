@@ -1,5 +1,6 @@
 // Local product settings component with synthetic scoped HTTP replies; no external calls.
-const fs=require("node:fs"),path=require("node:path"),assert=require("node:assert/strict");
+const fs=require("node:fs"),os=require("node:os"),path=require("node:path"),assert=require("node:assert/strict");
+const shots=fs.mkdtempSync(path.join(os.tmpdir(),"arkism-memory-policy-")); // a private screenshot folder, not a fixed shared /tmp name
 const {chromium}=require(process.env.PLAYWRIGHT_CORE_PATH||path.resolve(__dirname,"../frontend/node_modules/playwright-core"));
 (async()=>{const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});try{
  const page=await browser.newPage({viewport:{width:1000,height:900},locale:"ko-KR"});await page.route("**/*",r=>r.abort());const errors=[];page.on("pageerror",e=>errors.push(e.message));
@@ -25,6 +26,6 @@ const {chromium}=require(process.env.PLAYWRIGHT_CORE_PATH||path.resolve(__dirnam
  await toggle.focus();await page.keyboard.press("Space");await page.getByRole("button",{name:"저장",exact:true}).click();await page.waitForFunction(()=>window.writes.length===2);
  assert.deepEqual(await page.evaluate(()=>window.writes[1].body.recall_quality.signal_policy),{disabled:true});
  await toggle.focus();await page.keyboard.press("Space");await page.getByText("평가 순위 정책",{exact:true}).click();
- const panel=page.locator("section").filter({has:page.getByRole("switch",{name:"최근 작업 평가로 순위 조정",exact:true})}).first();await panel.screenshot({path:"/tmp/arkism-memory-policy-settings.png"});
+ const panel=page.locator("section").filter({has:page.getByRole("switch",{name:"최근 작업 평가로 순위 조정",exact:true})}).first();await panel.screenshot({path:path.join(shots,"settings.png")});
  assert.deepEqual(errors,[]);console.log("PASS: explicit policy toggle, dimension/window change, sibling preservation, scoped save and explicit disable by keyboard");
 }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

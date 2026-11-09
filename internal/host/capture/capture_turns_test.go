@@ -138,6 +138,16 @@ func TestProcessConversationWindowsSplitsCaptureAndStoresTurns(t *testing.T) {
 	if len(sources) == 0 || job["turns_stored"] != true {
 		t.Fatal("turns were not stored", len(sources))
 	}
+	checkConversationSources(t, sources)
+	stored := len(sources)
+	if err := storeTurns(job, users, "claude-code", func() error { return nil }); err != nil || len(sources) != stored {
+		t.Fatal("turns stored twice")
+	}
+}
+
+// checkConversationSources checks each stored turns source and its explicit capture order.
+func checkConversationSources(t *testing.T, sources []map[string]any) {
+	t.Helper()
 	for i, s := range sources {
 		order, ok := s["conversation_order"].(map[string]any)
 		index, indexOK := num(order["index"])
@@ -149,10 +159,6 @@ func TestProcessConversationWindowsSplitsCaptureAndStoresTurns(t *testing.T) {
 			!strings.HasPrefix(s["idempotency_key"].(string), "turns-") || len(s["idempotency_key"].(string)) > 128 {
 			t.Fatal("bad source", s)
 		}
-	}
-	stored := len(sources)
-	if err := storeTurns(job, users, "claude-code", func() error { return nil }); err != nil || len(sources) != stored {
-		t.Fatal("turns stored twice")
 	}
 }
 

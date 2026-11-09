@@ -168,10 +168,15 @@ func TestApplyLLMPreset(t *testing.T) {
 	if remote.Configured() {
 		t.Fatal("keyless remote endpoint must not be usable")
 	}
+	checkLLMPresetRejects(t, server.URL)
+}
+
+func checkLLMPresetRejects(t *testing.T, serverURL string) {
+	t.Helper()
 	for _, bad := range []struct {
 		c            LLMConfig
 		preset, base string
-	}{{LLMConfig{}, "other", ""}, {LLMConfig{Endpoint: server.URL}, "", server.URL}, {LLMConfig{Protocol: "other"}, "", ""}, {LLMConfig{}, "", "http://models.example.com/v1"},
+	}{{LLMConfig{}, "other", ""}, {LLMConfig{Endpoint: serverURL}, "", serverURL}, {LLMConfig{Protocol: "other"}, "", ""}, {LLMConfig{}, "", "http://models.example.com/v1"},
 		{LLMConfig{APIKey: "tok"}, "gateway", "https://models.example.com/v1"}} {
 		if _, err := ApplyLLMPreset(bad.c, bad.preset, bad.base, ""); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("%+v: %v", bad, err)

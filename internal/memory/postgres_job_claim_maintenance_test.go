@@ -75,31 +75,7 @@ func TestPostgresJobClaimMaintenanceBlocksOwnerAndRestrictedWorker(t *testing.T)
 	if err != nil || !st.Active {
 		t.Fatalf("maintenance: %+v %v", st, err)
 	}
-	for _, entry := range []struct {
-		name string
-		repo *Postgres
-	}{{"owner", p}, {"restricted", worker}, {"owner-erasure-empty", &ownerErasure}, {"restricted-erasure-empty", &workerErasure}} {
-		if got, err := entry.repo.ClaimJob(ctx, now, time.Minute); !errors.Is(err, ErrUnavailable) || got.ID != "" {
-			t.Fatalf("%s bypassed active gate: %s %v", entry.name, got.ID, err)
-		}
-	}
-	// The restricted pool has one connection, so check the exact session used by
-	// each blocked claim. The gate must reject before changing its preference.
-	for _, setting := range []string{"on", "off"} {
-		if _, err = app.pool.Exec(ctx, "SELECT set_config('enable_sort',$1,false)", setting); err != nil {
-			t.Fatal(err)
-		}
-		if _, err = worker.ClaimJob(ctx, now, time.Minute); !errors.Is(err, ErrUnavailable) {
-			t.Fatal(err)
-		}
-		var got string
-		if err = app.pool.QueryRow(ctx, "SELECT current_setting('enable_sort')").Scan(&got); err != nil || got != setting {
-			t.Fatalf("blocked claim changed session setting %s -> %s: %v", setting, got, err)
-		}
-	}
-	if _, err = app.pool.Exec(ctx, "RESET enable_sort"); err != nil {
-		t.Fatal(err)
-	}
+	assertActiveMaintenanceBlocksClaims(ctx, t, app, now, []blockedClaimRepo{{"owner", p}, {"restricted", worker}, {"owner-erasure-empty", &ownerErasure}, {"restricted-erasure-empty", &workerErasure}})
 	if after := queueMaintenanceSnapshot(t, p); !bytes.Equal(before, after) {
 		t.Fatal("blocked claims changed durable queue fields or payload")
 	}
@@ -123,97 +99,146 @@ func TestPostgresJobClaimMaintenanceBlocksOwnerAndRestrictedWorker(t *testing.T)
 	}
 }
 
+type blockedClaimRepo struct {
+	name string
+	repo *Postgres
+}
+
+// assertActiveMaintenanceBlocksClaims checks every repo is refused while
+// maintenance is active. repos[1] must be the restricted worker on app's pool.
+func assertActiveMaintenanceBlocksClaims(ctx context.Context, t *testing.T, app *Postgres, now time.Time, repos []blockedClaimRepo) {
+	t.Helper()
+	for _, entry := range repos {
+		if got, err := entry.repo.ClaimJob(ctx, now, time.Minute); !errors.Is(err, ErrUnavailable) || got.ID != "" {
+			t.Fatalf("%s bypassed active gate: %s %v", entry.name, got.ID, err)
+		}
+	}
+	worker := repos[1].repo
+	// The restricted pool has one connection, so check the exact session used by
+	// each blocked claim. The gate must reject before changing its preference.
+	for _, setting := range []string{"on", "off"} {
+		if _, err := app.pool.Exec(ctx, "SELECT set_config('enable_sort',$1,false)", setting); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := worker.ClaimJob(ctx, now, time.Minute); !errors.Is(err, ErrUnavailable) {
+			t.Fatal(err)
+		}
+		var got string
+		if err := app.pool.QueryRow(ctx, "SELECT current_setting('enable_sort')").Scan(&got); err != nil || got != setting {
+			t.Fatalf("blocked claim changed session setting %s -> %s: %v", setting, got, err)
+		}
+	}
+	if _, err := app.pool.Exec(ctx, "RESET enable_sort"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+type jobClaimDrainMode struct{ name, isolation, sort string }
+
 func TestPostgresJobClaimMaintenanceDrainsCallerTransaction(t *testing.T) {
-	for _, mode := range []struct{ name, isolation, sort string }{{"read-committed", "read committed", "on"}, {"serializable", "serializable", "off"}} {
-		t.Run(mode.name, func(t *testing.T) {
-			p, svc, scope, token := durableMaintenanceFixture(t)
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-			defer cancel()
-			now := time.Now().UTC()
-			queueTestJob(t, p, "queue-admitted", "embedding", JobStatusPending, nil, time.Time{})
-			release := make(chan struct{})
-			var once sync.Once
-			unblock := func() { once.Do(func() { close(release) }) }
-			defer unblock()
-			admitted := make(chan int32, 1)
-			claimDone := make(chan error, 1)
-			wrapper := p.ReadTransaction
-			if mode.isolation == "serializable" {
-				wrapper = p.Transaction
-			}
-			go func() {
-				claimDone <- wrapper(ctx, func(ctx context.Context, tx Tx) error {
-					child := tx.(*Postgres)
-					if _, err := child.q().Exec(ctx, "SELECT set_config('enable_sort',$1,true)", mode.sort); err != nil {
-						return err
-					}
-					r, err := child.ClaimJob(ctx, now, time.Minute)
-					if err != nil {
-						return err
-					}
-					if r.ID != "queue-admitted" {
-						return fmt.Errorf("wrong admitted job: %s", r.ID)
-					}
-					var isolation, sort string
-					var pid int32
-					if err = child.q().QueryRow(ctx, "SELECT current_setting('transaction_isolation'),current_setting('enable_sort'),pg_backend_pid()").Scan(&isolation, &sort, &pid); err != nil {
-						return err
-					}
-					if isolation != mode.isolation || sort != mode.sort {
-						return fmt.Errorf("caller state changed: isolation=%s sort=%s", isolation, sort)
-					}
-					admitted <- pid
-					select {
-					case <-release:
-						return nil
-					case <-ctx.Done():
-						return ctx.Err()
-					}
-				})
-			}()
-			var pid int32
-			select {
-			case pid = <-admitted:
-			case err := <-claimDone:
-				t.Fatalf("claim was not admitted: %v", err)
-			case <-ctx.Done():
-				t.Fatal(ctx.Err())
-			}
-			type result struct {
-				status MemoryMaintenanceStatus
-				err    error
-			}
-			maintenanceDone := make(chan result, 1)
-			go func() {
-				st, err := svc.BeginPrivacyMaintenance(ctx, token, queueMaintenanceRequest(scope, "queue-drain"))
-				maintenanceDone <- result{st, err}
-			}()
-			waitQueueGateBlocker(t, p, ctx, pid, "memory_maintenance_gate")
-			select {
-			case r := <-maintenanceDone:
-				t.Fatalf("maintenance passed an open claim transaction: %+v", r)
-			default:
-			}
-			unblock()
-			if err := <-claimDone; err != nil {
-				t.Fatal(err)
-			}
-			r := <-maintenanceDone
-			if r.err != nil || !r.status.Active {
-				t.Fatalf("maintenance after drain: %+v", r)
-			}
-			var attempts int
-			var status string
-			if err := p.pool.QueryRow(ctx, "SELECT attempts,status FROM memory_records WHERE collection='jobs' AND id='queue-admitted'").Scan(&attempts, &status); err != nil || attempts != 1 || status != JobStatusRunning {
-				t.Fatalf("admitted claim did not commit exactly once: %d %s %v", attempts, status, err)
-			}
-			if _, err := p.ClaimJob(ctx, now, time.Minute); !errors.Is(err, ErrUnavailable) {
-				t.Fatalf("new claim passed active maintenance: %v", err)
-			}
-			if _, err := p.CancelMemoryMaintenance(ctx, r.status.Revision); err != nil {
-				t.Fatal(err)
-			}
+	for _, mode := range []jobClaimDrainMode{{"read-committed", "read committed", "on"}, {"serializable", "serializable", "off"}} {
+		t.Run(mode.name, func(t *testing.T) { jobClaimMaintenanceDrain(t, mode) })
+	}
+}
+
+// holdAdmittedClaim claims the queued job inside the caller's transaction,
+// checks the caller's settings survived, reports its backend pid and holds the
+// transaction open until release.
+func holdAdmittedClaim(ctx context.Context, child *Postgres, now time.Time, mode jobClaimDrainMode, admitted chan<- int32, release <-chan struct{}) error {
+	if _, err := child.q().Exec(ctx, "SELECT set_config('enable_sort',$1,true)", mode.sort); err != nil {
+		return err
+	}
+	r, err := child.ClaimJob(ctx, now, time.Minute)
+	if err != nil {
+		return err
+	}
+	if r.ID != "queue-admitted" {
+		return fmt.Errorf("wrong admitted job: %s", r.ID)
+	}
+	var isolation, sort string
+	var pid int32
+	if err = child.q().QueryRow(ctx, "SELECT current_setting('transaction_isolation'),current_setting('enable_sort'),pg_backend_pid()").Scan(&isolation, &sort, &pid); err != nil {
+		return err
+	}
+	if isolation != mode.isolation || sort != mode.sort {
+		return fmt.Errorf("caller state changed: isolation=%s sort=%s", isolation, sort)
+	}
+	admitted <- pid
+	select {
+	case <-release:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func jobClaimMaintenanceDrain(t *testing.T, mode jobClaimDrainMode) {
+	p, svc, scope, token := durableMaintenanceFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	now := time.Now().UTC()
+	queueTestJob(t, p, "queue-admitted", "embedding", JobStatusPending, nil, time.Time{})
+	release := make(chan struct{})
+	var once sync.Once
+	unblock := func() { once.Do(func() { close(release) }) }
+	defer unblock()
+	admitted := make(chan int32, 1)
+	claimDone := make(chan error, 1)
+	wrapper := p.ReadTransaction
+	if mode.isolation == "serializable" {
+		wrapper = p.Transaction
+	}
+	go func() {
+		claimDone <- wrapper(ctx, func(ctx context.Context, tx Tx) error {
+			return holdAdmittedClaim(ctx, tx.(*Postgres), now, mode, admitted, release)
 		})
+	}()
+	var pid int32
+	select {
+	case pid = <-admitted:
+	case err := <-claimDone:
+		t.Fatalf("claim was not admitted: %v", err)
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	type result struct {
+		status MemoryMaintenanceStatus
+		err    error
+	}
+	maintenanceDone := make(chan result, 1)
+	go func() {
+		st, err := svc.BeginPrivacyMaintenance(ctx, token, queueMaintenanceRequest(scope, "queue-drain"))
+		maintenanceDone <- result{st, err}
+	}()
+	waitQueueGateBlocker(t, p, ctx, pid, "memory_maintenance_gate")
+	select {
+	case r := <-maintenanceDone:
+		t.Fatalf("maintenance passed an open claim transaction: %+v", r)
+	default:
+	}
+	unblock()
+	if err := <-claimDone; err != nil {
+		t.Fatal(err)
+	}
+	r := <-maintenanceDone
+	if r.err != nil || !r.status.Active {
+		t.Fatalf("maintenance after drain: %+v", r)
+	}
+	checkAdmittedClaimCommittedOnce(t, p, ctx, now)
+	if _, err := p.CancelMemoryMaintenance(ctx, r.status.Revision); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func checkAdmittedClaimCommittedOnce(t *testing.T, p *Postgres, ctx context.Context, now time.Time) {
+	t.Helper()
+	var attempts int
+	var status string
+	if err := p.pool.QueryRow(ctx, "SELECT attempts,status FROM memory_records WHERE collection='jobs' AND id='queue-admitted'").Scan(&attempts, &status); err != nil || attempts != 1 || status != JobStatusRunning {
+		t.Fatalf("admitted claim did not commit exactly once: %d %s %v", attempts, status, err)
+	}
+	if _, err := p.ClaimJob(ctx, now, time.Minute); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("new claim passed active maintenance: %v", err)
 	}
 }
 

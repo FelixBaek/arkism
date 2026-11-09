@@ -56,6 +56,12 @@ func TestExtractDocumentListTagsAndReprocess(t *testing.T) {
 		// The document's tags are what observation scopes are cut from: the edit moves the memory's scope.
 		t.Fatalf("observation scopes %d", len(sc))
 	}
+	checkDocumentReprocess(t, f, up)
+}
+
+// checkDocumentReprocess reprocesses an uploaded document and refuses one whose stored source changed.
+func checkDocumentReprocess(t *testing.T, f *fixture, up FileMemoriesResult) {
+	t.Helper()
 	// Reprocess reads every chunk again from the stored evidence, with the document's tags.
 	if _, err := f.svc.ReprocessDocument(testCtx, f.agent, up.DocumentID, WikiScopeInput{Scope: scopeA}); err == nil {
 		t.Fatal("agent reprocess of another person's document")
@@ -93,51 +99,66 @@ func TestSourceChunkText(t *testing.T) {
 
 func TestExtractDocumentDelete(t *testing.T) {
 	for _, approved := range []bool{false, true} {
-		f, _ := wikiFixture(t, extractAnswer(extractRuleClaim))
-		f.svc.Repo = opsFakeRepo{f.repo}
-		up := extractUpload(t, f, "선택 상태에는 주황 강조선을 쓰지 않는다.")
-		// An agent lists only the documents it uploaded itself.
-		if list, err := f.svc.ListExtractDocuments(testCtx, f.agent, scopeA, DocumentPage{Limit: 10}); err != nil || len(list.Items) != 0 {
-			t.Fatalf("agent list %+v %v", list, err)
+		extractDocumentDeleteCase(t, approved)
+	}
+}
+
+func extractDocumentDeleteCase(t *testing.T, approved bool) {
+	t.Helper()
+	f, _ := wikiFixture(t, extractAnswer(extractRuleClaim))
+	f.svc.Repo = opsFakeRepo{f.repo}
+	up := extractUpload(t, f, "선택 상태에는 주황 강조선을 쓰지 않는다.")
+	// An agent lists only the documents it uploaded itself.
+	if list, err := f.svc.ListExtractDocuments(testCtx, f.agent, scopeA, DocumentPage{Limit: 10}); err != nil || len(list.Items) != 0 {
+		t.Fatalf("agent list %+v %v", list, err)
+	}
+	c := f.repo.rows("memory_candidates")[0]
+	if approved {
+		c.Status = "approved"
+		if err := f.repo.Replace(testCtx, "memory_candidates", c, c.Revision); err != nil {
+			t.Fatal(err)
 		}
-		c := f.repo.rows("memory_candidates")[0]
-		if approved {
-			c.Status = "approved"
-			if err := f.repo.Replace(testCtx, "memory_candidates", c, c.Revision); err != nil {
-				t.Fatal(err)
-			}
-			f.put(colMemories, Record{ID: c.ID, Kind: c.Kind, Status: "active", Text: c.Text, ApprovedBy: "human-1"})
+		f.put(colMemories, Record{ID: c.ID, Kind: c.Kind, Status: "active", Text: c.Text, ApprovedBy: "human-1"})
+	}
+	if _, err := f.svc.DeleteExtractDocument(testCtx, f.agent, up.DocumentID, WikiScopeInput{Scope: scopeA}); !errors.Is(err, ErrDenied) {
+		t.Fatalf("agent delete: %v", err)
+	}
+	got, err := f.svc.DeleteExtractDocument(testCtx, f.human, up.DocumentID, WikiScopeInput{Scope: scopeA})
+	if err != nil || got.Jobs != 1 || approved && (got.Kept != 1 || got.Rejected != 0) || !approved && (got.Kept != 0 || got.Rejected != 1) {
+		t.Fatalf("delete %+v %v", got, err)
+	}
+	checkExtractCandidateAfterDelete(t, f, c.ID, approved)
+	checkExtractDocumentGone(t, f, up)
+}
+
+func checkExtractCandidateAfterDelete(t *testing.T, f *fixture, id string, approved bool) {
+	t.Helper()
+	cand, _ := f.repo.Get(testCtx, "memory_candidates", scopeA, id)
+	if approved && cand.Status != "approved" || !approved && cand.Status != "rejected" {
+		t.Fatalf("candidate after delete %+v", cand)
+	}
+	if approved {
+		if m, err := f.repo.Get(testCtx, colMemories, scopeA, id); err != nil || m.Status != "active" {
+			t.Fatalf("approved memory must stay %+v %v", m, err)
 		}
-		if _, err := f.svc.DeleteExtractDocument(testCtx, f.agent, up.DocumentID, WikiScopeInput{Scope: scopeA}); !errors.Is(err, ErrDenied) {
-			t.Fatalf("agent delete: %v", err)
+	}
+}
+
+func checkExtractDocumentGone(t *testing.T, f *fixture, up FileMemoriesResult) {
+	t.Helper()
+	for _, id := range []string{up.DocumentID, up.JobID} {
+		if _, err := f.repo.Get(testCtx, "jobs", scopeA, id); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("%s still there: %v", id, err)
 		}
-		got, err := f.svc.DeleteExtractDocument(testCtx, f.human, up.DocumentID, WikiScopeInput{Scope: scopeA})
-		if err != nil || got.Jobs != 1 || approved && (got.Kept != 1 || got.Rejected != 0) || !approved && (got.Kept != 0 || got.Rejected != 1) {
-			t.Fatalf("delete %+v %v", got, err)
-		}
-		cand, _ := f.repo.Get(testCtx, "memory_candidates", scopeA, c.ID)
-		if approved && cand.Status != "approved" || !approved && cand.Status != "rejected" {
-			t.Fatalf("candidate after delete %+v", cand)
-		}
-		if approved {
-			if m, err := f.repo.Get(testCtx, colMemories, scopeA, c.ID); err != nil || m.Status != "active" {
-				t.Fatalf("approved memory must stay %+v %v", m, err)
-			}
-		}
-		for _, id := range []string{up.DocumentID, up.JobID} {
-			if _, err := f.repo.Get(testCtx, "jobs", scopeA, id); !errors.Is(err, ErrNotFound) {
-				t.Fatalf("%s still there: %v", id, err)
-			}
-		}
-		if list, _ := f.svc.ListExtractDocuments(testCtx, f.human, scopeA, DocumentPage{Limit: 10}); len(list.Items) != 0 {
-			t.Fatalf("list after delete %+v", list)
-		}
-		if _, err := f.svc.DeleteExtractDocument(testCtx, f.human, up.DocumentID, WikiScopeInput{Scope: scopeA}); !errors.Is(err, ErrNotFound) {
-			t.Fatalf("second delete: %v", err)
-		}
-		if !slices.ContainsFunc(f.repo.rows("audit_events"), func(r Record) bool { return r.Kind == "delete:file_extract_document" && r.Target.ID == up.DocumentID }) {
-			t.Fatal("delete not audited")
-		}
+	}
+	if list, _ := f.svc.ListExtractDocuments(testCtx, f.human, scopeA, DocumentPage{Limit: 10}); len(list.Items) != 0 {
+		t.Fatalf("list after delete %+v", list)
+	}
+	if _, err := f.svc.DeleteExtractDocument(testCtx, f.human, up.DocumentID, WikiScopeInput{Scope: scopeA}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("second delete: %v", err)
+	}
+	if !slices.ContainsFunc(f.repo.rows("audit_events"), func(r Record) bool { return r.Kind == "delete:file_extract_document" && r.Target.ID == up.DocumentID }) {
+		t.Fatal("delete not audited")
 	}
 }
 

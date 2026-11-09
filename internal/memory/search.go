@@ -153,67 +153,99 @@ func fuseWeighted(lists [][]Hit, limit int, weights map[string]float64) []Scored
 	if limit <= 0 {
 		return []ScoredHit{}
 	}
-	const rankOffset = 60
-	const exactKeywordWeight = 2.0
-	type ranked struct {
-		ScoredHit
-		key            string
-		keywordCredits map[string]float64
-	}
-	merged := map[string]*ranked{}
+	merged := map[string]*fusedEntry{}
 	for lane, list := range lists {
-		seen := map[string]bool{}
-		for position, hit := range list {
-			key := hit.Origin + ":" + hit.Collection + ":" + hit.ID
-			if seen[key] {
-				continue
-			}
-			seen[key] = true
-			entry := merged[key]
-			if entry == nil {
-				hit.Reasons = slices.Clone(hit.Reasons)
-				entry = &ranked{ScoredHit: ScoredHit{Hit: hit}, key: key}
-				merged[key] = entry
-			}
-			entry.Lanes = append(entry.Lanes, lane)
-			if entry.VectorMatch == nil && hit.VectorMatch != nil {
-				entry.VectorMatch = hit.VectorMatch
-			}
-			weight := 1.0
-			if slices.Contains(hit.Reasons, "exact_keyword") {
-				weight = exactKeywordWeight
-				if hit.termShare > 0 {
-					weight *= hit.termShare
-				}
-			} else if slices.ContainsFunc(hit.Reasons, isNeighborReason) {
-				weight = graphLaneWeight * math.Pow(graphHopDecay, float64(max(hit.graphHops, 1)-1))
-			} else if hit.termShare > 0 {
-				weight = hit.termShare
-			}
-			credit := weight / (rankOffset + float64(position+1)/laneWeight(weights, hit.Reasons))
-			if hit.keywordQueryKey != "" {
-				// Equivalent FTS queries are the same evidence, even when query
-				// wording changed. Keep post-gate candidate union and the best
-				// surviving rank without adding repeated lexical votes.
-				if entry.keywordCredits == nil {
-					entry.keywordCredits = map[string]float64{}
-				}
-				prior := entry.keywordCredits[hit.keywordQueryKey]
-				entry.keywordCredits[hit.keywordQueryKey] = max(prior, credit)
-				credit = max(0, credit-prior)
-			}
-			entry.Score += credit
-			for _, reason := range hit.Reasons {
-				if !slices.Contains(entry.Hit.Reasons, reason) {
-					entry.Hit.Reasons = append(entry.Hit.Reasons, reason)
-				}
-			}
-		}
+		mergeFusionLane(merged, lane, list, weights)
 	}
-	rows := make([]*ranked, 0, len(merged))
+	rows := make([]*fusedEntry, 0, len(merged))
 	for _, r := range merged {
 		rows = append(rows, r)
 	}
+	sortFused(rows)
+	out := make([]ScoredHit, 0, min(limit, len(rows)))
+	for _, r := range rows {
+		if len(out) >= limit {
+			break
+		}
+		r.Hit.Authority = AuthorityDataOnly
+		out = append(out, r.ScoredHit)
+	}
+	return out
+}
+
+const (
+	fusionRankOffset         = 60
+	fusionExactKeywordWeight = 2.0
+)
+
+type fusedEntry struct {
+	ScoredHit
+	key            string
+	keywordCredits map[string]float64
+}
+
+// mergeFusionLane adds one lane's hits, in rank order, to the fused entries.
+func mergeFusionLane(merged map[string]*fusedEntry, lane int, list []Hit, weights map[string]float64) {
+	seen := map[string]bool{}
+	for position, hit := range list {
+		key := hit.Origin + ":" + hit.Collection + ":" + hit.ID
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		entry := merged[key]
+		if entry == nil {
+			hit.Reasons = slices.Clone(hit.Reasons)
+			entry = &fusedEntry{ScoredHit: ScoredHit{Hit: hit}, key: key}
+			merged[key] = entry
+		}
+		entry.Lanes = append(entry.Lanes, lane)
+		if entry.VectorMatch == nil && hit.VectorMatch != nil {
+			entry.VectorMatch = hit.VectorMatch
+		}
+		credit := fusionHitWeight(hit) / (fusionRankOffset + float64(position+1)/laneWeight(weights, hit.Reasons))
+		entry.Score += entry.dedupeKeywordCredit(hit.keywordQueryKey, credit)
+		for _, reason := range hit.Reasons {
+			if !slices.Contains(entry.Hit.Reasons, reason) {
+				entry.Hit.Reasons = append(entry.Hit.Reasons, reason)
+			}
+		}
+	}
+}
+
+func fusionHitWeight(hit Hit) float64 {
+	if slices.Contains(hit.Reasons, "exact_keyword") {
+		weight := fusionExactKeywordWeight
+		if hit.termShare > 0 {
+			weight *= hit.termShare
+		}
+		return weight
+	}
+	if slices.ContainsFunc(hit.Reasons, isNeighborReason) {
+		return graphLaneWeight * math.Pow(graphHopDecay, float64(max(hit.graphHops, 1)-1))
+	}
+	if hit.termShare > 0 {
+		return hit.termShare
+	}
+	return 1.0
+}
+
+// dedupeKeywordCredit treats equivalent FTS queries as the same evidence, even
+// when query wording changed: keep the best surviving rank without adding
+// repeated lexical votes.
+func (e *fusedEntry) dedupeKeywordCredit(queryKey string, credit float64) float64 {
+	if queryKey == "" {
+		return credit
+	}
+	if e.keywordCredits == nil {
+		e.keywordCredits = map[string]float64{}
+	}
+	prior := e.keywordCredits[queryKey]
+	e.keywordCredits[queryKey] = max(prior, credit)
+	return max(0, credit-prior)
+}
+
+func sortFused(rows []*fusedEntry) {
 	sort.Slice(rows, func(i, j int) bool {
 		a, b := rows[i], rows[j]
 		if a.Score != b.Score {
@@ -227,16 +259,8 @@ func fuseWeighted(lists [][]Hit, limit int, weights map[string]float64) []Scored
 		}
 		return a.key < b.key
 	})
-	out := make([]ScoredHit, 0, min(limit, len(rows)))
-	for _, r := range rows {
-		if len(out) >= limit {
-			break
-		}
-		r.Hit.Authority = AuthorityDataOnly
-		out = append(out, r.ScoredHit)
-	}
-	return out
 }
+
 func (s *Service) Search(ctx context.Context, token string, in SearchInput) (ContextBundle, error) {
 	return withOperation(s, ctx, token, OpRecall, in.Scope, in, func() (ContextBundle, error) {
 		out, _, err := s.searchWithActor(ctx, token, in)

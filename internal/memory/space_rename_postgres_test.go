@@ -64,8 +64,16 @@ func TestPostgresSpaceRenameMovesEveryRow(t *testing.T) {
 	if got, err := p.Get(testCtx, colMemories, to, mem.ID); err != nil || got.Scope.ProjectID != to.ProjectID {
 		t.Fatalf("memory under new name: %+v %v", got.Scope, err)
 	}
-	// Lookups by the recomputed ids work under the new name.
-	if _, err = p.Get(testCtx, colSpaceConfigs, to, scopedSingletonID(spaceConfigID, to)); err != nil {
+	assertRenamedLookups(t, f, p, to, toSub, bleed, settings, req)
+	if _, err = p.RenameSpace(testCtx, scopeA, to, true); !errors.Is(err, ErrConflict) {
+		t.Fatalf("rename onto a used name: %v", err)
+	}
+}
+
+// assertRenamedLookups checks lookups by the recomputed ids work under the new name.
+func assertRenamedLookups(t *testing.T, f *fixture, p *Postgres, to, toSub Scope, bleed WikiPageView, settings Record, req PrivacyDeletionRequest) {
+	t.Helper()
+	if _, err := p.Get(testCtx, colSpaceConfigs, to, scopedSingletonID(spaceConfigID, to)); err != nil {
 		t.Fatalf("space settings under new name: %v", err)
 	}
 	page, err := f.svc.GetWikiPage(testCtx, f.human, toSub, wikiPageID(toSub, "bleed"))
@@ -85,8 +93,5 @@ func TestPostgresSpaceRenameMovesEveryRow(t *testing.T) {
 	req.Scope = to
 	if got, err := p.Get(testCtx, colJobs, to, privacyJobID(to, "human-1", "k1")); err != nil || got.PrivacyDeletion.RequestHash != ContentHash(structuredText(req)) {
 		t.Fatalf("privacy request under new name: %+v %v", got.PrivacyDeletion, err)
-	}
-	if _, err = p.RenameSpace(testCtx, scopeA, to, true); !errors.Is(err, ErrConflict) {
-		t.Fatalf("rename onto a used name: %v", err)
 	}
 }

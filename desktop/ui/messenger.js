@@ -326,7 +326,7 @@ window.ArkismMessenger.hookShape = (f) => {
 };
 // only what changed, for PATCH /v1/webhooks/{id}: typed headers/query replace the sealed set, 지우기 sends empty sets, blank keeps them
 window.ArkismMessenger.hookPatch = (h, f, shape) => {
-  const out = {}, same = (a, b) => [...a].sort().join("\n") === [...b].sort().join("\n");
+  const out = {}, same = (a, b) => { const key = (x) => [...x].sort((p, q) => p.localeCompare(q)).join("\n"); return key(a) === key(b); };
   if (f.url !== h.url) out.url = f.url;
   if (!same(f.events, h.events || [])) out.events = f.events;
   if (f.content !== !!h.include_content) out.include_content = f.content;

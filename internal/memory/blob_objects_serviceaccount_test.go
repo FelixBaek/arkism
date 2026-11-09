@@ -34,56 +34,69 @@ func serviceAccountKeyFile(t *testing.T, tokenURL string) ([]byte, *rsa.PrivateK
 	return raw, key
 }
 
+// fakeServiceAccountStorage serves the token endpoint (checking the signed
+// assertion against key) and an in-memory bucket behind the bearer token.
+type fakeServiceAccountStorage struct {
+	objects map[string][]byte
+	tokens  atomic.Int32
+	key     *rsa.PrivateKey
+}
+
+func (f *fakeServiceAccountStorage) token(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	parts := strings.Split(r.Form.Get("assertion"), ".")
+	sig, _ := base64.RawURLEncoding.DecodeString(parts[2])
+	sum := sha256.Sum256([]byte(parts[0] + "." + parts[1]))
+	claims, _ := base64.RawURLEncoding.DecodeString(parts[1])
+	if rsa.VerifyPKCS1v15(&f.key.PublicKey, crypto.SHA256, sum[:], sig) != nil || !strings.Contains(string(claims), `"scope":"storage.rw"`) {
+		w.WriteHeader(400)
+		return
+	}
+	f.tokens.Add(1)
+	_, _ = io.WriteString(w, `{"access_token":"tok","expires_in":3600}`)
+}
+
+func (f *fakeServiceAccountStorage) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/token" {
+		f.token(w, r)
+		return
+	}
+	if r.Header.Get("Authorization") != "Bearer tok" {
+		w.WriteHeader(401)
+		return
+	}
+	switch {
+	case r.Method == http.MethodPost && r.URL.Path == "/upload/storage/v1/b/blobs/o" && r.URL.Query().Get("uploadType") == "media":
+		f.objects[r.URL.Query().Get("name")], _ = io.ReadAll(r.Body)
+	case r.Method == http.MethodGet && r.URL.Path == "/storage/v1/b/blobs/o":
+		items := []string{}
+		for k, v := range f.objects {
+			items = append(items, fmt.Sprintf(`{"name":%q,"size":"%d"}`, k, len(v)))
+		}
+		_, _ = io.WriteString(w, `{"items":[`+strings.Join(items, ",")+`]}`)
+	case r.Method == http.MethodGet && r.URL.Query().Get("alt") == "media":
+		if v, ok := f.objects[strings.TrimPrefix(r.URL.Path, "/storage/v1/b/blobs/o/")]; ok {
+			_, _ = w.Write(v)
+			return
+		}
+		w.WriteHeader(404)
+	case r.Method == http.MethodDelete:
+		delete(f.objects, strings.TrimPrefix(r.URL.Path, "/storage/v1/b/blobs/o/"))
+		w.WriteHeader(204)
+	default:
+		w.WriteHeader(400)
+	}
+}
+
 // The store trades a signed assertion for a token once, then round-trips an
 // object through upload, read, list and delete.
 func TestServiceAccountStoreRoundTrip(t *testing.T) {
-	objects := map[string][]byte{}
-	var tokens atomic.Int32
-	var key *rsa.PrivateKey
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/token" {
-			_ = r.ParseForm()
-			parts := strings.Split(r.Form.Get("assertion"), ".")
-			sig, _ := base64.RawURLEncoding.DecodeString(parts[2])
-			sum := sha256.Sum256([]byte(parts[0] + "." + parts[1]))
-			claims, _ := base64.RawURLEncoding.DecodeString(parts[1])
-			if rsa.VerifyPKCS1v15(&key.PublicKey, crypto.SHA256, sum[:], sig) != nil || !strings.Contains(string(claims), `"scope":"storage.rw"`) {
-				w.WriteHeader(400)
-				return
-			}
-			tokens.Add(1)
-			_, _ = io.WriteString(w, `{"access_token":"tok","expires_in":3600}`)
-			return
-		}
-		if r.Header.Get("Authorization") != "Bearer tok" {
-			w.WriteHeader(401)
-			return
-		}
-		switch {
-		case r.Method == http.MethodPost && r.URL.Path == "/upload/storage/v1/b/blobs/o" && r.URL.Query().Get("uploadType") == "media":
-			objects[r.URL.Query().Get("name")], _ = io.ReadAll(r.Body)
-		case r.Method == http.MethodGet && r.URL.Path == "/storage/v1/b/blobs/o":
-			items := []string{}
-			for k, v := range objects {
-				items = append(items, fmt.Sprintf(`{"name":%q,"size":"%d"}`, k, len(v)))
-			}
-			_, _ = io.WriteString(w, `{"items":[`+strings.Join(items, ",")+`]}`)
-		case r.Method == http.MethodGet && r.URL.Query().Get("alt") == "media":
-			if v, ok := objects[strings.TrimPrefix(r.URL.Path, "/storage/v1/b/blobs/o/")]; ok {
-				_, _ = w.Write(v)
-				return
-			}
-			w.WriteHeader(404)
-		case r.Method == http.MethodDelete:
-			delete(objects, strings.TrimPrefix(r.URL.Path, "/storage/v1/b/blobs/o/"))
-			w.WriteHeader(204)
-		default:
-			w.WriteHeader(400)
-		}
-	}))
+	fake := &fakeServiceAccountStorage{objects: map[string][]byte{}}
+	tokens := &fake.tokens
+	srv := httptest.NewServer(fake)
 	defer srv.Close()
 	keyFile, k := serviceAccountKeyFile(t, srv.URL+"/token")
-	key = k
+	fake.key = k
 	s, err := NewServiceAccountBlobStore(srv.URL, "blobs", "p/", "storage.rw", keyFile)
 	if err != nil {
 		t.Fatal(err)

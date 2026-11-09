@@ -364,6 +364,16 @@ func TestWikiTreeAndRenameAtTheRowCap(t *testing.T) {
 func TestWikiFolderMoveDeleteAndQueryPages(t *testing.T) {
 	f, scope := wikiPrintReviewed(t)
 	bleed, a3 := wikiPageID(scope, "bleed"), wikiPageID(scope, "a3-paper")
+	loose := wikiFolderQueryPages(t, f, scope, bleed, a3)
+	loose = wikiQueryPageNoFolder(t, f, scope, loose)
+	wikiFolderMove(t, f, scope)
+	wikiFolderAndPageDelete(t, f, scope, bleed, a3, loose)
+}
+
+// wikiFolderQueryPages files both pages under docs/print and adds a query page
+// in docs plus a loose one at the root, which it returns.
+func wikiFolderQueryPages(t *testing.T, f *fixture, scope Scope, bleed, a3 string) MentalModelView {
+	t.Helper()
 	for _, id := range []string{bleed, a3} {
 		page, _ := f.svc.GetWikiPage(testCtx, f.human, scope, id)
 		folder := "docs/print"
@@ -390,6 +400,13 @@ func TestWikiFolderMoveDeleteAndQueryPages(t *testing.T) {
 	if agentTree, _ := f.svc.WikiTree(testCtx, f.agent, scope); slices.ContainsFunc(agentTree.Pages, func(p WikiTreePage) bool { return p.Type == "query" }) {
 		t.Fatal("agent saw a query page with no approved text")
 	}
+	return loose
+}
+
+func wikiQueryPageNoFolder(t *testing.T, f *fixture, scope Scope, loose MentalModelView) MentalModelView {
+	t.Helper()
+	root := ""
+	var err error
 	// no_folder takes a query page out of the wiki; with a folder it is refused.
 	out := MentalModelInput{Scope: scope, ExpectedRevision: loose.Revision, Title: "Loose", Query: "loose", Refresh: MentalModelRefresh{Mode: "manual"}, NoFolder: true, Folder: &root}
 	if _, err := f.svc.UpdateMentalModel(testCtx, f.human, loose.ID, out); !errors.Is(err, ErrInvalid) {
@@ -405,7 +422,12 @@ func TestWikiFolderMoveDeleteAndQueryPages(t *testing.T) {
 	if loose, err = f.svc.UpdateMentalModel(testCtx, f.human, loose.ID, MentalModelInput{Scope: scope, ExpectedRevision: loose.Revision + 1, Title: "Loose", Query: "loose", Refresh: MentalModelRefresh{Mode: "manual"}, Folder: &root}); err != nil {
 		t.Fatal(err)
 	}
+	return loose
+}
 
+func wikiFolderMove(t *testing.T, f *fixture, scope Scope) {
+	t.Helper()
+	var err error
 	for _, bad := range []WikiFolderMoveInput{{From: "docs", To: "docs/inner"}, {From: "docs", To: "docs"}, {From: "", To: "x"}, {From: "docs", To: strings.Repeat("a/", 7) + "b"}} {
 		bad.Scope = scope
 		if _, err = f.svc.MoveWikiFolder(testCtx, f.human, bad); !errors.Is(err, ErrInvalid) {
@@ -428,7 +450,7 @@ func TestWikiFolderMoveDeleteAndQueryPages(t *testing.T) {
 	if err != nil || len(moved.Moved) != 3 {
 		t.Fatal("move", err, moved)
 	}
-	tree, _ = f.svc.WikiTree(testCtx, f.human, scope)
+	tree, _ := f.svc.WikiTree(testCtx, f.human, scope)
 	paths := []string{}
 	for _, fo := range tree.Folders {
 		paths = append(paths, fo.Path)
@@ -439,7 +461,11 @@ func TestWikiFolderMoveDeleteAndQueryPages(t *testing.T) {
 	if links, _ := f.svc.WikiGraph(testCtx, f.agent, scope); len(links) != 1 {
 		t.Fatal("move broke links", links)
 	}
+}
 
+func wikiFolderAndPageDelete(t *testing.T, f *fixture, scope Scope, bleed, a3 string, loose MentalModelView) {
+	t.Helper()
+	var err error
 	if _, err = f.svc.DeleteWikiFolder(testCtx, f.human, WikiFolderDeleteInput{Scope: scope, Path: "manual/docs"}); !errors.Is(err, ErrConflict) {
 		t.Fatal("non-empty folder deleted without recursive", err)
 	}
@@ -468,7 +494,7 @@ func TestWikiFolderMoveDeleteAndQueryPages(t *testing.T) {
 	if err != nil || len(all.Deleted) != 2 {
 		t.Fatal("recursive delete", err, all)
 	}
-	if tree, _ = f.svc.WikiTree(testCtx, f.human, scope); len(tree.Pages) != 0 || len(tree.Folders) != 0 {
+	if tree, _ := f.svc.WikiTree(testCtx, f.human, scope); len(tree.Pages) != 0 || len(tree.Folders) != 0 {
 		t.Fatalf("tree after recursive delete %+v", tree)
 	}
 }

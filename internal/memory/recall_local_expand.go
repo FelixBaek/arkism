@@ -74,20 +74,9 @@ func (s *Service) expandRecallLocally(ctx context.Context, token string, in *Sea
 		in.expandStatus = "local_unchanged"
 		return
 	}
-	vectors, space := s.expansionVectors(ctx, token, *in, d, queries)
-	for i, q := range queries {
-		sub := *in
-		sub.Query, sub.retrievalQuery = q, ""
-		lists, err := s.searchLists(ctx, token, collection, sub.retrieval(collection), vectors[i], space)
-		if err == nil {
-			err = s.cleanSearchLanes(ctx, token, sub, d, collection, Record{}, run, -1, vectors[i], space, map[string]Record{}, out, lists)
-		}
-		if err != nil {
-			in.expanded = nil
-			in.expandStatus = "local_failed"
-			return
-		}
-		in.expanded = append(in.expanded, expandedQuery{query: q, lists: lists, vector: vectors[i], space: space})
+	if s.searchExpansions(ctx, token, in, d, collection, run, out, queries) != nil {
+		in.expandStatus = "local_failed"
+		return
 	}
 	in.expandStatus, in.expandQueries = "local_applied", queries
 }

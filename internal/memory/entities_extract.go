@@ -93,10 +93,7 @@ func extractEntityCandidates(text string) []entityCandidate {
 		}
 		k := entityKey(name)
 		if i, ok := at[k]; ok {
-			if out[i].Type == entityTypeConcept && typ != entityTypeConcept {
-				out[i].Type = typ
-			}
-			out[i].Weak = out[i].Weak && weak
+			out[i].merge(typ, weak)
 			return
 		}
 		if len(out) < entityMaxPerMemory {
@@ -131,6 +128,14 @@ func extractEntityCandidates(text string) []entityCandidate {
 		add(c.Name, entityTypeConcept, c.Weak)
 	}
 	return out
+}
+
+// merge folds a repeat of the name in: a specific type replaces "concept", and the name stays weak only if every find was.
+func (c *entityCandidate) merge(typ string, weak bool) {
+	if c.Type == entityTypeConcept && typ != entityTypeConcept {
+		c.Type = typ
+	}
+	c.Weak = c.Weak && weak
 }
 
 // codeEntityType tells files and repos from other code identifiers.

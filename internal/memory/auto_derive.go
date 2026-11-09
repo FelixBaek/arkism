@@ -161,14 +161,7 @@ func countApproval(ctx context.Context, tx Tx, scope Scope, set autoDeriveSettin
 // the job itself: pending again for the next pass, or done after the last one.
 // A model, budget or permission stop ends the run; other errors are retried.
 func (s *Service) runAutoDerive(ctx context.Context, workerToken string, job Record) error {
-	state := AutoDeriveJob{}
-	if job.AutoDerive != nil {
-		state = *job.AutoDerive
-	}
-	if state.Pass == 0 || state.Started == nil {
-		started := time.Now().UTC()
-		state.Started, state.Approved = &started, 0 // this run consumes the approvals counted so far
-	}
+	state := autoDeriveRunState(job)
 	outcome, err := s.autoDerivePass(ctx, workerToken, job.Scope, state.Pass, state.Entities)
 	if err != nil {
 		return err
@@ -211,6 +204,19 @@ func (s *Service) runAutoDerive(ctx context.Context, workerToken string, job Rec
 		cur.Revision++
 		return tx.Replace(ctx, colJobs, cur, prev)
 	})
+}
+
+// autoDeriveRunState is the job's state for this run; a first pass starts a new run.
+func autoDeriveRunState(job Record) AutoDeriveJob {
+	state := AutoDeriveJob{}
+	if job.AutoDerive != nil {
+		state = *job.AutoDerive
+	}
+	if state.Pass == 0 || state.Started == nil {
+		started := time.Now().UTC()
+		state.Started, state.Approved = &started, 0 // this run consumes the approvals counted so far
+	}
+	return state
 }
 
 // autoDerivePass runs one existing proposal pass and names how it ended.

@@ -619,7 +619,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const id = state.scope?.project_id || "";
       // the other changes: accept only records that a person agrees; they then make the change on its own screen
       if (state.caps?.actions?.review_decide !== false && (!chg.cap || state.caps?.actions?.[chg.cap] !== false))
-        act.append(chg.ask ? button(chg.ok, "small danger", null, async () => { if (await window.askTyped(chg.ask(id), id, chg.ok)) go2("accept", { confirm: id }); })
+        act.append(chg.ask ? button(chg.ok, "small danger", null, async () => { if (await window.askTyped(chg.ask(id), id, chg.ok)) void go2("accept", { confirm: id }); })
           : button("좋아요", "small primary", null, () => go2("accept")), button("그대로 두기", "small", null, () => go2("dismiss")));
       else act.append(el("small", "ov-detail-hint", "이 제안은 사람만 정할 수 있어요."));
     } else if (signal) act.append(button("다시 볼게요", "small primary", null, () => go2("accept")), button("괜찮아요", "small", null, () => go2("dismiss")), forget, ...stale);
@@ -932,7 +932,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (current.has(cur.id)) { detailFor(current.get(cur.id)); return; }
       detail.replaceChildren(el("p", "ov-win-empty", "불러오는 중…"));
       const id = cur.id;
-      request(`/v1/memories/${encodeURIComponent(id)}?${query()}`).then((r) => r?.id === id ? r : null, () => null).then((r) => { if (!r || !d.isConnected) return; current.set(id, r); if (sel === id) detailFor(r); });
+      request(`/v1/memories/${encodeURIComponent(id)}?${query()}`).then((r) => { if (r?.id !== id || !d.isConnected) return; current.set(id, r); if (sel === id) detailFor(r); }, () => {}); // a failed read leaves the loading text, as before
     }
     search.addEventListener("input", () => { q = search.value.trim(); paint(); });
     function detailFor(m) {
@@ -1240,14 +1240,14 @@ window.ArkismOverviewWindows = (ctx, env) => {
   async function wideOps(focusTag = "", view = "summary") {
     const M = window.ArkismMemoryManagement, d = shell("기억 관리", null, "숫자·태그·정리 상태·기록", "dream");
     recipe(d, { wide: "ops", args: [focusTag, view] });
-    d.append(chipBar(OPS_VIEWS, view, (k) => { if (k !== view) wideOps(focusTag, k); }));
+    d.append(chipBar(OPS_VIEWS, view, (k) => { if (k !== view) void wideOps(focusTag, k); }));
     if (view !== "summary") return void ({ audit: opsAudit, models: opsModels, trend: opsTrend, jobs: opsJobs }[view] || opsAudit)(d, M);
     const body = el("div", "ov-wide-body"), left = el("div", "ov-wide-left"), right = el("div", "ov-wide-right ov-wide-detail");
     left.append(el("p", "ov-win-empty", "불러오는 중…")); body.append(left, right); d.append(body);
     const [st, tg, ops, ad, ds, mm] = await Promise.allSettled([request(`/v1/stats?${query()}`), request(`/v1/tags?${query()}`), request(`/v1/operations?${query({ status: "failed", limit: 20 })}`),
       request(`/v1/operations?${query({ kind: "auto_derive", limit: 5 })}`), request(`/v1/operations?${query({ kind: "derive_schedule", limit: 5 })}`), request(`/v1/mental-models?${query({ limit: 100 })}`)]);
     if (!d.isConnected) return;
-    const redo = () => { if (dlg === d) wideOps(focusTag); };
+    const redo = () => { if (dlg === d) void wideOps(focusTag); };
     const human = state.caps?.actions?.review_decide !== false; // rename and retry are people-only routes: an agent token sees no button
     // left: the numbers, then upkeep
     const t = st.status === "fulfilled" ? M.statTiles(st.value) : null, show = (v, unit) => (v == null ? "—" : `${num(v)}${unit}`);
@@ -1354,7 +1354,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const auditF = { action: "", days: "7", transport: "" };
   function opsAudit(d, M) {
     const body = el("div", "ov-wide-body"), left = el("div", "ov-wide-left"), right = el("div", "ov-wide-right ov-wide-detail");
-    const redo = () => { if (dlg === d) wideOps("", "audit"); };
+    const redo = () => { if (dlg === d) void wideOps("", "audit"); };
     const bar = el("div", "ov-wide-bar");
     bar.append(selectBox(AUDIT_KINDS, auditF.action, "활동 종류", (v) => { auditF.action = v; redo(); }), selectBox(TRANSPORT, auditF.transport, "어디서", (v) => { auditF.transport = v; redo(); }),
       selectBox(RANGE, auditF.days, "기간", (v) => { auditF.days = v; redo(); }));
@@ -1412,7 +1412,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const modelF = { status: "", operation: "", kind: "", run: "" };
   function opsModels(d, M) {
     const body = el("div", "ov-wide-body"), left = el("div", "ov-wide-left"), right = el("div", "ov-wide-right ov-wide-detail");
-    const redo = () => { if (dlg === d) wideOps("", "models"); };
+    const redo = () => { if (dlg === d) void wideOps("", "models"); };
     const bar = el("div", "ov-wide-bar"), opSlot = el("span");
     body.append(left, right); d.append(body);
     const summary = el("div", "ov-detail-group"), groups = el("div", "ov-detail-group"), loaded = [];
@@ -1481,7 +1481,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const trendF = { collection: "memories", by: "kind", days: "30", time_field: "created" };
   async function opsTrend(d, M) {
     const body = el("div", "ov-wide-body"), left = el("div", "ov-wide-left"), right = el("div", "ov-wide-right ov-wide-detail");
-    const redo = () => { if (dlg === d) wideOps("", "trend"); };
+    const redo = () => { if (dlg === d) void wideOps("", "trend"); };
     const bar = el("div", "ov-wide-bar");
     bar.append(selectBox(TREND_COL, trendF.collection, "무엇을", (v) => { trendF.collection = v; redo(); }), selectBox(TREND_BY, trendF.by, "나눠 보기", (v) => { trendF.by = v; redo(); }),
       selectBox(TREND_TIME, trendF.time_field, "어느 때 기준", (v) => { trendF.time_field = v; redo(); }),
@@ -1520,7 +1520,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const notice = (m) => ctx.notice?.(m); // app.js passes its toast
   function opsJobs(d) {
     const body = el("div", "ov-wide-body"), left = el("div", "ov-wide-left"), right = el("div", "ov-wide-right ov-wide-detail");
-    const redo = () => { if (dlg === d) wideOps("", "jobs"); };
+    const redo = () => { if (dlg === d) void wideOps("", "jobs"); };
     const human = state.caps?.actions?.review_decide !== false;
     const bar = el("div", "ov-wide-bar");
     bar.append(selectBox(JOB_STATUS, jobF.status, "상태", (v) => { jobF.status = v; redo(); }),

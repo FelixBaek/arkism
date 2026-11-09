@@ -52,54 +52,54 @@ func packContext(ctx context.Context, out *ContextBundle, budget int, encoding s
 	if count > budget {
 		return ErrInvalid
 	}
-	for _, h := range out.Items {
-		data.Items = append(data.Items, h)
-		candidate, n, err := measure()
-		if err != nil {
-			return err
-		}
-		if n > budget {
-			data.Items = data.Items[:len(data.Items)-1]
-			noteContextDrop(out, "token_budget")
-			continue
-		}
-		text, count = candidate, n
+	p := contextPacker{measure: measure, budget: budget, text: text, count: count}
+	if err := p.add(out, out.Items, &data.Items, "token_budget"); err != nil {
+		return err
 	}
 	// Provisional candidates come after approved items, only within what is left.
-	for _, h := range out.Provisional {
-		data.Provisional, data.ProvisionalNotice = append(data.Provisional, h), out.ProvisionalNotice
-		candidate, n, err := measure()
-		if err != nil {
-			return err
-		}
-		if n > budget {
-			data.Provisional = data.Provisional[:len(data.Provisional)-1]
-			noteContextDrop(out, "provisional_token_budget")
-			continue
-		}
-		text, count = candidate, n
+	if len(out.Provisional) > 0 {
+		data.ProvisionalNotice = out.ProvisionalNotice
+	}
+	if err := p.add(out, out.Provisional, &data.Provisional, "provisional_token_budget"); err != nil {
+		return err
 	}
 	if len(data.Provisional) == 0 {
 		data.ProvisionalNotice = ""
 	}
 	if len(conversation) > 0 && conversation[0] {
-		for _, h := range out.Conversation {
-			data.Conversation = append(data.Conversation, h)
-			candidate, n, err := measure()
-			if err != nil {
-				return err
-			}
-			if n > budget {
-				data.Conversation = data.Conversation[:len(data.Conversation)-1]
-				noteContextDrop(out, "conversation_token_budget")
-				continue
-			}
-			text, count = candidate, n
+		if err := p.add(out, out.Conversation, &data.Conversation, "conversation_token_budget"); err != nil {
+			return err
 		}
 		out.Conversation = data.Conversation
 	}
 	out.Items, out.Provisional, out.ProvisionalNotice = data.Items, data.Provisional, data.ProvisionalNotice
-	out.ContextData, out.TokensUsed, out.TokenEncoding = text, count, encoding
+	out.ContextData, out.TokensUsed, out.TokenEncoding = p.text, p.count, encoding
+	return nil
+}
+
+// contextPacker holds the last measured context that fit the budget.
+type contextPacker struct {
+	measure func() (string, int, error)
+	budget  int
+	text    string
+	count   int
+}
+
+// add appends hits to lane one at a time, keeping each only while the whole context fits.
+func (p *contextPacker) add(out *ContextBundle, hits []Hit, lane *[]Hit, reason string) error {
+	for _, h := range hits {
+		*lane = append(*lane, h)
+		candidate, n, err := p.measure()
+		if err != nil {
+			return err
+		}
+		if n > p.budget {
+			*lane = (*lane)[:len(*lane)-1]
+			noteContextDrop(out, reason)
+			continue
+		}
+		p.text, p.count = candidate, n
+	}
 	return nil
 }
 

@@ -35,41 +35,14 @@ func checkDirectiveCapacity(ctx context.Context, tx Tx, scope Scope, actor, excl
 		if r.ID == exclude {
 			return nil
 		}
-		retire := false
-		if r.Directive != nil && !r.Directive.Independent && r.Proposal != nil && r.Proposal.Collection == colMemories {
-			d := r.Directive
-			retire = d.SourceScope == nil || d.SourceRule == "" || d.SourceScope != nil && projectScope(*d.SourceScope) != scope
-			if !retire {
-				source, err := tx.Get(ctx, colMemories, *d.SourceScope, r.Proposal.ID)
-				if err != nil && !errors.Is(err, ErrNotFound) {
-					return err
-				}
-				retire = err != nil || source.Scope != *d.SourceScope || source.Revision < r.Proposal.Revision || (source.Status != statusActive || source.PrivacyQuarantined || source.ExpiresAt != nil && !source.ExpiresAt.After(time.Now())) || source.ContentErased || source.ApprovedBy == "" || source.Text != r.Text || ruleOf(source) != d.SourceRule
-				if !retire {
-					err = checkSources(ctx, tx, source)
-					if err != nil {
-						if !errors.Is(err, ErrInvalid) && !errors.Is(err, ErrDenied) && !errors.Is(err, ErrNotFound) {
-							return err
-						}
-						retire = true
-					}
-				}
-			}
+		retire, err := directiveSourceRetired(ctx, tx, scope, r)
+		if err != nil {
+			return err
 		}
 		if retire {
-			prev := r.Revision
-			r.Revision++
-			r.Status = "inactive"
-			r.UpdatedAt = time.Now().UTC()
-			if e := tx.Replace(ctx, colDirectives, r, prev); e != nil {
-				return e
-			}
-			if e := audit(ctx, tx, scope, actor, "retire:directive:source", r.ID); e != nil {
-				return e
-			}
-		} else if r.ID != exclude {
-			count++
+			return retireDirective(ctx, tx, scope, actor, r)
 		}
+		count++
 		return nil
 	})
 	if e != nil {
@@ -79,4 +52,41 @@ func checkDirectiveCapacity(ctx context.Context, tx Tx, scope Scope, actor, excl
 		return ErrConflict
 	}
 	return nil
+}
+
+// directiveSourceRetired reports whether a linked automatic rule no longer
+// matches a live, approved, unchanged source memory.
+func directiveSourceRetired(ctx context.Context, tx Tx, scope Scope, r Record) (bool, error) {
+	if r.Directive == nil || r.Directive.Independent || r.Proposal == nil || r.Proposal.Collection != colMemories {
+		return false, nil
+	}
+	d := r.Directive
+	if d.SourceScope == nil || d.SourceRule == "" || projectScope(*d.SourceScope) != scope {
+		return true, nil
+	}
+	source, err := tx.Get(ctx, colMemories, *d.SourceScope, r.Proposal.ID)
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return false, err
+	}
+	if err != nil || source.Scope != *d.SourceScope || source.Revision < r.Proposal.Revision || (source.Status != statusActive || source.PrivacyQuarantined || source.ExpiresAt != nil && !source.ExpiresAt.After(time.Now())) || source.ContentErased || source.ApprovedBy == "" || source.Text != r.Text || ruleOf(source) != d.SourceRule {
+		return true, nil
+	}
+	if err := checkSources(ctx, tx, source); err != nil {
+		if !errors.Is(err, ErrInvalid) && !errors.Is(err, ErrDenied) && !errors.Is(err, ErrNotFound) {
+			return false, err
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+func retireDirective(ctx context.Context, tx Tx, scope Scope, actor string, r Record) error {
+	prev := r.Revision
+	r.Revision++
+	r.Status = "inactive"
+	r.UpdatedAt = time.Now().UTC()
+	if e := tx.Replace(ctx, colDirectives, r, prev); e != nil {
+		return e
+	}
+	return audit(ctx, tx, scope, actor, "retire:directive:source", r.ID)
 }

@@ -45,9 +45,9 @@ func TestSharedKeySignature(t *testing.T) {
 	}
 }
 
-func TestSharedKeyStoreRoundTrip(t *testing.T) {
-	objects := map[string][]byte{}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// fakeSharedKeyHandler serves an in-memory container that requires SharedKey auth.
+func fakeSharedKeyHandler(objects map[string][]byte) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(r.Header.Get("Authorization"), "SharedKey acct:") || r.Header.Get("X-Ms-Version") != sharedKeyVersion {
 			w.WriteHeader(403)
 			return
@@ -74,7 +74,12 @@ func TestSharedKeyStoreRoundTrip(t *testing.T) {
 			delete(objects, r.URL.Path)
 			w.WriteHeader(202)
 		}
-	}))
+	}
+}
+
+func TestSharedKeyStoreRoundTrip(t *testing.T) {
+	objects := map[string][]byte{}
+	srv := httptest.NewServer(fakeSharedKeyHandler(objects))
 	defer srv.Close()
 	s, err := NewSharedKeyBlobStore(srv.URL+"/acct", "acct", "blobs", "p/", testSharedKey)
 	if err != nil {

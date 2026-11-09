@@ -11,7 +11,7 @@ export const isWebMode = (loc, tauri) => !tauri && String(loc?.pathname || "").s
 /** Trimmed token, or "" when it holds whitespace or control characters (a bad paste, never a header). */
 export function cleanToken(value) {
   const token = String(value ?? "").trim();
-  return token && token.length <= 4096 && !/[\s\x00-\x1f\x7f]/.test(token) ? token : "";
+  return token && token.length <= 4096 && !/[\s\p{Cc}]/u.test(token) ? token : "";
 }
 
 /** @param {Storage | undefined} storage */

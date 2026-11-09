@@ -785,8 +785,8 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     const owner = identity();
     if (!views.has(item.id)) {
       views.set(item.id, null);
-      request(`/v1/entities/${encodeURIComponent(item.id)}?${query()}`).then((v) => (v?.id === item.id && Array.isArray(v.memories) ? v : false), () => false)
-        .then((v) => { if (identity() !== owner) return; views.set(item.id, v); if (selected?.id === item.id && active() && !document.querySelector("#detail [data-sync-dirty]")) detail(); });
+      const got = (v) => { if (identity() !== owner) return; views.set(item.id, v); if (selected?.id === item.id && active() && !document.querySelector("#detail [data-sync-dirty]")) detail(); };
+      request(`/v1/entities/${encodeURIComponent(item.id)}?${query()}`).then((v) => got(v?.id === item.id && Array.isArray(v.memories) ? v : false), () => got(false));
     }
     const v = views.get(item.id), e = v || item;
     const head = el("div", "d-head");

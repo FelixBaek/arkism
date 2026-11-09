@@ -156,19 +156,14 @@ func (s *Service) WikiTree(ctx context.Context, token string, scope Scope) (Wiki
 	counts := map[string]int{}
 	for _, r := range rows {
 		if r.Wiki != nil && r.Wiki.Folder != nil {
-			for _, f := range wikiFolderAncestors(r.Wiki.Folder.Path) {
-				counts[f] += 0
-			}
+			countWikiFolder(counts, r.Wiki.Folder.Path, 0)
 			continue
 		}
 		p := wikiPageOf(r)
 		if p == nil || r.Status == "deleted" || d.Role != "human" && !wikiServable(ctx, s.Repo, r) {
 			continue
 		}
-		for _, f := range wikiFolderAncestors(p.Folder) {
-			counts[f] += 0
-		}
-		counts[p.Folder]++
+		countWikiFolder(counts, p.Folder, 1)
 		out.Pages = append(out.Pages, WikiTreePage{ID: r.ID, Revision: r.Revision, Slug: p.Slug, Type: p.Type, Title: wikiTitle(*p), Folder: p.Folder, ReviewState: p.ReviewState, Locked: p.Locked})
 	}
 	queries, err := s.wikiQueryPages(ctx, token, scope, d.Role == roleHuman)
@@ -176,23 +171,35 @@ func (s *Service) WikiTree(ctx context.Context, token string, scope Scope) (Wiki
 		return out, err
 	}
 	for _, q := range queries {
-		for _, f := range wikiFolderAncestors(q.Folder) {
-			counts[f] += 0
-		}
-		counts[q.Folder]++
+		countWikiFolder(counts, q.Folder, 1)
 	}
 	out.Pages = append(out.Pages, queries...)
-	for path, n := range counts {
-		if path != "" {
-			out.Folders = append(out.Folders, WikiTreeFolder{Path: path, Pages: n})
-		}
-	}
+	out.Folders = wikiTreeFolders(counts)
 	sort.Slice(out.Folders, func(i, j int) bool { return out.Folders[i].Path < out.Folders[j].Path })
 	sort.Slice(out.Pages, func(i, j int) bool {
 		a, b := out.Pages[i], out.Pages[j]
 		return a.Folder < b.Folder || a.Folder == b.Folder && a.Slug < b.Slug
 	})
 	return out, nil
+}
+
+// countWikiFolder lists folder and its ancestors (an empty folder counts 0) and adds pages to folder.
+func countWikiFolder(counts map[string]int, folder string, pages int) {
+	for _, f := range wikiFolderAncestors(folder) {
+		counts[f] += 0
+	}
+	counts[folder] += pages
+}
+
+// wikiTreeFolders lists every counted folder but the root.
+func wikiTreeFolders(counts map[string]int) []WikiTreeFolder {
+	out := []WikiTreeFolder{}
+	for path, n := range counts {
+		if path != "" {
+			out = append(out, WikiTreeFolder{Path: path, Pages: n})
+		}
+	}
+	return out
 }
 
 // PatchWikiPage moves a page to a folder and/or renames it (a person only).
@@ -215,33 +222,38 @@ func (s *Service) PatchWikiPage(ctx context.Context, token, id string, in WikiPa
 	}
 	var out Record
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		r, err := s.getWikiPage(ctx, tx, in.Scope, id)
-		if err != nil {
-			return err
-		}
-		if r.Revision != in.ExpectedRevision || r.Status == "deleted" {
-			return ErrConflict
-		}
-		p := *r.Wiki.Page
-		if in.Folder != nil {
-			p.Folder = folder
-		}
-		r.Wiki = &WikiRecord{Page: &p}
-		if in.Title != "" && in.Title != wikiTitle(p) {
-			err = s.renameWikiPage(ctx, tx, in.Scope, &r, in.Title, d.PrincipalID)
-		} else {
-			err = s.replaceWikiPage(ctx, tx, &r)
-		}
-		if err != nil {
-			return err
-		}
-		out = r
-		return audit(ctx, tx, in.Scope, d.PrincipalID, "wiki:patch", id)
+		var err error
+		out, err = s.patchWikiPageTx(ctx, tx, id, in, folder, d.PrincipalID)
+		return err
 	})
 	if err != nil {
 		return WikiPageView{}, err
 	}
 	return viewWikiPage(out, true), nil
+}
+
+func (s *Service) patchWikiPageTx(ctx context.Context, tx Tx, id string, in WikiPagePatchInput, folder, actor string) (Record, error) {
+	r, err := s.getWikiPage(ctx, tx, in.Scope, id)
+	if err != nil {
+		return Record{}, err
+	}
+	if r.Revision != in.ExpectedRevision || r.Status == "deleted" {
+		return Record{}, ErrConflict
+	}
+	p := *r.Wiki.Page
+	if in.Folder != nil {
+		p.Folder = folder
+	}
+	r.Wiki = &WikiRecord{Page: &p}
+	if in.Title != "" && in.Title != wikiTitle(p) {
+		err = s.renameWikiPage(ctx, tx, in.Scope, &r, in.Title, actor)
+	} else {
+		err = s.replaceWikiPage(ctx, tx, &r)
+	}
+	if err != nil {
+		return Record{}, err
+	}
+	return r, audit(ctx, tx, in.Scope, actor, "wiki:patch", id)
 }
 
 // renameWikiPage retitles r. A new slug is a new page identity: the row moves
@@ -471,19 +483,11 @@ func (s *Service) MoveWikiFolder(ctx context.Context, token string, in WikiFolde
 			return err
 		}
 		for _, seen := range set.pages {
-			r, err := s.getWikiPage(ctx, tx, in.Scope, seen.ID)
+			id, err := s.moveWikiFolderPage(ctx, tx, in.Scope, seen, rebase)
 			if err != nil {
 				return err
 			}
-			p := *r.Wiki.Page
-			if p.Folder, err = rebase(p.Folder); err != nil {
-				return err
-			}
-			r.Wiki = &WikiRecord{Page: &p}
-			if err = s.replaceWikiPage(ctx, tx, &r); err != nil {
-				return err
-			}
-			out.Moved = append(out.Moved, r.ID)
+			out.Moved = append(out.Moved, id)
 		}
 		for _, seen := range set.models {
 			if err := moveWikiQueryPage(ctx, tx, in.Scope, seen, rebase); err != nil {
@@ -522,6 +526,23 @@ func (s *Service) moveWikiFolderRows(ctx context.Context, tx Tx, scope Scope, fo
 		}
 	}
 	return nil
+}
+
+// moveWikiFolderPage rebases one page's folder and returns its id.
+func (s *Service) moveWikiFolderPage(ctx context.Context, tx Tx, scope Scope, seen Record, rebase func(string) (string, error)) (string, error) {
+	r, err := s.getWikiPage(ctx, tx, scope, seen.ID)
+	if err != nil {
+		return "", err
+	}
+	p := *r.Wiki.Page
+	if p.Folder, err = rebase(p.Folder); err != nil {
+		return "", err
+	}
+	r.Wiki = &WikiRecord{Page: &p}
+	if err = s.replaceWikiPage(ctx, tx, &r); err != nil {
+		return "", err
+	}
+	return r.ID, nil
 }
 
 func moveWikiQueryPage(ctx context.Context, tx Tx, scope Scope, seen Record, rebase func(string) (string, error)) error {
@@ -568,14 +589,8 @@ func (s *Service) DeleteWikiFolder(ctx context.Context, token string, in WikiFol
 		if err := s.deleteWikiPages(ctx, tx, in.Scope, d.PrincipalID, set.rows, set.pages, &out); err != nil {
 			return err
 		}
-		for _, m := range set.models {
-			if err := tx.Delete(ctx, colMentalModels, in.Scope, m.ID, m.Revision); err != nil {
-				return err
-			}
-			if err := audit(ctx, tx, in.Scope, d.PrincipalID, "delete:"+colMentalModels, m.ID); err != nil {
-				return err
-			}
-			out.Deleted = append(out.Deleted, m.ID)
+		if err := deleteWikiFolderModels(ctx, tx, in.Scope, d.PrincipalID, set.models, &out); err != nil {
+			return err
 		}
 		for _, f := range set.folders {
 			if err := tx.Delete(ctx, colWikiPages, in.Scope, f.ID, f.Revision); err != nil {
@@ -585,6 +600,20 @@ func (s *Service) DeleteWikiFolder(ctx context.Context, token string, in WikiFol
 		return audit(ctx, tx, in.Scope, d.PrincipalID, "wiki:folder_deleted", wikiFolderID(in.Scope, path))
 	})
 	return out, err
+}
+
+// deleteWikiFolderModels deletes the folder's query pages (mental models), one audit each.
+func deleteWikiFolderModels(ctx context.Context, tx Tx, scope Scope, actor string, models []Record, out *WikiCleanupResult) error {
+	for _, m := range models {
+		if err := tx.Delete(ctx, colMentalModels, scope, m.ID, m.Revision); err != nil {
+			return err
+		}
+		if err := audit(ctx, tx, scope, actor, "delete:"+colMentalModels, m.ID); err != nil {
+			return err
+		}
+		out.Deleted = append(out.Deleted, m.ID)
+	}
+	return nil
 }
 
 // deleteWikiPages deletes the given pages and unlinks them from the rest.

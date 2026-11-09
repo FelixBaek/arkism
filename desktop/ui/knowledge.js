@@ -419,8 +419,8 @@ window.ArkismKnowledge = (ctx) => {
       const ids = [...new Set(L.chunks.items.map((x) => x.source?.id).filter(Boolean))];
       for (const id of ids) if (!kept[id]) {
         kept[id] = { items: null, error: "" };
-        get(`/v1/sources/${encodeURIComponent(id)}/artifacts`, { limit: 100 }).then((r) => { kept[id].items = Array.isArray(r?.items) ? r.items : []; },
-          (e) => { kept[id].error = off(e) ? "원본 파일을 볼 권한이 없거나 남아 있지 않아요." : errText(e); kept[id].items = []; }).then(redraw);
+        get(`/v1/sources/${encodeURIComponent(id)}/artifacts`, { limit: 100 }).then((r) => { kept[id].items = Array.isArray(r?.items) ? r.items : []; redraw(); },
+          (e) => { kept[id].error = off(e) ? "원본 파일을 볼 권한이 없거나 남아 있지 않아요." : errText(e); kept[id].items = []; redraw(); });
       }
       const list = el("div", "v4k-evidence");
       const files = ids.flatMap((id) => (kept[id].items || []).map((a) => [id, a]));
@@ -848,7 +848,8 @@ window.ArkismKnowledge = (ctx) => {
     const m = K.query?.[p.id];
     if (m === undefined) {
       K.query = { ...K.query, [p.id]: null };
-      get(`/v1/mental-models/${encodeURIComponent(p.id)}`).then((v) => v, () => false).then((v) => { K.query[p.id] = v; if (K.pageSel === p.id) paint(); });
+      const got = (v) => { K.query[p.id] = v; if (K.pageSel === p.id) paint(); };
+      get(`/v1/mental-models/${encodeURIComponent(p.id)}`).then(got, () => got(false));
     }
     if (p.stale) box.append(card("근거 기억이 바뀌었어요. 주제 요약에서 다시 만들고 승인해 주세요.", []));
     if (!m) box.append(sec("본문", null, el("p", "meta", m === false ? "불러오지 못했어요." : "불러오는 중…")));
@@ -939,7 +940,7 @@ window.ArkismKnowledge = (ctx) => {
   async function loadStrategies() {
     const { workspace_id: w, project_id: p } = state.scope || {};
     if (!w || !p) return [];
-    try { return Object.keys((await get(`/v1/spaces/${encodeURIComponent(w)}/${encodeURIComponent(p)}/config/effective`))?.config?.extraction_strategies || {}).sort(); }
+    try { return Object.keys((await get(`/v1/spaces/${encodeURIComponent(w)}/${encodeURIComponent(p)}/config/effective`))?.config?.extraction_strategies || {}).sort((a, b) => a.localeCompare(b)); }
     catch (_) { return []; } // no strategies to offer; the server default applies
   }
   const field = (label, input) => { const f = el("label", "v4k-field"); f.append(el("span", "", label), input); return f; };
@@ -947,7 +948,7 @@ window.ArkismKnowledge = (ctx) => {
     const A = { text: "", files: [], tags: "", context: "", when: "", meta: "", strategy: "", parser: "", doc: "", append: false, entities: "", blocks: [], more: false };
     let pop = null;
     const redraw = (key) => { if (pop?.dialog.isConnected) pop.select(key); };
-    if (!strategies) loadStrategies().then((list) => { strategies = list; if (list.length) redraw(A.files.length ? "files" : initial); });
+    if (!strategies) void (async () => { const list = await loadStrategies(); strategies = list; if (list.length) redraw(A.files.length ? "files" : initial); })();
     function options(files) {
       const more = el("details", "v4k-more v4k-opts"); more.append(el("summary", "", "자세히"));
       more.open = A.more; more.addEventListener("toggle", () => { A.more = more.open; });
@@ -1079,7 +1080,7 @@ window.ArkismKnowledge = (ctx) => {
     if (F.state === "idle") { F.state = "loading"; queueMicrotask(() => loadDocs()); }
     const bar = el("div", "v4s-bar");
     const date = (key, label) => { const i = el("input", "v4s-input v4k-date"); i.type = "date"; i.value = F[key]; i.setAttribute("aria-label", label); i.title = label; i.addEventListener("change", () => { F[key] = i.value; F.state = "loading"; void loadDocs(); }); return i; };
-    const tags = [...new Set([F.tag, ...F.items.flatMap((d) => d.tags || [])].filter(Boolean))].sort();
+    const tags = [...new Set([F.tag, ...F.items.flatMap((d) => d.tags || [])].filter(Boolean))].sort((a, b) => a.localeCompare(b));
     bar.append(searchBox("문서 이름·태그·내용 검색", F.q, (v) => { F.q = v; F.state = "loading"; void loadDocs(); }),
       noI18nOpts(select("태그", [["", "태그: 모두"], ...tags.map((t) => [t, t])], F.tag, (v) => { F.tag = v; F.state = "loading"; void loadDocs(); })),
       date("from", "이날부터"), date("to", "이날까지"));
@@ -1133,7 +1134,7 @@ window.ArkismKnowledge = (ctx) => {
     const add = el("form", "v4k-bind add"), input = el("input", "v4s-input"); input.placeholder = "새 태그"; input.setAttribute("aria-label", "새 태그");
     const addBtn = button("추가", "", null); addBtn.type = "submit"; addBtn.disabled = K.busy || !human();
     add.append(input, addBtn);
-    add.addEventListener("submit", (e) => { e.preventDefault(); const t = input.value.trim(); if (t) docAct(() => request(`/v1/files/memories/documents/${id}`, { method: "PATCH", body: JSON.stringify({ scope: state.scope, add: [t] }) }), tagDone); });
+    add.addEventListener("submit", (e) => { e.preventDefault(); const t = input.value.trim(); if (t) void docAct(() => request(`/v1/files/memories/documents/${id}`, { method: "PATCH", body: JSON.stringify({ scope: state.scope, add: [t] }) }), tagDone); });
     box.append(sec("태그", null, tagBox, add, el("p", "meta", "고친 태그는 이 문서의 기억 후보와 승인된 기억에도 같이 바뀌어요.")));
     // 기억 후보
     const cands = el("div", "v4s-actions");

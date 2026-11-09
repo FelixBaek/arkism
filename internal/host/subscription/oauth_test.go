@@ -124,7 +124,8 @@ func TestOAuthDeviceLoginRefreshAndLogout(t *testing.T) {
 	if !strings.Contains(out.String(), "ABCD-1234") || strings.Contains(out.String(), "at-1") || strings.Contains(out.String(), "rt-SECRET-1") {
 		t.Fatalf("login output must show the code and never a token: %q", out.String())
 	}
-	st, err := os.Stat(oauthPath("xai", ".json"))
+	path, _ := oauthPath("xai", ".json")
+	st, err := os.Stat(path)
 	if err != nil || st.Mode().Perm() != 0o600 {
 		t.Fatalf("file store must be 0600: %v %v", st, err)
 	}
@@ -173,7 +174,8 @@ func TestOAuthRefreshRefusedNeedsLoginAndHidesSecrets(t *testing.T) {
 	if err := OAuthLogin(context.Background(), "nous", &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(oauthPath("nous", ".json")); !errors.Is(err, os.ErrNotExist) {
+	nousPath, _ := oauthPath("nous", ".json")
+	if _, err := os.Stat(nousPath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("with a credential store no token file is written")
 	}
 	f.refreshStatus = 400

@@ -458,11 +458,16 @@ func (s *Service) GetWebhook(ctx context.Context, token string, scope Scope, id 
 	return webhookView(r), nil
 }
 
-func (s *Service) UpdateWebhook(ctx context.Context, token, id string, in WebhookUpdate) (WebhookView, error) {
-	if in.ExpectedRevision < 1 || in.URL != nil && checkWebhookURL(*in.URL, s.WebhookAllowPrivate) != nil ||
+// validWebhookUpdate checks every field the update resends; omitted fields stay as stored.
+func (s *Service) validWebhookUpdate(in WebhookUpdate) bool {
+	return !(in.ExpectedRevision < 1 || in.URL != nil && checkWebhookURL(*in.URL, s.WebhookAllowPrivate) != nil ||
 		in.Events != nil && !validWebhookEvents(in.Events) || in.Secret != nil && !validWebhookSecret(*in.Secret) ||
 		in.Method != nil && !validWebhookMethod(*in.Method) || in.TimeoutSeconds != nil && !validWebhookTimeout(*in.TimeoutSeconds) ||
-		!validWebhookPairs(in.Headers, true) || !validWebhookPairs(in.QueryParams, false) {
+		!validWebhookPairs(in.Headers, true) || !validWebhookPairs(in.QueryParams, false))
+}
+
+func (s *Service) UpdateWebhook(ctx context.Context, token, id string, in WebhookUpdate) (WebhookView, error) {
+	if !s.validWebhookUpdate(in) {
 		return WebhookView{}, ErrInvalid
 	}
 	d, err := s.humanWebhooks(ctx, token, in.Scope, id)
@@ -516,23 +521,7 @@ func (s *Service) applyWebhookUpdate(w *Webhook, in WebhookUpdate, id string) er
 		w.TimeoutSeconds = *in.TimeoutSeconds
 	}
 	if in.Headers != nil || in.QueryParams != nil || in.URL != nil {
-		h, err := s.openWebhookHTTP(w, in.Scope, id)
-		if err != nil {
-			return err
-		}
-		// A new origin must not inherit sealed credentials meant for the old one:
-		// parts the same update does not resend are dropped.
-		moved := in.URL != nil && webhookOrigin(*in.URL) != webhookOrigin(cmp.Or(h.URL, w.URL))
-		if in.Headers != nil || moved {
-			h.Headers = in.Headers
-		}
-		if in.QueryParams != nil || moved {
-			h.Query = in.QueryParams
-		}
-		if in.URL != nil {
-			w.URL, h.URL = webhookShownURL(*in.URL)
-		}
-		if err = sealWebhookHTTP(s.WebhookKey, w, h, in.Scope, id); err != nil {
+		if err := s.applyWebhookHTTPUpdate(w, in, id); err != nil {
 			return err
 		}
 	}
@@ -553,6 +542,27 @@ func (s *Service) applyWebhookUpdate(w *Webhook, in WebhookUpdate, id string) er
 		w.SealedKey = sealed
 	}
 	return nil
+}
+
+// applyWebhookHTTPUpdate reseals the URL, headers and query parameters the update changes.
+func (s *Service) applyWebhookHTTPUpdate(w *Webhook, in WebhookUpdate, id string) error {
+	h, err := s.openWebhookHTTP(w, in.Scope, id)
+	if err != nil {
+		return err
+	}
+	// A new origin must not inherit sealed credentials meant for the old one:
+	// parts the same update does not resend are dropped.
+	moved := in.URL != nil && webhookOrigin(*in.URL) != webhookOrigin(cmp.Or(h.URL, w.URL))
+	if in.Headers != nil || moved {
+		h.Headers = in.Headers
+	}
+	if in.QueryParams != nil || moved {
+		h.Query = in.QueryParams
+	}
+	if in.URL != nil {
+		w.URL, h.URL = webhookShownURL(*in.URL)
+	}
+	return sealWebhookHTTP(s.WebhookKey, w, h, in.Scope, id)
 }
 
 // DeleteWebhook removes the webhook; its queued deliveries end as failed "webhook_gone".

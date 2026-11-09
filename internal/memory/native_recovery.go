@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"io"
 	"reflect"
-
-	"github.com/jackc/pgx/v5"
 )
 
 const nativeRecoveryProtocol = "arkism-native-recovery-v1"
@@ -92,25 +90,18 @@ func (p *Postgres) nativeRecoveryTransaction(ctx context.Context, generation str
 	if p == nil || p.pool == nil || p.tx != nil || !sourceHashPattern.MatchString(generation) {
 		return ErrInvalid
 	}
-	tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable, AccessMode: pgx.ReadWrite})
+	view, rollback, err := p.maintenanceSnapshot(ctx)
 	if err != nil {
-		return pgErr(err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err = tx.Exec(ctx, `SELECT arkism.check_maintenance_access()`); err != nil {
-		return pgErr(err)
-	}
-	if err = disableSnapshotRowSecurity(ctx, tx); err != nil {
 		return err
 	}
-	view := &Postgres{pool: p.pool, tx: tx}
+	defer rollback()
 	if err = view.checkPausedRecoveryGate(ctx, generation); err != nil {
 		return err
 	}
 	if err = fn(view); err != nil {
 		return err
 	}
-	return pgErr(tx.Commit(ctx))
+	return pgErr(view.tx.Commit(ctx))
 }
 
 // VerifyNativeRecoveryReadback compares the actual restored database before

@@ -16,18 +16,11 @@ func (p *Postgres) ReconcileNativeRecovery(ctx context.Context, source *Postgres
 	if p == nil || source == nil || p == source || p.pool == nil || source.pool == nil || p.tx != nil || source.tx != nil || !sourceHashPattern.MatchString(manifest) || !sourceHashPattern.MatchString(sourceGeneration) || !sourceHashPattern.MatchString(restoredGeneration) {
 		return ErrInvalid
 	}
-	lease, err := source.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable, AccessMode: pgx.ReadWrite})
+	current, release, err := source.maintenanceSnapshot(ctx)
 	if err != nil {
-		return pgErr(err)
-	}
-	defer func() { _ = lease.Rollback(ctx) }() // Source is read-only; no cross-database commit is asserted.
-	if _, err = lease.Exec(ctx, `SELECT arkism.check_maintenance_access()`); err != nil {
-		return pgErr(err)
-	}
-	if err = disableSnapshotRowSecurity(ctx, lease); err != nil {
 		return err
 	}
-	current := &Postgres{pool: source.pool, tx: lease}
+	defer release() // Source is read-only; no cross-database commit is asserted.
 	if err = current.checkPausedRecoveryGate(ctx, sourceGeneration); err != nil {
 		return err
 	}

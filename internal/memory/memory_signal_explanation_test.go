@@ -41,19 +41,7 @@ func TestSignalExplanationHTTPMatchesSearchAndDedup(t *testing.T) {
 	if v.Mode != "recent_first_trace" || v.HistoricalTotal != 4 || v.WindowEvents != 4 || v.EligibleTotal != 3 || v.EligiblePassed != 2 || v.ExcludedWindowEvents != 1 || !v.MinimumMet {
 		t.Fatal(v)
 	}
-	out := f.search(f.human, SearchInput{Scope: scopeA, Query: m.Text, Modes: []string{"fts"}, Explain: true})
-	found := false
-	for _, hit := range out.Items {
-		if hit.ID == m.ID {
-			found = true
-			if hit.Explain == nil || hit.Explain.Outcome == nil || math.Abs(*hit.Explain.Outcome-v.EffectiveFactor) > 1e-9 {
-				t.Fatal("explanation differs from search", hit, v)
-			}
-		}
-	}
-	if !found {
-		t.Fatal("missing memory")
-	}
+	checkSearchOutcomeMatches(t, f, m, v)
 	if got := request(""); got.Code != 401 {
 		t.Fatal("anonymous explanation", got.Code)
 	}
@@ -68,6 +56,23 @@ func TestSignalExplanationHTTPMatchesSearchAndDedup(t *testing.T) {
 		t.Fatal(off, e)
 	}
 }
+func checkSearchOutcomeMatches(t *testing.T, f *fixture, m Record, v MemorySignalExplanation) {
+	t.Helper()
+	out := f.search(f.human, SearchInput{Scope: scopeA, Query: m.Text, Modes: []string{"fts"}, Explain: true})
+	found := false
+	for _, hit := range out.Items {
+		if hit.ID == m.ID {
+			found = true
+			if hit.Explain == nil || hit.Explain.Outcome == nil || math.Abs(*hit.Explain.Outcome-v.EffectiveFactor) > 1e-9 {
+				t.Fatal("explanation differs from search", hit, v)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("missing memory")
+	}
+}
+
 func TestSignalPolicyExplicitDisableOverridesInherited(t *testing.T) {
 	f := newFixture(t)
 	f.svc.SpaceTemplate = &SpaceTemplate{Config: SpaceConfig{RecallQuality: &SpaceRecallQuality{SignalPolicy: &SignalPolicy{Dimension: "work_task", WindowDays: 30, MinSamples: 3}}}}

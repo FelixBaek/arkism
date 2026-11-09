@@ -258,7 +258,13 @@ func TestEntityMergeDeleteAndAuthorization(t *testing.T) {
 	if err != nil || renamed.Name != "PostgreSQL" || renamed.Type != "tool" || !slices.Contains(renamed.Aliases, "Postgres") {
 		t.Fatal(renamed, err)
 	}
-	if _, err = f.svc.DeleteEntity(testCtx, f.agent, postgres, EntityScopeInput{Scope: scopeA}); !errors.Is(err, ErrDenied) {
+	checkEntityDelete(t, f, repo, postgres)
+}
+
+// checkEntityDelete deletes an entity and checks memories stay, it does not come back and its tombstone is hidden.
+func checkEntityDelete(t *testing.T, f *fixture, repo *entityTestRepo, postgres string) {
+	t.Helper()
+	if _, err := f.svc.DeleteEntity(testCtx, f.agent, postgres, EntityScopeInput{Scope: scopeA}); !errors.Is(err, ErrDenied) {
 		t.Fatal("agent deleted", err)
 	}
 	del, err := f.svc.DeleteEntity(testCtx, f.human, postgres, EntityScopeInput{Scope: scopeA})

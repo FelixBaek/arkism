@@ -157,12 +157,7 @@ func selectDiverse(rows []ScoredHit, limit int) []ScoredHit {
 		spans[i], words[i] = tokenSet(SearchTokens(r.evidenceSpan)), tokenSet(searchQueryTerms(r.Text))
 	}
 	for len(picked) < limit {
-		at, value := -1, math.Inf(-1)
-		for i, r := range rows {
-			if v := r.Score/best - diversityPenalty*closest[i]; !used[i] && v > value {
-				at, value = i, v
-			}
-		}
+		at := nextDiversePick(rows, used, closest, best)
 		used[at] = true
 		picked = append(picked, rows[at])
 		for i := range rows {
@@ -170,18 +165,35 @@ func selectDiverse(rows []ScoredHit, limit int) []ScoredHit {
 				continue
 			}
 			if len(rows[at].vector) > 0 && len(rows[at].vector) == len(rows[i].vector) {
-				similarity := cosine(rows[at].vector, rows[i].vector)
-				closest[i] = max(closest[i], nearDuplicateShare(similarity))
-				if sameSource(rows[at].Hit, rows[i].Hit) && retells(words[i], words[at]) {
-					closest[i] = max(closest[i], max(0, similarity-sameSourceSimilarity)/(1-sameSourceSimilarity))
-				}
-				if similarity >= defaultCaptureMergeSimilarity && rows[at].Scope == rows[i].Scope && sameSourceSpan(spans[at], spans[i]) {
-					closest[i] = 1
-				}
+				closest[i] = pickCloseness(rows[at], rows[i], closest[i], spans[at], spans[i], words[at], words[i])
 			}
 		}
 	}
 	return picked
+}
+
+// nextDiversePick returns the unused row with the highest score/best minus its diversity penalty.
+func nextDiversePick(rows []ScoredHit, used []bool, closest []float64, best float64) int {
+	at, value := -1, math.Inf(-1)
+	for i, r := range rows {
+		if v := r.Score/best - diversityPenalty*closest[i]; !used[i] && v > value {
+			at, value = i, v
+		}
+	}
+	return at
+}
+
+// pickCloseness raises row's near-duplicate share against the newly picked row; both have comparable vectors.
+func pickCloseness(pick, row ScoredHit, closest float64, pickSpan, rowSpan, pickWords, rowWords map[string]bool) float64 {
+	similarity := cosine(pick.vector, row.vector)
+	closest = max(closest, nearDuplicateShare(similarity))
+	if sameSource(pick.Hit, row.Hit) && retells(rowWords, pickWords) {
+		closest = max(closest, max(0, similarity-sameSourceSimilarity)/(1-sameSourceSimilarity))
+	}
+	if similarity >= defaultCaptureMergeSimilarity && pick.Scope == row.Scope && sameSourceSpan(pickSpan, rowSpan) {
+		closest = 1
+	}
+	return closest
 }
 
 func tokenSet(tokens []string) map[string]bool {
@@ -382,19 +394,29 @@ func weighKeywordCoverage(in SearchInput, lists [][]Hit) [][]Hit {
 			if slices.Contains(h.Reasons, reasonTextSearch) && !slices.Contains(h.Reasons, reasonExactKeyword) && !slices.Contains(h.Reasons, reasonVector) {
 				out[i][j].keywordQueryKey = keywordKey
 			}
-			exact := slices.Contains(h.Reasons, reasonExactKeyword)
-			if exact && (!localQuality || slices.ContainsFunc(h.keywords, func(k string) bool { return strings.EqualFold(k, strings.TrimSpace(in.Query)) })) {
-				continue
-			}
-			if !exact && !slices.Contains(h.Reasons, reasonTextSearch) {
-				continue
-			}
-			if found, concepts := conceptsFound(terms, h); concepts > 0 && found > 0 {
-				out[i][j].termShare = float64(found) / float64(concepts)
+			if share, ok := keywordTermShare(in, terms, localQuality, h); ok {
+				out[i][j].termShare = share
 			}
 		}
 	}
 	return out
+}
+
+// keywordTermShare is the share of the query's topic concepts a keyword lane hit holds; ok is
+// false when the hit keeps its credit (an exact keyword match of the whole query, or no keyword
+// lane reason) or holds none of them.
+func keywordTermShare(in SearchInput, terms []string, localQuality bool, h Hit) (float64, bool) {
+	exact := slices.Contains(h.Reasons, reasonExactKeyword)
+	if exact && (!localQuality || slices.ContainsFunc(h.keywords, func(k string) bool { return strings.EqualFold(k, strings.TrimSpace(in.Query)) })) {
+		return 0, false
+	}
+	if !exact && !slices.Contains(h.Reasons, reasonTextSearch) {
+		return 0, false
+	}
+	if found, concepts := conceptsFound(terms, h); concepts > 0 && found > 0 {
+		return float64(found) / float64(concepts), true
+	}
+	return 0, false
 }
 
 // probeAllowed asks whether the caller holds action without a denial audit row: optional

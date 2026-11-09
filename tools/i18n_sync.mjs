@@ -21,7 +21,7 @@ const require = createRequire(import.meta.url);
 const { extract, stale, HANGUL } = require(path.join(UI, "i18n-extract.js"));
 const { DICTIONARIES } = require(path.join(UI, "i18n.js"));
 const KINDS = ["strings", "patterns"];
-const placeholders = (s) => [...s.matchAll(/\{(\d+)\}/g)].map((m) => m[1]).sort().join(",");
+const placeholders = (s) => [...s.matchAll(/\{(\d+)\}/g)].map((m) => Number(m[1])).sort((x, y) => x - y).join(",");
 const file = (code) => path.join(UI, `i18n-${code}.js`);
 
 export function load(codes = DICTIONARIES) {

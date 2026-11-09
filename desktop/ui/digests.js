@@ -252,8 +252,8 @@ window.ArkismDigests = (ctx) => {
     if (soft && document.querySelector("#detail [data-sync-dirty]")) return;
     if (state.memTab === "merge") return mergeDetail(soft);
     if (state.memTab === "notes") return notesDetail(soft);
-    if (filter.view === "models") return modelDetail(soft);
-    if (filter.view === "observations") return observationDetail(soft);
+    if (filter.view === "models") return modelDetail();
+    if (filter.view === "observations") return observationDetail();
     const id = (state.selected || "").replace(/^digest:/, "");
     if (id === "user") return userDetail();
     const e = entries().find((x) => x.id === id);
@@ -819,7 +819,8 @@ window.ArkismDigests = (ctx) => {
     const h = side.hist.get(key);
     if (h === undefined) {
       side.hist.set(key, null);
-      request(`${path}?${query()}`).then((v) => v, () => false).then((v) => { side.hist.set(key, v); if (here() && state.selected === key && !document.querySelector("#detail [data-sync-dirty]")) detail(); });
+      const got = (v) => { side.hist.set(key, v); if (here() && state.selected === key && !document.querySelector("#detail [data-sync-dirty]")) detail(); };
+      request(`${path}?${query()}`).then(got, () => got(false));
     }
     if (!h) { s.append(el("p", "meta", h === false ? "이력을 불러오지 못했어요." : "이력을 불러오는 중…")); return s; }
     const revs = [...(h.revisions || [])].sort((a, b) => b.version - a.version || new Date(b.at) - new Date(a.at));
@@ -951,7 +952,7 @@ window.ArkismDigests = (ctx) => {
     await Promise.all(want);
     if (here() && filter.view === "observations" && side.key === key) { render(false); detail(true); }
   }
-  const scopeOf = (o) => [...new Set((o.tags || []).filter((t) => !t.startsWith("review:")))].sort().join("\u0000") || "-";
+  const scopeOf = (o) => [...new Set((o.tags || []).filter((t) => !t.startsWith("review:")))].sort((a, b) => a.localeCompare(b)).join("\u0000") || "-";
   function paintObservations() {
     const got = side.obs[filter.obsStatus];
     const items = (Array.isArray(got) ? got : []).filter((o) => (!filter.obsScope || scopeOf(o) === filter.obsScope) && (!filter.q || (o.content || "").toLowerCase().includes(filter.q)));
@@ -1031,9 +1032,9 @@ window.ArkismDigests = (ctx) => {
   const runError = (e) => MODEL_CODES[e.message] || (e.message === "access_denied" ? "이 계정은 정리를 실행할 수 없어요." : `처리하지 못했어요: ${e.message}`);
   function startPlan() {
     const run = side.run = { phase: "plan" };
+    const show = () => { if (side.run === run && here() && state.selected === "ob:run") detail(); };
     request("/v1/observations/consolidate", { method: "POST", body: JSON.stringify({ scope: state.scope, plan_only: true }) })
-      .then((v) => { run.plan = v; run.phase = "planned"; }, (e) => { run.phase = "plan_failed"; run.error = runError(e); })
-      .then(() => { if (side.run === run && here() && state.selected === "ob:run") detail(); });
+      .then((v) => { run.plan = v; run.phase = "planned"; show(); }, (e) => { run.phase = "plan_failed"; run.error = runError(e); show(); });
   }
   async function startRun() {
     const run = side.run;
@@ -1051,8 +1052,9 @@ window.ArkismDigests = (ctx) => {
     const v = side.strategies;
     if (v === undefined) s.append(button("미리보기", "small", null, () => {
       side.strategies = null; detail();
+      const got = (x) => { side.strategies = x; if (here() && state.selected === "ob:run") detail(); };
       request("/v1/observations/strategies/preview", { method: "POST", body: JSON.stringify({ scope: state.scope }) })
-        .then((x) => x, (e) => ({ error: e.message })).then((x) => { side.strategies = x; if (here() && state.selected === "ob:run") detail(); });
+        .then(got, (e) => got({ error: e.message }));
     }));
     else if (v === null) s.append(el("p", "meta", "불러오는 중…"));
     else if (v.error) s.append(el("p", "dg-warn", `미리 보지 못했어요 (${v.error}).`));

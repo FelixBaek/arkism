@@ -1,5 +1,6 @@
 // Actual evaluation component DOM, keyboard interaction and bounded synthetic API.
-const fs = require("node:fs"), path = require("node:path"), assert = require("node:assert/strict");
+const fs = require("node:fs"), os = require("node:os"), path = require("node:path"), assert = require("node:assert/strict");
+const shots = fs.mkdtempSync(path.join(os.tmpdir(), "arkism-memory-feedback-")); // a private screenshot folder, not a fixed shared /tmp name
 const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__dirname,"../frontend/node_modules/playwright-core"));
 (async () => {
  const browser = await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
@@ -15,7 +16,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__
    const el=(tag,cls="",text="")=>{const n=document.createElement(tag);n.className=cls;n.textContent=text;return n};
    const section=title=>{const n=el("section","section");n.append(el("h3","",title));return n};
    const facts=pairs=>{const n=el("dl","facts");for(const [k,v]of pairs)n.append(el("dt","",k),el("dd","",v));return n};
-   window.ArkismMemoryEvaluation.mount({container:document.querySelector("#panel"),record:{id:"memory",revision:2},scope:{workspace_id:"work",project_id:"project"},el,section,facts,onFix:()=>window.fixed++,request:async(path,opts)=>{
+   window.ArkismMemoryEvaluation.mount({container:document.querySelector("#panel"),record:{id:"memory",revision:2},scope:{workspace_id:"work",project_id:"project"},el,section,facts,onFix:()=>window.fixed++,request:async(path)=>{
     window.calls.push(path);
     if(path.includes("evaluations/summary"))return {authority:"data_only_untrusted",target:{collection:"memories",id:"memory",revision:2},groups:{automated_check:{count:1}},passed:false};
     if(path.includes("signal-policy")){if(window.failPolicy){window.failPolicy=false;throw new Error("503")};return {authority:"data_only_untrusted",memory:{id:"memory",revision:2},mode:"recent_first_trace",as_of:"2026-11-07T10:00:00Z",policy:{dimension:"work_task",window_days:30,min_samples:3},historical_total:8,window_events:4,eligible_total:3,eligible_passed:2,excluded_window_events:1,minimum_met:true,evaluation_factor:1.1,work_factor:1,effective_factor:1.1}}
@@ -43,7 +44,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__
   assert.equal(await page.evaluate(()=>window.fixed),1);
   assert.deepEqual(errors,[]);
   assert.ok(await page.evaluate(()=>window.calls.filter(p=>!p.includes("evaluations/summary")).every(p=>p.includes("workspace_id=work")&&p.includes("project_id=project"))));
-  await page.screenshot({path:process.env.ARKISM_FEEDBACK_SCREENSHOT||"/tmp/arkism-memory-feedback.png",fullPage:true});
+  await page.screenshot({path:process.env.ARKISM_FEEDBACK_SCREENSHOT||path.join(shots,"feedback.png"),fullPage:true});
   await page.setViewportSize({width:390,height:844});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   for(const file of ["memory-pages.js","memory-insight.js"])await page.addScriptTag({path:path.resolve(__dirname,"../ui",file)});
@@ -69,7 +70,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__
    await page.locator("#table").getByText(label,{exact:true}).waitFor();
    await page.locator("#table .original-row").focus();await page.keyboard.press("Enter");
    await page.getByText(/다시 승인하면 원본과 독립된 수동 규칙/).waitFor();
-   if(state==="needs_review")await page.screenshot({path:"/tmp/arkism-rule-review.png",fullPage:true});
+   if(state==="needs_review")await page.screenshot({path:path.join(shots,"rule-review.png"),fullPage:true});
    await page.getByRole("button",{name:"수동 규칙으로 다시 승인",exact:true}).focus();await page.keyboard.press("Enter");
    await page.getByText("규칙 · 켜짐",{exact:true}).waitFor();
    assert.deepEqual(await page.evaluate(()=>window.ruleWrites.map(w=>[w.path,w.body.scope,w.body.expected_revision,w.body.active,w.body.source_state||null])),[["/v1/directives/rule",{workspace_id:"work",project_id:"project"},3,true,null]]);
@@ -79,7 +80,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__
   await page.locator("#table .original-row").waitFor();
   await page.locator("#table .original-row").focus();await page.keyboard.press("Enter");
   await page.getByText(/수정하거나 끄면 독립된 수동 규칙으로 바뀌어요/).waitFor();
-  await page.screenshot({path:"/tmp/arkism-rule-active-link.png",fullPage:true});
+  await page.screenshot({path:path.join(shots,"rule-active-link.png"),fullPage:true});
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await page.getByRole("button",{name:"끄기",exact:true}).focus();await page.keyboard.press("Enter");
   await page.getByText("규칙 · 꺼짐",{exact:true}).waitFor();

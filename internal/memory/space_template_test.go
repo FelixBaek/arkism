@@ -26,6 +26,21 @@ func spaceTemplateJob(t *testing.T, f *fixture, scope Scope) SpaceReport {
 	return SpaceReport{}
 }
 
+// assertTemplateDefinitionsOff: no person chose the definitions for this space, so they arrive switched off.
+func assertTemplateDefinitionsOff(t *testing.T, f *fixture, scope Scope) {
+	t.Helper()
+	for _, r := range scopeRecords(f, colDirectives, scope) {
+		if r.Status == "active" {
+			t.Fatalf("auto-applied directive is active: %+v", r)
+		}
+	}
+	for _, r := range scopeRecords(f, colMentalModels, scope) {
+		if m := r.MentalModel.Refresh; m.Mode != mmRefreshManual || m.AfterConsolidation || m.Cron != "" {
+			t.Fatalf("auto-applied mental model refreshes on its own: %+v", m)
+		}
+	}
+}
+
 func TestSpaceTemplateAutoApply(t *testing.T) {
 	f := newFixture(t)
 	in := directiveInput("Units", "Always use metric units.", "both", 7)
@@ -63,17 +78,7 @@ func TestSpaceTemplateAutoApply(t *testing.T) {
 	if report := spaceTemplateJob(t, f, scopeC); report.Config != "applied" || report.Imported != 2 {
 		t.Fatalf("capture apply report = %+v", report)
 	}
-	// No person chose the definitions for this space: they arrive switched off.
-	for _, r := range scopeRecords(f, colDirectives, scopeC) {
-		if r.Status == "active" {
-			t.Fatalf("auto-applied directive is active: %+v", r)
-		}
-	}
-	for _, r := range scopeRecords(f, colMentalModels, scopeC) {
-		if m := r.MentalModel.Refresh; m.Mode != mmRefreshManual || m.AfterConsolidation || m.Cron != "" {
-			t.Fatalf("auto-applied mental model refreshes on its own: %+v", m)
-		}
-	}
+	assertTemplateDefinitionsOff(t, f, scopeC)
 	if cfg := f.svc.mustSpace(t, scopeC); cfg.ExtractionMode != spaceExtractVerbose {
 		t.Fatalf("template settings not stored: %+v", cfg)
 	}

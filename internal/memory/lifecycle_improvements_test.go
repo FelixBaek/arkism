@@ -140,123 +140,143 @@ func (tx approvalRecoveryTx) KnowledgeRelations(ctx context.Context, s Scope, n 
 
 func TestApprovedRelationsRecoverThroughWorker(t *testing.T) {
 	for _, stale := range []bool{false, true} {
-		t.Run(fmt.Sprint(stale), func(t *testing.T) {
-			f := newFixture(t)
-			repo := &approvalRecoveryRepo{entityTestRepo: newEntityTestRepo(f.repo), relations: map[string]KnowledgeRelation{}}
-			f.svc.Repo = repo
-			f.auth.actors[f.work] = actor("worker-1", "service", true, "read", "write", "embed", "search", "context")
-			claim := CaptureClaim{Subject: "Team assignment", Text: "Mira belongs to the Cedar team", Kind: "semantic", Basis: "explicit_user", Reason: "stated fact", Entities: []EntityInput{{Name: "Mira", Type: "person"}, {Name: "Cedar", Type: "organization"}}, Relations: []EntityRelationInput{{Source: "Mira", Relation: "member_of", Target: "Cedar"}}}
-			id := oneCandidate(t, f.capture(f.human, captureInput(scopeA, "relation-recovery", claim)))
-			repo.fail = errors.New("entity store temporarily unavailable")
-			m := f.approveCandidate(id)
-			var job Record
-			for key, r := range f.repo.store[colJobs] {
-				if r.Kind == "approved_entities" {
-					job = r
-				} else {
-					r.Status = JobStatusDone
-					f.repo.store[colJobs][key] = r
-				}
-			}
-			if job.ID == "" {
-				t.Fatal("approval did not durably queue recovery")
-			}
-			if len(repo.relations) != 0 {
-				t.Fatal("relations written during outage")
-			}
-			if e := f.svc.WorkOnce(testCtx, f.work); e == nil {
-				t.Fatal("outage reported success")
-			}
-			if f.repo.store[colJobs][recKey(scopeA, job.ID)].Status != JobStatusRetry {
-				t.Fatal("failed recovery not retried")
-			}
-			repo.fail = nil
-			if stale {
-				r := f.repo.store[colMemories][recKey(scopeA, m.ID)]
-				r.Status = "superseded"
-				r.Revision++
-				f.repo.store[colMemories][recKey(scopeA, m.ID)] = r
-			}
-			if e := f.svc.WorkOnce(testCtx, f.work); e != nil {
-				t.Fatal(e)
-			}
-			if stale {
-				if len(repo.relations) != 0 {
-					t.Fatal("stale approval published relations")
-				}
-				return
-			}
-			if len(repo.relations) != 1 {
-				t.Fatal("recovery did not publish one edge", len(repo.relations))
-			}
-			for _, edge := range repo.relations {
-				out, e := f.svc.ExpandKnowledgeGraph(testCtx, f.human, KnowledgeGraphInput{Scope: scopeA, Start: edge.Source})
-				if e != nil || len(out.Items) != 1 {
-					t.Fatal("recovered relation not searchable", out, e)
-				}
-			}
-			if e := f.svc.WorkOnce(testCtx, f.work); !errors.Is(e, ErrNotFound) {
-				t.Fatal("completed recovery was not drained", e)
-			}
-			if len(repo.relations) != 1 {
-				t.Fatal("duplicate relation")
-			}
-		})
+		t.Run(fmt.Sprint(stale), func(t *testing.T) { approvedRelationsRecovery(t, stale) })
+	}
+}
+
+func approvedRelationsRecovery(t *testing.T, stale bool) {
+	f := newFixture(t)
+	repo := &approvalRecoveryRepo{entityTestRepo: newEntityTestRepo(f.repo), relations: map[string]KnowledgeRelation{}}
+	f.svc.Repo = repo
+	f.auth.actors[f.work] = actor("worker-1", "service", true, "read", "write", "embed", "search", "context")
+	claim := CaptureClaim{Subject: "Team assignment", Text: "Mira belongs to the Cedar team", Kind: "semantic", Basis: "explicit_user", Reason: "stated fact", Entities: []EntityInput{{Name: "Mira", Type: "person"}, {Name: "Cedar", Type: "organization"}}, Relations: []EntityRelationInput{{Source: "Mira", Relation: "member_of", Target: "Cedar"}}}
+	id := oneCandidate(t, f.capture(f.human, captureInput(scopeA, "relation-recovery", claim)))
+	repo.fail = errors.New("entity store temporarily unavailable")
+	m := f.approveCandidate(id)
+	job := onlyApprovedEntitiesJob(t, f)
+	if len(repo.relations) != 0 {
+		t.Fatal("relations written during outage")
+	}
+	if e := f.svc.WorkOnce(testCtx, f.work); e == nil {
+		t.Fatal("outage reported success")
+	}
+	if f.repo.store[colJobs][recKey(scopeA, job.ID)].Status != JobStatusRetry {
+		t.Fatal("failed recovery not retried")
+	}
+	repo.fail = nil
+	if stale {
+		r := f.repo.store[colMemories][recKey(scopeA, m.ID)]
+		r.Status = "superseded"
+		r.Revision++
+		f.repo.store[colMemories][recKey(scopeA, m.ID)] = r
+	}
+	if e := f.svc.WorkOnce(testCtx, f.work); e != nil {
+		t.Fatal(e)
+	}
+	if stale {
+		if len(repo.relations) != 0 {
+			t.Fatal("stale approval published relations")
+		}
+		return
+	}
+	checkRecoveredRelation(t, f, repo)
+}
+
+// onlyApprovedEntitiesJob returns the queued approved_entities job and marks every other job done.
+func onlyApprovedEntitiesJob(t *testing.T, f *fixture) Record {
+	t.Helper()
+	var job Record
+	for key, r := range f.repo.store[colJobs] {
+		if r.Kind == "approved_entities" {
+			job = r
+		} else {
+			r.Status = JobStatusDone
+			f.repo.store[colJobs][key] = r
+		}
+	}
+	if job.ID == "" {
+		t.Fatal("approval did not durably queue recovery")
+	}
+	return job
+}
+
+func checkRecoveredRelation(t *testing.T, f *fixture, repo *approvalRecoveryRepo) {
+	t.Helper()
+	if len(repo.relations) != 1 {
+		t.Fatal("recovery did not publish one edge", len(repo.relations))
+	}
+	for _, edge := range repo.relations {
+		out, e := f.svc.ExpandKnowledgeGraph(testCtx, f.human, KnowledgeGraphInput{Scope: scopeA, Start: edge.Source})
+		if e != nil || len(out.Items) != 1 {
+			t.Fatal("recovered relation not searchable", out, e)
+		}
+	}
+	if e := f.svc.WorkOnce(testCtx, f.work); !errors.Is(e, ErrNotFound) {
+		t.Fatal("completed recovery was not drained", e)
+	}
+	if len(repo.relations) != 1 {
+		t.Fatal("duplicate relation")
 	}
 }
 
 func TestLinkedDirectiveReviewAndRuleIdentity(t *testing.T) {
 	for _, change := range []string{"legacy", "rule", "quarantine", "future_revision", "source_removed"} {
-		t.Run(change, func(t *testing.T) {
-			f := newFixture(t)
-			claim := CaptureClaim{Subject: "rule", Text: "Keep deployment notes brief", Kind: "procedural", Basis: "explicit_user", Reason: "instruction", Rule: "always"}
-			m := f.approveCandidate(oneCandidate(t, f.capture(f.human, captureInput(scopeA, "linked-rule", claim))))
-			rows, e := f.svc.directives(testCtx, scopeA, "")
-			if e != nil || len(rows) != 1 {
-				t.Fatal(rows, e)
-			}
-			dir := rows[0]
-			switch change {
-			case "legacy":
-				dir.Directive.SourceScope = nil
-				dir.Directive.SourceRule = ""
-				f.repo.store[colDirectives][recKey(dir.Scope, dir.ID)] = dir
-			case "future_revision":
-				dir.Proposal.Revision = m.Revision + 1
-				f.repo.store[colDirectives][recKey(dir.Scope, dir.ID)] = dir
-			case "rule":
-				m.Tags = []string{ruleTagPrefix + "never"}
-				m.Revision++
-				f.repo.store[colMemories][recKey(scopeA, m.ID)] = m
-			case "source_removed":
-				delete(f.repo.store["sources"], recKey(scopeA, m.Sources[0].SourceID))
-			case "quarantine":
-				m.PrivacyQuarantined = true
-				f.repo.store[colMemories][recKey(scopeA, m.ID)] = m
-			}
-			list, e := f.svc.ListDirectives(testCtx, f.human, scopeA, 10, "")
-			if e != nil || len(list.Items) != 1 || list.Items[0].Active || list.Items[0].SourceState == "" {
-				t.Fatal("source state invisible", list, e)
-			}
-			get, e := f.svc.GetDirective(testCtx, f.human, scopeA, dir.ID)
-			if e != nil || get.Active || get.SourceState != list.Items[0].SourceState {
-				t.Fatal(get, e)
-			}
-			applied, e := f.svc.directives(testCtx, scopeA, "context")
-			if e != nil || len(applied) != 0 {
-				t.Fatal("invalid linked directive applied", applied, e)
-			}
-			if change == "legacy" {
-				updated, e := f.svc.UpdateDirective(testCtx, f.human, dir.ID, DirectiveInput{Scope: scopeA, ExpectedRevision: dir.Revision, Title: "Reviewed rule", Rule: claim.Text, Priority: 50, AppliesTo: "both"})
-				if e != nil || !updated.Active {
-					t.Fatal(updated, e)
-				}
-				applied, e = f.svc.directives(testCtx, scopeA, "context")
-				if e != nil || len(applied) != 1 {
-					t.Fatal("human review did not restore independent rule", applied, e)
-				}
-			}
-		})
+		t.Run(change, func(t *testing.T) { linkedDirectiveChange(t, change) })
+	}
+}
+
+func linkedDirectiveChange(t *testing.T, change string) {
+	f := newFixture(t)
+	claim := CaptureClaim{Subject: "rule", Text: "Keep deployment notes brief", Kind: "procedural", Basis: "explicit_user", Reason: "instruction", Rule: "always"}
+	m := f.approveCandidate(oneCandidate(t, f.capture(f.human, captureInput(scopeA, "linked-rule", claim))))
+	rows, e := f.svc.directives(testCtx, scopeA, "")
+	if e != nil || len(rows) != 1 {
+		t.Fatal(rows, e)
+	}
+	dir := rows[0]
+	applyLinkedDirectiveChange(f, change, dir, m)
+	list, e := f.svc.ListDirectives(testCtx, f.human, scopeA, 10, "")
+	if e != nil || len(list.Items) != 1 || list.Items[0].Active || list.Items[0].SourceState == "" {
+		t.Fatal("source state invisible", list, e)
+	}
+	get, e := f.svc.GetDirective(testCtx, f.human, scopeA, dir.ID)
+	if e != nil || get.Active || get.SourceState != list.Items[0].SourceState {
+		t.Fatal(get, e)
+	}
+	applied, e := f.svc.directives(testCtx, scopeA, "context")
+	if e != nil || len(applied) != 0 {
+		t.Fatal("invalid linked directive applied", applied, e)
+	}
+	if change == "legacy" {
+		updated, e := f.svc.UpdateDirective(testCtx, f.human, dir.ID, DirectiveInput{Scope: scopeA, ExpectedRevision: dir.Revision, Title: "Reviewed rule", Rule: claim.Text, Priority: 50, AppliesTo: "both"})
+		if e != nil || !updated.Active {
+			t.Fatal(updated, e)
+		}
+		applied, e = f.svc.directives(testCtx, scopeA, "context")
+		if e != nil || len(applied) != 1 {
+			t.Fatal("human review did not restore independent rule", applied, e)
+		}
+	}
+}
+
+func applyLinkedDirectiveChange(f *fixture, change string, dir, m Record) {
+	switch change {
+	case "legacy":
+		dir.Directive.SourceScope = nil
+		dir.Directive.SourceRule = ""
+		f.repo.store[colDirectives][recKey(dir.Scope, dir.ID)] = dir
+	case "future_revision":
+		dir.Proposal.Revision = m.Revision + 1
+		f.repo.store[colDirectives][recKey(dir.Scope, dir.ID)] = dir
+	case "rule":
+		m.Tags = []string{ruleTagPrefix + "never"}
+		m.Revision++
+		f.repo.store[colMemories][recKey(scopeA, m.ID)] = m
+	case "source_removed":
+		delete(f.repo.store["sources"], recKey(scopeA, m.Sources[0].SourceID))
+	case "quarantine":
+		m.PrivacyQuarantined = true
+		f.repo.store[colMemories][recKey(scopeA, m.ID)] = m
 	}
 }
 
@@ -279,18 +299,7 @@ func TestPostgresApprovedEntityOutboxAndReplay(t *testing.T) {
 	f.auth.actors[f.work] = actor("worker-1", "service", true, "read", "write", "embed", "search", "context")
 	claim := CaptureClaim{Subject: "Team assignment", Text: "Mira belongs to the Cedar team", Kind: "semantic", Basis: "explicit_user", Reason: "stated fact", Entities: []EntityInput{{Name: "Mira", Type: "person"}, {Name: "Cedar", Type: "organization"}}, Relations: []EntityRelationInput{{Source: "Mira", Relation: "member_of", Target: "Cedar"}}}
 	m := f.approveCandidate(oneCandidate(t, f.capture(f.human, captureInput(scopeA, "pg-relation", claim))))
-	var job Record
-	for _, j := range pgCollection(t, p, colJobs) {
-		if j.Kind == approvedEntitiesJobKind {
-			job = j
-			continue
-		}
-		j.Status = JobStatusDone
-		j.Revision++
-		if e := p.Replace(testCtx, colJobs, j, j.Revision-1); e != nil {
-			t.Fatal(e)
-		}
-	}
+	job := approvedEntitiesJobOnly(t, p)
 	if job.ID == "" || job.Target.Revision != m.Revision {
 		t.Fatal("outbox not committed with approval", job)
 	}
@@ -323,12 +332,7 @@ func TestPostgresApprovedEntityOutboxAndReplay(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	var node GraphEntity
-	for _, ent := range g.entities {
-		if ent.Name == "Mira" {
-			node = GraphEntity{Kind: namedEntityKind, ID: ent.ID}
-		}
-	}
+	node := namedGraphEntity(g, "Mira")
 	out, e := f.svc.ExpandKnowledgeGraph(testCtx, f.human, KnowledgeGraphInput{Scope: scopeA, Start: node})
 	if e != nil || len(out.Items) != 1 {
 		t.Fatal("relation recall", out, e)
@@ -357,6 +361,34 @@ func TestPostgresApprovedEntityOutboxAndReplay(t *testing.T) {
 	}
 }
 
+// approvedEntitiesJobOnly returns the approved-entities job after marking every other job done.
+func approvedEntitiesJobOnly(t *testing.T, p *Postgres) Record {
+	t.Helper()
+	var job Record
+	for _, j := range pgCollection(t, p, colJobs) {
+		if j.Kind == approvedEntitiesJobKind {
+			job = j
+			continue
+		}
+		j.Status = JobStatusDone
+		j.Revision++
+		if e := p.Replace(testCtx, colJobs, j, j.Revision-1); e != nil {
+			t.Fatal(e)
+		}
+	}
+	return job
+}
+
+func namedGraphEntity(g *entityGraph, name string) GraphEntity {
+	var node GraphEntity
+	for _, ent := range g.entities {
+		if ent.Name == name {
+			node = GraphEntity{Kind: namedEntityKind, ID: ent.ID}
+		}
+	}
+	return node
+}
+
 func TestCaptureDatedLegacyPointerCompatibility(t *testing.T) {
 	f := newFixture(t)
 	claim := CaptureClaim{Subject: "inspection", Text: "The inspection completed", Kind: "episodic", Basis: "explicit_user", Reason: "event", OccurredFrom: "2026-10-01", OccurredTo: "2026-10-01"}
@@ -383,138 +415,161 @@ func TestCaptureDatedLegacyPointerCompatibility(t *testing.T) {
 
 func TestPostgresReindexPreservesApprovedEntityOutbox(t *testing.T) {
 	for _, status := range []string{JobStatusPending, JobStatusDone} {
-		t.Run(status, func(t *testing.T) {
-			p := isolatedPostgres(t)
-			f := newFixture(t)
-			f.svc.Repo = p
-			claim := CaptureClaim{Subject: "Team assignment", Text: "Mira belongs to the Cedar team", Kind: "semantic", Basis: "explicit_user", Reason: "stated fact", Entities: []EntityInput{{Name: "Mira", Type: "person"}, {Name: "Cedar", Type: "organization"}}, Relations: []EntityRelationInput{{Source: "Mira", Relation: "member_of", Target: "Cedar"}}}
-			m := f.approveCandidate(oneCandidate(t, f.capture(f.human, captureInput(scopeA, "reindex-approved", claim))))
-			var job Record
-			before := 0
-			for _, r := range pgCollection(t, p, colJobs) {
-				if r.Kind == approvedEntitiesJobKind {
-					job = r
-				}
-				if r.Kind == "embedding" && r.Target != nil && r.Target.ID == m.ID {
-					before++
-				}
+		t.Run(status, func(t *testing.T) { reindexPreservesApprovedEntityOutbox(t, status) })
+	}
+}
+
+func reindexPreservesApprovedEntityOutbox(t *testing.T, status string) {
+	p := isolatedPostgres(t)
+	f := newFixture(t)
+	f.svc.Repo = p
+	claim := CaptureClaim{Subject: "Team assignment", Text: "Mira belongs to the Cedar team", Kind: "semantic", Basis: "explicit_user", Reason: "stated fact", Entities: []EntityInput{{Name: "Mira", Type: "person"}, {Name: "Cedar", Type: "organization"}}, Relations: []EntityRelationInput{{Source: "Mira", Relation: "member_of", Target: "Cedar"}}}
+	m := f.approveCandidate(oneCandidate(t, f.capture(f.human, captureInput(scopeA, "reindex-approved", claim))))
+	job, before := approvalOutboxAndEmbeddings(t, p, m)
+	finishTargetEmbeddings(t, p, m)
+	if status == JobStatusDone {
+		job.Status = status
+		job.Revision++
+		if e := p.Replace(testCtx, colJobs, job, job.Revision-1); e != nil {
+			t.Fatal(e)
+		}
+	}
+	queued, e := p.EnqueueReindex(testCtx, "test:new-space:1024d")
+	if e != nil || queued != 1 {
+		t.Fatal("reindex collided with approval outbox", queued, e)
+	}
+	after, count := 0, 0
+	for _, r := range pgCollection(t, p, colJobs) {
+		if r.Kind == approvedEntitiesJobKind {
+			count++
+			if structuredText(r) != structuredText(job) {
+				t.Fatal("reindex altered approval job", r)
 			}
-			if job.ID == "" {
-				t.Fatal("approval outbox missing")
+		}
+		if isEmbeddingJobFor(r, m) && r.Target.Revision == m.Revision {
+			after++
+		}
+	}
+	if count != 1 || after != before+1 {
+		t.Fatal("reindex lost embedding or duplicated recovery", count, before, after)
+	}
+}
+
+func isEmbeddingJobFor(r, m Record) bool {
+	return r.Kind == "embedding" && r.Target != nil && r.Target.ID == m.ID
+}
+
+// approvalOutboxAndEmbeddings returns the approval's outbox job and how many embedding jobs target m.
+func approvalOutboxAndEmbeddings(t *testing.T, p *Postgres, m Record) (Record, int) {
+	t.Helper()
+	var job Record
+	before := 0
+	for _, r := range pgCollection(t, p, colJobs) {
+		if r.Kind == approvedEntitiesJobKind {
+			job = r
+		}
+		if isEmbeddingJobFor(r, m) {
+			before++
+		}
+	}
+	if job.ID == "" {
+		t.Fatal("approval outbox missing")
+	}
+	return job, before
+}
+
+// finishTargetEmbeddings: one active embedding job per target, so finish the
+// approval's own embedding and the reindex has to queue a new one.
+func finishTargetEmbeddings(t *testing.T, p *Postgres, m Record) {
+	t.Helper()
+	for _, r := range pgCollection(t, p, colJobs) {
+		if isEmbeddingJobFor(r, m) && r.Status != JobStatusDone {
+			r.Status = JobStatusDone
+			r.Revision++
+			if e := p.Replace(testCtx, colJobs, r, r.Revision-1); e != nil {
+				t.Fatal(e)
 			}
-			// One active embedding job per target: finish the approval's own
-			// embedding so the reindex below has to queue a new one.
-			for _, r := range pgCollection(t, p, colJobs) {
-				if r.Kind == "embedding" && r.Target != nil && r.Target.ID == m.ID && r.Status != JobStatusDone {
-					r.Status = JobStatusDone
-					r.Revision++
-					if e := p.Replace(testCtx, colJobs, r, r.Revision-1); e != nil {
-						t.Fatal(e)
-					}
-				}
-			}
-			if status == JobStatusDone {
-				job.Status = status
-				job.Revision++
-				if e := p.Replace(testCtx, colJobs, job, job.Revision-1); e != nil {
-					t.Fatal(e)
-				}
-			}
-			queued, e := p.EnqueueReindex(testCtx, "test:new-space:1024d")
-			if e != nil || queued != 1 {
-				t.Fatal("reindex collided with approval outbox", queued, e)
-			}
-			after, count := 0, 0
-			for _, r := range pgCollection(t, p, colJobs) {
-				if r.Kind == approvedEntitiesJobKind {
-					count++
-					if structuredText(r) != structuredText(job) {
-						t.Fatal("reindex altered approval job", r)
-					}
-				}
-				if r.Kind == "embedding" && r.Target != nil && r.Target.ID == m.ID && r.Target.Revision == m.Revision {
-					after++
-				}
-			}
-			if count != 1 || after != before+1 {
-				t.Fatal("reindex lost embedding or duplicated recovery", count, before, after)
-			}
-		})
+		}
 	}
 }
 
 func TestPostgresEntityExtractionReadOnlyAndLiveBatch(t *testing.T) {
 	for _, mode := range []string{"dry_run", "mixed_liveness"} {
-		t.Run(mode, func(t *testing.T) {
-			p := isolatedPostgres(t)
-			f := newFixture(t)
-			f.svc.Repo = p
-			seed := func(id, name string, offset int) Record {
-				r := graphMemory(t, f, p, id)
-				r.Entities = []EntityInput{{Name: name, Type: "person"}}
-				r.Revision++
-				when := time.Now().Add(time.Duration(offset) * time.Hour)
-				if offset < 0 {
-					r.ExpiresAt = &when
-				}
-				if offset > 0 {
-					r.EffectiveAt = &when
-				}
-				if e := p.Replace(testCtx, colMemories, r, r.Revision-1); e != nil {
-					t.Fatal(e)
-				}
-				return r
-			}
-			current := seed("current-memory", "Mira", 0)
-			if mode == "mixed_liveness" {
-				seed("expired-memory", "ExpiredPerson", -1)
-				seed("future-memory", "FuturePerson", 1)
-				bare := current
-				bare.ID, bare.Revision, bare.Sources = "sourceless-memory", 1, nil
-				bare.Entities = []EntityInput{{Name: "UnreferencedPerson", Type: "person"}}
-				if e := p.Insert(testCtx, colMemories, bare); e != nil {
-					t.Fatal(e)
-				}
-			}
-			beforeMemory, e := p.Get(testCtx, colMemories, scopeA, current.ID)
-			if e != nil {
-				t.Fatal(e)
-			}
-			beforeSource, e := p.Get(testCtx, "sources", scopeA, current.Sources[0].SourceID)
-			if e != nil {
-				t.Fatal(e)
-			}
-			out, e := f.svc.ExtractEntities(testCtx, f.human, EntityExtractInput{Scope: scopeA, DryRun: mode == "dry_run"})
-			if e != nil || out.Memories != 1 || out.NewEntities != 1 {
-				t.Fatal("live extraction batch", out, e)
-			}
-			g, e := loadEntityGraph(testCtx, p, scopeA)
-			if e != nil {
-				t.Fatal(e)
-			}
-			if mode == "dry_run" {
-				afterMemory, e := p.Get(testCtx, colMemories, scopeA, current.ID)
-				if e != nil {
-					t.Fatal(e)
-				}
-				afterSource, e := p.Get(testCtx, "sources", scopeA, current.Sources[0].SourceID)
-				if e != nil {
-					t.Fatal(e)
-				}
-				if beforeMemory.MemoryReferenceFence != afterMemory.MemoryReferenceFence || beforeSource.MemoryReferenceFence != afterSource.MemoryReferenceFence || len(g.entities) != 0 || len(g.mentions) != 0 {
-					t.Fatal("dry run wrote fences or graph", beforeMemory.MemoryReferenceFence, afterMemory.MemoryReferenceFence, beforeSource.MemoryReferenceFence, afterSource.MemoryReferenceFence)
-				}
-			} else {
-				if len(g.entities) != 1 {
-					t.Fatal("non-live entity extracted", g.entities)
-				}
-				for _, ent := range g.entities {
-					if ent.Name != "Mira" {
-						t.Fatal("wrong entity extracted", ent)
-					}
-				}
-			}
-		})
+		t.Run(mode, func(t *testing.T) { entityExtractionBatch(t, mode) })
+	}
+}
+
+// seedEntityMemory gives a graph memory one person entity; a negative offset
+// (hours) expires it, a positive one makes it effective only in the future.
+func seedEntityMemory(t *testing.T, f *fixture, p *Postgres, id, name string, offset int) Record {
+	t.Helper()
+	r := graphMemory(t, f, p, id)
+	r.Entities = []EntityInput{{Name: name, Type: "person"}}
+	r.Revision++
+	when := time.Now().Add(time.Duration(offset) * time.Hour)
+	if offset < 0 {
+		r.ExpiresAt = &when
+	}
+	if offset > 0 {
+		r.EffectiveAt = &when
+	}
+	if e := p.Replace(testCtx, colMemories, r, r.Revision-1); e != nil {
+		t.Fatal(e)
+	}
+	return r
+}
+
+func memoryAndSourceFences(t *testing.T, p *Postgres, m Record) (memory, source Record) {
+	t.Helper()
+	memory, e := p.Get(testCtx, colMemories, scopeA, m.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	source, e = p.Get(testCtx, "sources", scopeA, m.Sources[0].SourceID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	return memory, source
+}
+
+func entityExtractionBatch(t *testing.T, mode string) {
+	p := isolatedPostgres(t)
+	f := newFixture(t)
+	f.svc.Repo = p
+	current := seedEntityMemory(t, f, p, "current-memory", "Mira", 0)
+	if mode == "mixed_liveness" {
+		seedEntityMemory(t, f, p, "expired-memory", "ExpiredPerson", -1)
+		seedEntityMemory(t, f, p, "future-memory", "FuturePerson", 1)
+		bare := current
+		bare.ID, bare.Revision, bare.Sources = "sourceless-memory", 1, nil
+		bare.Entities = []EntityInput{{Name: "UnreferencedPerson", Type: "person"}}
+		if e := p.Insert(testCtx, colMemories, bare); e != nil {
+			t.Fatal(e)
+		}
+	}
+	beforeMemory, beforeSource := memoryAndSourceFences(t, p, current)
+	out, e := f.svc.ExtractEntities(testCtx, f.human, EntityExtractInput{Scope: scopeA, DryRun: mode == "dry_run"})
+	if e != nil || out.Memories != 1 || out.NewEntities != 1 {
+		t.Fatal("live extraction batch", out, e)
+	}
+	g, e := loadEntityGraph(testCtx, p, scopeA)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if mode == "dry_run" {
+		afterMemory, afterSource := memoryAndSourceFences(t, p, current)
+		if beforeMemory.MemoryReferenceFence != afterMemory.MemoryReferenceFence || beforeSource.MemoryReferenceFence != afterSource.MemoryReferenceFence || len(g.entities) != 0 || len(g.mentions) != 0 {
+			t.Fatal("dry run wrote fences or graph", beforeMemory.MemoryReferenceFence, afterMemory.MemoryReferenceFence, beforeSource.MemoryReferenceFence, afterSource.MemoryReferenceFence)
+		}
+		return
+	}
+	if len(g.entities) != 1 {
+		t.Fatal("non-live entity extracted", g.entities)
+	}
+	for _, ent := range g.entities {
+		if ent.Name != "Mira" {
+			t.Fatal("wrong entity extracted", ent)
+		}
 	}
 }
 
