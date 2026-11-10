@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"context"
 	"encoding/json"
 	"maps"
 	"net/http"
@@ -192,6 +193,12 @@ func checkDreamStages(t *testing.T, s dreamModelSeed, item DreamRunItem) {
 	version, err := s.f.svc.Repo.Get(testCtx, colSkillVersions, scopeA, skill.ActiveVersion)
 	if err != nil || version.Status != statusActive || checkActiveSkill(testCtx, s.f.svc.Repo, version) != nil {
 		t.Fatal("promoted version is not routable", version.Status, err)
+	}
+	// The skill search re-reads the version's lessons through its fence; they are still candidates.
+	if err = s.f.svc.Repo.Transaction(testCtx, func(ctx context.Context, tx Tx) error {
+		return checkActiveSkill(ctx, searchReadTx{Tx: tx}, version)
+	}); err != nil {
+		t.Fatal("the skill search refuses the promoted version", err)
 	}
 }
 

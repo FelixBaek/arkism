@@ -22,6 +22,14 @@ func (t searchReadTx) Get(ctx context.Context, col string, scope Scope, id strin
 	if e != nil {
 		return Record{}, e
 	}
+	if col == "memory_candidates" && r.Status == "candidate" {
+		// A generated skill's lessons stay candidates, so the search fence (active rows only) would
+		// refuse every skill built from them. Lock the lesson and reread it: this fence checks no revision.
+		if e = t.Tx.FenceRelationMember(ctx, scope, col, id); e != nil {
+			return Record{}, e
+		}
+		return t.Tx.Get(ctx, col, scope, id)
+	}
 	if e = t.Tx.FenceSearchRead(ctx, scope, col, id, r.Revision); e != nil {
 		return Record{}, e
 	}
