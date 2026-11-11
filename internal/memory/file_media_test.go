@@ -15,19 +15,22 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // fakeVisionLLM reads images with canned text; it is a fakeWikiLLM otherwise.
 type fakeVisionLLM struct {
 	*fakeWikiLLM
-	reads  []string
-	images [][]byte
+	reads        []string
+	images       [][]byte
+	imagePrompts []string
 }
 
 func (f *fakeVisionLLM) ImageInput() bool { return true }
 
 func (f *fakeVisionLLM) CompleteImage(_ context.Context, system, user, mime string, image []byte, _ int) (string, ProviderUsage, error) {
 	f.images = append(f.images, image)
+	f.imagePrompts = append(f.imagePrompts, system+"\n"+user)
 	if len(f.images) > len(f.reads) {
 		return "", ProviderUsage{}, ErrUnavailable
 	}
@@ -250,5 +253,38 @@ func TestFileMediaDryRunCallsNoModel(t *testing.T) {
 	in.DryRun = true
 	if _, err := f.svc.ExtractFileMemories(testCtx, f.human, in); !errors.Is(err, errUnsupportedFormat) {
 		t.Fatalf("a dry run still says audio is off: %v", err)
+	}
+}
+
+// This checks the ingestion contract with canned model output, not visual accuracy.
+func TestFileImageDescriptionRetainsEvidenceAfterPrivacyFiltering(t *testing.T) {
+	const description = "A triangular sign is above a round dial; the smallest label is unreadable."
+	claim := `{"content":"A triangular sign is above a round dial","kind":"semantic","semantic_kind":"fact","evidence_kind":"inference","evidence_quote":"` + description + `","confidence":0.7}`
+	f, llm := mediaFixture(t, extractAnswer(claim))
+	v := &fakeVisionLLM{fakeWikiLLM: llm, reads: []string{"STOP\nVisual description\n" + description + "\n<private>private inspection note</private>\napi_key=sk-abcdefghijklmnop1234"}}
+	f.svc.Wiki = v
+	out, err := f.svc.ExtractFileMemories(testCtx, f.human, mediaUpload("diagram.png", []byte("SYNTHETIC_IMAGE")))
+	if err != nil || out.CandidatesCreated != 1 || len(v.imagePrompts) != 1 {
+		t.Fatalf("image extraction: %+v %v", out, err)
+	}
+	for _, rule := range []string{"exactly as written", "Visual description", "spatial relations", "units, values", "state uncertainty", "do not infer identities"} {
+		if !strings.Contains(v.imagePrompts[0], rule) {
+			t.Fatalf("image reader missing rule %q", rule)
+		}
+	}
+	if len(llm.prompts) != 1 || !strings.Contains(llm.prompts[0], description) || strings.Contains(llm.prompts[0], "private inspection note") || strings.Contains(llm.prompts[0], "sk-abcdefghijklmnop1234") {
+		t.Fatal("description missing or private text reached extraction")
+	}
+	candidates := f.repo.rows("memory_candidates")
+	if len(candidates) != 1 || candidates[0].Status != "candidate" || len(candidates[0].Sources) == 0 {
+		t.Fatal("description lost reviewed-candidate provenance")
+	}
+	ref := candidates[0].Sources[0]
+	source, err := f.repo.Get(testCtx, "sources", scopeA, ref.SourceID)
+	if err != nil || ref.Span == nil || validateSourceSpan(ref.Span, ContentHash(source.Text), utf8.RuneCountInString(source.Text)) != nil || !strings.Contains(source.Text, description) {
+		t.Fatal("description is not bound to stored evidence", err)
+	}
+	if strings.Contains(source.Text, "private inspection note") || strings.Contains(source.Text, "sk-abcdefghijklmnop1234") {
+		t.Fatal("private model output persisted in source")
 	}
 }
