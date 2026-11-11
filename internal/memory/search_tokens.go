@@ -181,10 +181,15 @@ func searchQueryConcepts(terms []string) []string {
 // searchConceptGroups also returns each concept's first term, the word as the query spelled it.
 func searchConceptGroups(terms []string) (concepts, heads []string) {
 	concepts, heads = []string{}, []string{}
+	standalone := [][]string{}
 	for _, term := range terms {
 		if i := slices.IndexFunc(heads, func(head string) bool { return sameSearchConcept(head, term) }); i >= 0 {
-			if alt := " | " + tsQuote(term); heads[i] != term && !strings.Contains(concepts[i], tsQuote(term)) {
-				concepts[i] = strings.TrimSuffix(concepts[i], ")") + alt + ")"
+			// A compound branch may contain this word only as one half of
+			// an AND expression. Only independent OR alternatives suppress
+			// adding a stem; inspecting the rendered query loses that distinction.
+			if !slices.Contains(standalone[i], term) {
+				concepts[i] = strings.TrimSuffix(concepts[i], ")") + " | " + tsQuote(term) + ")"
+				standalone[i] = append(standalone[i], term)
 			}
 			continue
 		}
@@ -199,6 +204,7 @@ func searchConceptGroups(terms []string) (concepts, heads []string) {
 		concept := "(" + strings.Join(parts, " | ") + ")"
 		if !slices.Contains(concepts, concept) {
 			concepts, heads = append(concepts, concept), append(heads, term)
+			standalone = append(standalone, words)
 		}
 	}
 	return concepts, heads

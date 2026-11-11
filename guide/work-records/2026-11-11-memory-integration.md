@@ -87,3 +87,22 @@ that local TypeScript compilation ran. Its newly added legacy-polling fixture
 also now shuts down and closes its local HTTP server through test cleanup, so
 assertion failures do not leave the fixture socket open. The final generator
 rerun completed without the earlier ResourceWarning (1.042s).
+
+The next actual-response run exposed a missing error-detail contract, and the
+full PostgreSQL suite exposed a Korean query regression in the completion's
+alias deduplication. Both were reproduced and repaired without lowering test
+criteria. See [actual HTTP contract validation](2026-11-11-api-error-contract.md),
+[Korean particle recovery](2026-11-11-korean-recall-followup.md) and
+[distinct concept counting](2026-11-11-concept-evidence-counter.md).
+The final local selections validate281 handler responses and recover all six
+missing Korean cases, while a separate service-level PostgreSQL regression
+removes a repeated-concept false positive and preserves independent evidence.
+The latest combined lexical race selection passed21 top-level tests and32
+subtests. Semantic paraphrase observations remain0/4; these targeted successes
+do not establish general language quality or the all-category90% goal.
+
+On the preceding CI head, code-graph and long archive timing probes initially
+missed their budgets under parallel load and then passed their existing isolated
+retries. The remaining Go/coverage failure was Korean recall; Windows stopped on
+the missing error detail. Neither retry policy nor timing threshold was changed.
+Fresh CI must evaluate the repaired head.

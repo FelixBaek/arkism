@@ -8758,7 +8758,24 @@
           "400": {"description": "Malformed input or a non-loopback redirect", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
           "403": {"description": "Google refused the code, or the account is not allowed or not verified", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
           "404": {"description": "Google sign-in is not configured", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
-          "503": {"description": "Google unreachable", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}
+          "503": {"description": "Google unreachable", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+          "429": {
+            "description": "Too many sign-in attempts. Retry after the indicated number of seconds.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
         },
         "operationId": "postV1AuthGoogle"
       }
@@ -54879,8 +54896,20 @@
               "flow_time_limit",
               "flow_legacy_run",
               "effect_outcome_unknown",
-              "unsupported_media_type"
+              "unsupported_media_type",
+              "defense_blocked",
+              "extraction_disabled",
+              "no_extractable_text",
+              "model_not_configured",
+              "invalid_model_output",
+              "handle_taken",
+              "model_budget_exceeded",
+              "rate_limited"
             ]
+          },
+          "detail": {
+            "type": "string",
+            "description": "Optional explanation of a validation, revision or access failure. Clients should branch on code, not parse this text."
           }
         },
         "required": [

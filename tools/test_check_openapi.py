@@ -1,7 +1,7 @@
 import copy
 import unittest
 from jsonschema import ValidationError
-from check_openapi import check_document, check_cases, read_json, ROOT
+from check_openapi import check_document, check_cases, read_json, validate_value, ROOT
 
 
 class OpenAPIContracts(unittest.TestCase):
@@ -46,6 +46,30 @@ class OpenAPIContracts(unittest.TestCase):
     def test_management_evidence_cannot_be_empty(self):
         with self.assertRaisesRegex(ValueError, "incomplete real management coverage"):
             check_cases(self.doc, [], require_management=True)
+
+    def test_error_detail_is_optional_and_typed_without_opening_the_envelope(self):
+        schema = {"$ref": "#/components/schemas/Error"}
+        for body in ({"code": "invalid_request"},
+                     {"code": "invalid_request", "detail": 'body: unknown field "extra"'},
+                     {"code": "revision_conflict", "detail": "revision: sent 3, stored 5"},
+                     {"code": "access_denied", "detail": "row policy refused the write"}):
+            validate_value(self.doc, schema, body)
+        for body in ({"detail": "missing code"},
+                     {"code": "invalid_request", "detail": 3},
+                     {"code": "invalid_request", "detail": None},
+                     {"code": "invalid_request", "extra": "not documented"},
+                     {"code": "not_a_real_error"}):
+            with self.subTest(body=body), self.assertRaises(ValidationError):
+                validate_value(self.doc, schema, body)
+
+    def test_additional_emitted_error_codes_are_documented(self):
+        for code in ("defense_blocked", "extraction_disabled", "no_extractable_text",
+                     "model_not_configured", "invalid_model_output", "handle_taken",
+                     "model_budget_exceeded", "rate_limited"):
+            with self.subTest(code=code):
+                validate_value(self.doc, {"$ref": "#/components/schemas/Error"}, {"code": code})
+        self.assertEqual(check_cases(self.doc, [{"operation": "POST /v1/auth/google",
+                                               "status": 429, "body": {"code": "rate_limited"}}]), 1)
 
     def test_anonymous_evidence_requires_authentication_challenge_status(self):
         doc = copy.deepcopy(self.doc)
