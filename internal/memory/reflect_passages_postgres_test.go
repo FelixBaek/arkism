@@ -100,53 +100,63 @@ func TestPostgresReflectPassagesFenceSourceErasure(t *testing.T) {
 			name = "parent"
 		}
 		t.Run(name, func(t *testing.T) {
-			f, p, _ := pgPassageFixture(t)
-			f.svc.ReflectPassages = 10
-			var parent Record
-			if dependency {
-				parent = Record{ID: "pg-parent", Scope: scopeA, Kind: "message", Status: statusActive, Revision: 1, Text: "original parent", Sensitivity: "internal", CreatedBy: "human-1"}
-				if err := p.Insert(testCtx, "sources", parent); err != nil {
-					t.Fatal(err)
-				}
-				var err error
-				parent, err = p.Get(testCtx, "sources", scopeA, parent.ID)
-				if err != nil {
-					t.Fatal(err)
-				}
-			}
-			selected := pgPassageRow(t, p, scopeA, "pg-selected", "[2026-10-01] Rowan: copper pump inspection erasure-canary.", "passage-erasure", 2, func(r *Record) {
-				if dependency {
-					r.Sources = refs(parent)
-				}
-			})
-			target := selected
-			if dependency {
-				target = parent
-			}
-			changed := false
-			model := &pgPassageChangingModel{fakeWikiLLM: fakeWikiLLM{answers: []string{"erasure-canary"}}, change: func() {
-				current, err := p.Get(testCtx, "sources", scopeA, target.ID)
-				if err != nil {
-					t.Fatal(err)
-				}
-				current.ContentErased = true
-				if err := p.Replace(testCtx, "sources", current, current.Revision); err != nil {
-					t.Fatal(err)
-				}
-				changed = true
-			}}
-			f.svc.Wiki = model
-			out, err := f.svc.Reflect(testCtx, f.human, ReflectInput{Scope: scopeA, Query: "copper pump inspection", MaxIterations: 1})
-			if !changed || len(model.prompts) != 1 || !strings.Contains(model.prompts[0], "erasure-canary") {
-				t.Fatal("erasure hook not exercised", changed, model.prompts, err)
-			}
-			if (!errors.Is(err, ErrDenied) && !errors.Is(err, ErrConflict)) || out.Answer != "" || out.Prompt != nil {
-				t.Fatal("erased source delivered", err, out)
-			}
-			current, e := p.Get(testCtx, "sources", scopeA, target.ID)
-			if e != nil || !current.ContentErased {
-				t.Fatal("DB erasure not committed", e)
-			}
+			pgPassageAssertErasureFence(t, dependency)
 		})
+	}
+}
+
+func pgPassageAssertErasureFence(t *testing.T, dependency bool) {
+	t.Helper()
+	f, p, _ := pgPassageFixture(t)
+	f.svc.ReflectPassages = 10
+	var parent Record
+	if dependency {
+		parent = Record{ID: "pg-parent", Scope: scopeA, Kind: "message", Status: statusActive, Revision: 1, Text: "original parent", Sensitivity: "internal", CreatedBy: "human-1"}
+		if err := p.Insert(testCtx, "sources", parent); err != nil {
+			t.Fatal(err)
+		}
+		var err error
+		parent, err = p.Get(testCtx, "sources", scopeA, parent.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	selected := pgPassageRow(t, p, scopeA, "pg-selected", "[2026-10-01] Rowan: copper pump inspection erasure-canary.", "passage-erasure", 2, func(r *Record) {
+		if dependency {
+			r.Sources = refs(parent)
+		}
+	})
+	target := selected
+	if dependency {
+		target = parent
+	}
+	changed := false
+	model := &pgPassageChangingModel{fakeWikiLLM: fakeWikiLLM{answers: []string{"erasure-canary"}}, change: func() {
+		pgPassageErase(t, p, target.ID)
+		changed = true
+	}}
+	f.svc.Wiki = model
+	out, err := f.svc.Reflect(testCtx, f.human, ReflectInput{Scope: scopeA, Query: "copper pump inspection", MaxIterations: 1})
+	if !changed || len(model.prompts) != 1 || !strings.Contains(model.prompts[0], "erasure-canary") {
+		t.Fatal("erasure hook not exercised", changed, model.prompts, err)
+	}
+	if (!errors.Is(err, ErrDenied) && !errors.Is(err, ErrConflict)) || out.Answer != "" || out.Prompt != nil {
+		t.Fatal("erased source delivered", err, out)
+	}
+	current, e := p.Get(testCtx, "sources", scopeA, target.ID)
+	if e != nil || !current.ContentErased {
+		t.Fatal("DB erasure not committed", e)
+	}
+}
+
+func pgPassageErase(t *testing.T, p *Postgres, id string) {
+	t.Helper()
+	current, err := p.Get(testCtx, "sources", scopeA, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current.ContentErased = true
+	if err := p.Replace(testCtx, "sources", current, current.Revision); err != nil {
+		t.Fatal(err)
 	}
 }

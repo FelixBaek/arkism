@@ -64,34 +64,39 @@ func (s *Service) verifyReflectSources(ctx context.Context, token string, run *r
 		}
 	}
 	return s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		checked := searchReadTx{Tx: tx}
 		for id, snapshot := range run.sourceRecords {
-			current, err := tx.Get(ctx, "sources", run.in.Scope, id)
-			if err != nil {
-				return err
-			}
-			original := snapshot.record
-			current.MemoryReferenceFence, original.MemoryReferenceFence = 0, 0
-			if current.Scope != run.in.Scope || !live(current) || current.ContentErased || current.PrivacyQuarantined || structuredText(current) != structuredText(original) {
-				return ErrConflict
-			}
-			if len(current.Sources) > 0 {
-				if err := checkSources(ctx, checked, current); err != nil {
-					return err
-				}
-			}
-			if snapshot.transfer {
-				refs := append(slices.Clone(current.Sources), sourceReference(current, "reflect_source"))
-				if err := checkTransferSources(ctx, checked, current.Scope, current.Sensitivity, refs); err != nil {
-					return err
-				}
-			}
-			if err := tx.FenceSource(ctx, run.in.Scope, id); err != nil {
+			if err := verifyReflectSourceTx(ctx, tx, run.in.Scope, id, snapshot); err != nil {
 				return err
 			}
 		}
 		return nil
 	})
+}
+
+// Verify and fence one source plus its dependencies inside the delivery transaction.
+func verifyReflectSourceTx(ctx context.Context, tx Tx, scope Scope, id string, snapshot reflectSourceSnapshot) error {
+	current, err := tx.Get(ctx, "sources", scope, id)
+	if err != nil {
+		return err
+	}
+	original := snapshot.record
+	current.MemoryReferenceFence, original.MemoryReferenceFence = 0, 0
+	if current.Scope != scope || !live(current) || current.ContentErased || current.PrivacyQuarantined || structuredText(current) != structuredText(original) {
+		return ErrConflict
+	}
+	checked := searchReadTx{Tx: tx}
+	if len(current.Sources) > 0 {
+		if err := checkSources(ctx, checked, current); err != nil {
+			return err
+		}
+	}
+	if snapshot.transfer {
+		refs := append(slices.Clone(current.Sources), sourceReference(current, "reflect_source"))
+		if err := checkTransferSources(ctx, checked, current.Scope, current.Sensitivity, refs); err != nil {
+			return err
+		}
+	}
+	return tx.FenceSource(ctx, scope, id)
 }
 
 // Optional sources must fit the combined prompt, including tools, directives and
