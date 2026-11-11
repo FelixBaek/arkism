@@ -139,6 +139,36 @@ smoke test produced no memories; the request scope was corrected before any of
 these 32 generation requests, and the diagnostic was preserved. No production
 service was changed.
 
+## Follow-up native candidate
+
+Candidate 75a2e407 repeated the same frozen 32 native-service questions in a
+separate immutable ledger. All requests returned HTTP 200, with 35 successful
+generation calls, zero retries and a maximum of three calls per question. Thirty
+questions used one iteration, one used two and one used three. Generation usage
+was 205,544 tokens. Two questions actually entered the mixed-envelope repair
+branch, including one that used both remaining iterations; neither embedded
+request was executed as a tool. This supplies live branch evidence that the
+earlier selected-case check did not provide.
+
+The unchanged fixed grader scored **27/32 (84.375%)** again: single-hop 7/8,
+temporal 7/8, multi-hop 7/8 and open-domain 6/8. Twenty-four new judge calls and
+eight exact prior judgments were used, with 8,440 new grading tokens and no
+missing or invalid judgments. The earlier malformed-tool failure now answered
+correctly, but another multi-hop answer omitted supported incidents. The net
+score is unchanged and is not evidence of a quality gain. The output SHA-256 is
+`f81b04b2c15c95716b9da7f706c5f9fa89739d237e82747e6ee9588edd9a8025`.
+
+A separate previously failed nickname question exercised ordinary recall and
+new raw-source retrieval naturally, using two calls within a separate three-call
+cap. Its trace included nine raw-source IDs in addition to memory hits. The
+answer still did not recover the nickname present in the original dialogue;
+this selected case remains unresolved. Its one-call historical judgment was
+incorrect (250 grading tokens); generation used 13,079 tokens. There was no retry
+or addition to the frozen 32-question denominator. A later test-file-only portability correction did not
+change the measured production code. All prior outputs were preserved. These
+results do not establish the target in any full-set category beyond the earlier
+single-hop result, and no final full-set improvement is claimed.
+
 ## Acquisition integrity and next measurement
 
 An initial bulk retrieval attempt encountered transaction retries and was stopped;
