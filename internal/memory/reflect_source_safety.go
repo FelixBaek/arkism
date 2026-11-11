@@ -9,6 +9,7 @@ import (
 type reflectSourceSnapshot struct {
 	record   Record
 	transfer bool
+	dateOnly bool
 }
 
 func (run *reflectRun) keepSources(records []Record, transfer bool) {
@@ -33,8 +34,16 @@ func (run *reflectRun) noteSourceFailure(tool, reason string) {
 // Stored source text needs the same record and transfer checks as other evidence.
 // The prompt-only passage is local; reread inputs always leave for their model.
 func (s *Service) reflectSourceReadable(ctx context.Context, token string, in ReflectInput, r Record, transfer bool) bool {
+	return s.reflectSourceReadableFor(ctx, token, in, r, transfer, false)
+}
+
+func (s *Service) reflectSourceReadableFor(ctx context.Context, token string, in ReflectInput, r Record, transfer, dateOnly bool) bool {
+	kinds := []string{conversationSourceKind}
+	if dateOnly {
+		kinds = []string{conversationSourceKind, "message"}
+	}
 	filters := reflectFilters(in)
-	criteria, err := normalizeSearchCriteria(SearchCriteria{Kinds: []string{conversationSourceKind}, Filters: &filters})
+	criteria, err := normalizeSearchCriteria(SearchCriteria{Kinds: kinds, Filters: &filters})
 	if err != nil || r.Scope != in.Scope || !live(r) || r.ContentErased || r.PrivacyQuarantined || r.Sensitivity == "restricted" || !criteria.matchesRecord(r) {
 		return false
 	}
@@ -46,7 +55,11 @@ func (s *Service) reflectSourceReadable(ctx context.Context, token string, in Re
 	}
 	if transfer {
 		refs := append(slices.Clone(r.Sources), sourceReference(r, "reflect_source"))
-		_, err = s.authorizeTransfer(ctx, token, "context:read", in.Scope, r.ID, r.Sensitivity, wikiDestination, redactSessionPrivate(r.Text), refs)
+		body := redactSessionPrivate(r.Text)
+		if dateOnly {
+			body = structuredText(r.CollectedAt)
+		}
+		_, err = s.authorizeTransfer(ctx, token, "context:read", in.Scope, r.ID, r.Sensitivity, wikiDestination, body, refs)
 		return err == nil
 	}
 	return true
@@ -59,7 +72,7 @@ func (s *Service) verifyReflectSources(ctx context.Context, token string, run *r
 		return nil
 	}
 	for _, snapshot := range run.sourceRecords {
-		if !s.reflectSourceReadable(ctx, token, run.in, snapshot.record, snapshot.transfer) {
+		if !s.reflectSourceReadableFor(ctx, token, run.in, snapshot.record, snapshot.transfer, snapshot.dateOnly) {
 			return ErrDenied
 		}
 	}

@@ -409,6 +409,7 @@ func (s *Service) reflectPromptOnly(ctx context.Context, token string, run *refl
 	if u.Requests > 0 {
 		out.Usage = &u
 	}
+	s.reflectSourceAnchors(ctx, token, run)
 	run.boundSources()
 	if err := s.verifyReflectSources(ctx, token, run); err != nil {
 		return ReflectOutput{}, err
@@ -438,6 +439,7 @@ func (s *Service) reflectLoop(ctx context.Context, token string, run *reflectRun
 	}
 	for i := 1; i <= run.in.MaxIterations; i++ {
 		final := i == run.in.MaxIterations
+		s.reflectSourceAnchors(ctx, token, run)
 		run.boundSources()
 		if err := s.verifyReflectSources(ctx, token, run); err != nil {
 			return ReflectOutput{}, err

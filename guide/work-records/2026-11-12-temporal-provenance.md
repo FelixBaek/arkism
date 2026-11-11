@@ -41,3 +41,12 @@ No category accuracy improvement or 90% acceptance is claimed.
 검색 결과 변환에서 관찰 날짜가 사라져 답변 모델이 상대 날짜의 기준을 받지
 못하던 문제를 재현하고 수정했다. 수집·관찰 날짜만 전달하며 저장 시각이나
 사건 시각을 대신 넣지 않는다. 과거 평가 정답이나 채점 기준은 바꾸지 않았다.
+
+## Source-date follow-up
+
+The [source-date follow-up](2026-11-12-source-date-fallback.md) additionally
+suppresses the observation-time fallback for non-original source locators, so a
+file read time is not relabeled as its original utterance time. It supplies a
+separate permission-checked and fenced path for missing dates from hash-bound
+original messages. The initial three-test verification above predates that
+follow-up; the new record reports its own final selection.

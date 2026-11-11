@@ -7,7 +7,7 @@ import "time"
 // imported conversation may have been observed years before database ingestion.
 func recordObservationAnchor(r Record) *time.Time {
 	at := r.CollectedAt
-	if (at == nil || at.IsZero()) && r.MemoryContext != nil {
+	if (at == nil || at.IsZero()) && r.MemoryContext != nil && originalObservationRefs(r.Sources) {
 		at = r.MemoryContext.ObservedAt
 	}
 	if at == nil || at.IsZero() {
@@ -15,4 +15,14 @@ func recordObservationAnchor(r Record) *time.Time {
 	}
 	copy := *at
 	return &copy
+}
+
+// A file locator describes evidence read later, not the original utterance time.
+func originalObservationRefs(refs []SourceRef) bool {
+	for _, ref := range refs {
+		if ref.Locator != "" && ref.Locator != "original" {
+			return false
+		}
+	}
+	return true
 }
