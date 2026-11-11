@@ -62,14 +62,73 @@ func dynamicsCrashChild(t *testing.T, svc *Service, token string, scope Scope) {
 		dynamicsRebindExpect(t, err, nil, "probe report")
 		fmt.Printf("probe %s\n", raw)
 	case "drain":
-		result := "ok"
-		if err := svc.WorkDynamicsOnce(testCtx, token); err != nil {
-			result = err.Error()
-		}
-		fmt.Printf("drain %s\n", result)
+		dynamicsCrashDrainChild(t, svc, token, scope)
 	default:
 		t.Fatal("unknown crash child role")
 	}
+}
+
+func dynamicsCrashDrainChild(t *testing.T, svc *Service, token string, scope Scope) {
+	t.Helper()
+	// Expose the same configured substep deadline to the test report. A
+	// dependency failure without deadline evidence must not be retried blindly.
+	var injection *dynamicsCrashPublishDeadline
+	if mode := os.Getenv("SYS05_CRASH_PUBLISH_DEADLINE"); mode != "" {
+		bound, err := svc.nativeActor(testCtx, token, scope, "write:jobs")
+		dynamicsRebindExpect(t, err, nil, "deadline injection actor")
+		row, err := svc.Repo.Get(bound, colJobs, scope, dynamicsCoordinatorID(scope))
+		dynamicsRebindExpect(t, err, nil, "deadline injection coordinator")
+		target := min(row.DynamicsLoad.Head+svc.DynamicsLoad.config.Limits.BatchLimit, row.DynamicsLoad.Tail)
+		if mode == "final" {
+			target = row.DynamicsLoad.Tail
+		}
+		injection = &dynamicsCrashPublishDeadline{Postgres: svc.Repo.(*Postgres), scope: scope, targetHead: target, generation: row.DynamicsLoad.PublicationGeneration}
+		svc.Repo = injection
+	}
+	ctx, cancel := context.WithTimeout(testCtx, time.Duration(svc.DynamicsLoad.config.Limits.WorkerSubstepTimeoutNS))
+	defer cancel()
+	report := dynamicsCrashDrainReport{Result: "ok"}
+	if err := svc.WorkDynamicsOnce(ctx, token); err != nil {
+		report.Result = err.Error()
+	}
+	report.DeadlineExceeded = errors.Is(ctx.Err(), context.DeadlineExceeded)
+	report.InjectedAfterCommit = injection != nil && injection.injected
+	if report.InjectedAfterCommit {
+		report.InjectedHead = injection.targetHead
+		report.InjectedGeneration = injection.generation
+	}
+	raw, err := json.Marshal(report)
+	dynamicsRebindExpect(t, err, nil, "drain report")
+	fmt.Printf("drain %s\n", raw)
+}
+
+// Let a real apply commit, then consume the unchanged worker deadline before
+// publication. No write is rolled back or forged; a later process must publish it.
+type dynamicsCrashPublishDeadline struct {
+	*Postgres
+	scope      Scope
+	targetHead int64
+	generation int64
+	injected   bool
+}
+
+func (r *dynamicsCrashPublishDeadline) Transaction(ctx context.Context, fn func(context.Context, Tx) error) error {
+	committedTarget := false
+	err := r.Postgres.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		if err := fn(ctx, tx); err != nil {
+			return err
+		}
+		row, err := tx.Get(ctx, colJobs, r.scope, dynamicsCoordinatorID(r.scope))
+		if err == nil {
+			committedTarget = row.DynamicsLoad.Head == r.targetHead && row.DynamicsLoad.PublicationGeneration == r.generation
+		}
+		return err
+	})
+	if err == nil && committedTarget && !r.injected {
+		r.injected = true
+		<-ctx.Done()
+	}
+	return err
 }
 
 // dynamicsCrashInApply passes transactions through until armed; the armed one runs
@@ -103,16 +162,34 @@ func dynamicsCrashCommand(t *testing.T, p *nativePGFixture, cfg DynamicsLoadConf
 
 // dynamicsCrashDrain runs one worker round in a fresh process and returns its report line.
 func dynamicsCrashDrain(t *testing.T, p *nativePGFixture, cfg DynamicsLoadConfig) string {
+	return dynamicsCrashDrainRound(t, p, cfg, "").Result
+}
+
+type dynamicsCrashDrainReport struct {
+	Result              string `json:"result"`
+	DeadlineExceeded    bool   `json:"deadline_exceeded"`
+	InjectedAfterCommit bool   `json:"injected_after_commit"`
+	InjectedHead        int64  `json:"injected_head,omitempty"`
+	InjectedGeneration  int64  `json:"injected_generation"`
+}
+
+func dynamicsCrashDrainRound(t *testing.T, p *nativePGFixture, cfg DynamicsLoadConfig, inject string) dynamicsCrashDrainReport {
 	t.Helper()
-	out, err := dynamicsCrashCommand(t, p, cfg, "drain").CombinedOutput()
+	command := dynamicsCrashCommand(t, p, cfg, "drain")
+	if inject != "" {
+		command.Env = append(command.Env, "SYS05_CRASH_PUBLISH_DEADLINE="+inject)
+	}
+	out, err := command.CombinedOutput()
 	dynamicsRebindExpect(t, err, nil, "drain process "+string(out))
 	for _, line := range strings.Split(string(out), "\n") {
 		if strings.HasPrefix(line, "drain ") {
-			return strings.TrimPrefix(line, "drain ")
+			var report dynamicsCrashDrainReport
+			dynamicsRebindExpect(t, json.Unmarshal([]byte(strings.TrimPrefix(line, "drain ")), &report), nil, "drain report")
+			return report
 		}
 	}
 	t.Fatalf("drain process gave no report: %s", out)
-	return ""
+	return dynamicsCrashDrainReport{}
 }
 
 type dynamicsCrashProbeReport struct {
@@ -294,7 +371,7 @@ func dynamicsCrashCase(t *testing.T, leaseNS, lateNS int64, role string) map[str
 // dynamicsCrashFullQueue fills the queue with four updates on one trace and drains
 // it with new worker processes; with crash, the first worker dies inside its apply
 // transaction and an admission is tried while its lease is held.
-func dynamicsCrashFullQueue(t *testing.T, crash bool) map[string]any {
+func dynamicsCrashFullQueue(t *testing.T, crash bool, inject string) map[string]any {
 	t.Helper()
 	// The wait limit leaves room for the dead lease plus several drain processes on a
 	// slow race runner; this test is about the full queue, not the wait limit.
@@ -322,9 +399,10 @@ func dynamicsCrashFullQueue(t *testing.T, crash bool) map[string]any {
 		}
 		out["admission_while_held"] = err.Error()
 	}
+	rounds := dynamicsCrashDrainQueue(t, p, cfg, inject)
 	var drains []string
-	for round := 0; round < 4 && dynamicsRebindCoordinator(t, p.admin).DynamicsLoad.Count > 0; round++ {
-		drains = append(drains, dynamicsCrashDrain(t, p, cfg))
+	for _, round := range rounds {
+		drains = append(drains, round.Result)
 	}
 	q := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad
 	done := 0
@@ -336,8 +414,31 @@ func dynamicsCrashFullQueue(t *testing.T, crash bool) map[string]any {
 		}
 	}
 	out["drains"], out["events_added"], out["entries_done"] = drains, len(p.rows(t, "event"))-events, done
+	out["rounds"] = rounds
 	out["count_after"], out["head_after"], out["withheld_after"], out["published_generation"] = q.Count, q.Head, q.Withheld, q.PublicationGeneration
 	return out
+}
+
+// A committed final apply may still owe publication. Stay within the original
+// four rounds, and require an error-free round that advances publication after
+// the queue becomes empty; an earlier prefix's generation is not completion.
+func dynamicsCrashDrainQueue(t *testing.T, p *nativePGFixture, cfg DynamicsLoadConfig, inject string) []dynamicsCrashDrainReport {
+	t.Helper()
+	var rounds []dynamicsCrashDrainReport
+	for round := 0; round < 4; round++ {
+		before := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad.PublicationGeneration
+		report := dynamicsCrashDrainRound(t, p, cfg, inject)
+		if report.Result != "ok" && !((report.Result == ErrUnavailable.Error() || report.Result == context.DeadlineExceeded.Error()) && report.DeadlineExceeded) {
+			t.Fatalf("unexpected drain failure: %+v", report)
+		}
+		rounds = append(rounds, report)
+		q := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad
+		if report.Result == "ok" && q.Count == 0 && q.PublicationGeneration > before {
+			return rounds
+		}
+	}
+	t.Fatalf("queue publication did not complete within four rounds: %+v", rounds)
+	return nil
 }
 
 // A full queue when the worker dies inside its first apply: a new admission is
@@ -349,7 +450,7 @@ func TestDynamicsWorkerProcessCrashUnderFullQueuePG(t *testing.T) {
 	report := map[string]any{"protocol": "sys05-b-worker-crash-full-queue-v1"}
 	for _, crash := range []bool{false, true} {
 		name := map[bool]string{false: "no_crash", true: "crash_in_first_apply"}[crash]
-		t.Run(name, func(t *testing.T) { report[name] = dynamicsCrashFullQueue(t, crash) })
+		t.Run(name, func(t *testing.T) { report[name] = dynamicsCrashFullQueue(t, crash, "") })
 	}
 	out, err := json.Marshal(report)
 	dynamicsRebindExpect(t, err, nil, "report")
@@ -367,5 +468,35 @@ func TestDynamicsWorkerProcessCrashUnderFullQueuePG(t *testing.T) {
 	}
 	if run["events_added"] != base["events_added"] {
 		t.Fatalf("crash changed the native events: %s", out)
+	}
+}
+
+func TestDynamicsWorkerPublishesAfterFinalApplyDeadlinePG(t *testing.T) {
+	for _, mode := range []string{"batch", "final"} {
+		t.Run(mode, func(t *testing.T) { dynamicsAssertPublicationAfterDeadline(t, mode) })
+	}
+}
+
+func dynamicsAssertPublicationAfterDeadline(t *testing.T, mode string) {
+	t.Helper()
+	report := dynamicsCrashFullQueue(t, false, mode)
+	rounds := report["rounds"].([]dynamicsCrashDrainReport)
+	t.Logf("publication after committed apply deadline: %+v", report)
+	injectedFinalApply := false
+	for _, round := range rounds {
+		if round.InjectedAfterCommit && round.InjectedHead == 4 && round.DeadlineExceeded {
+			injectedFinalApply = true
+			if report["published_generation"].(int64) <= round.InjectedGeneration {
+				t.Fatal("final committed apply was not followed by a new publication")
+			}
+			if mode == "final" && round.InjectedGeneration < 1 {
+				t.Fatal("final-only fixture did not preserve an earlier prefix publication")
+			}
+		}
+	}
+	if len(rounds) < 2 || len(rounds) > 4 || !injectedFinalApply || rounds[len(rounds)-1].Result != "ok" ||
+		report["count_after"] != int64(0) || report["head_after"] != int64(4) || report["entries_done"] != 4 ||
+		report["events_added"] != 1 || report["withheld_after"] != false || report["published_generation"].(int64) < 1 {
+		t.Fatalf("committed queue must publish within the existing four rounds: %+v", report)
 	}
 }
