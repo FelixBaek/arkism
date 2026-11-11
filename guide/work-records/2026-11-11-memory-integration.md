@@ -68,3 +68,12 @@ attempt failed because it could not open sockets.
 This integration supersedes the P21/P33 work proposed in #551. Existing #548
 (capture repair) and #550 (a Sonar finding exception) were already separate open
 PRs in the recovered session; neither is marked completed by this integration.
+
+The passing Sonar gate still reported three maintainability findings. Follow-up
+cleanup renames a local list bound that shadowed Go's `max`, removes a temporary
+variable used only by a test condition, and makes the Python client generator
+emit ordinary strings for routes without path parameters. Parameterized paths
+retain their escaped interpolation. No lint suppression or quality threshold
+was added. Generated SDK comparison passed; related existing Go and SDK tests
+passed: three host reflect tests and two lesson-grouping tests with race, plus
+nine Python SDK tests (2.021s). No new tests mirror these mechanical edits.
