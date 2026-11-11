@@ -10,6 +10,7 @@ type reflectSourceSnapshot struct {
 	record   Record
 	transfer bool
 	dateOnly bool
+	expanded bool
 }
 
 func (run *reflectRun) keepSources(records []Record, transfer bool) {
@@ -17,8 +18,15 @@ func (run *reflectRun) keepSources(records []Record, transfer bool) {
 		run.sourceRecords = map[string]reflectSourceSnapshot{}
 	}
 	for _, r := range records {
-		old := run.sourceRecords[r.ID]
-		run.sourceRecords[r.ID] = reflectSourceSnapshot{record: r, transfer: transfer || old.transfer}
+		old, exists := run.sourceRecords[r.ID]
+		if !exists {
+			old.record = r
+		}
+		// Earlier prompt text may still depend on the first admitted version.
+		// Upgrade its obligations without replacing the snapshot that binds it.
+		old.transfer = transfer || old.transfer
+		old.dateOnly = false
+		run.sourceRecords[r.ID] = old
 	}
 }
 
@@ -42,6 +50,10 @@ func (s *Service) reflectSourceReadableFor(ctx context.Context, token string, in
 	if dateOnly {
 		kinds = []string{conversationSourceKind, "message"}
 	}
+	return s.reflectSourceReadableKinds(ctx, token, in, r, transfer, dateOnly, kinds)
+}
+
+func (s *Service) reflectSourceReadableKinds(ctx context.Context, token string, in ReflectInput, r Record, transfer, dateOnly bool, kinds []string) bool {
 	filters := reflectFilters(in)
 	criteria, err := normalizeSearchCriteria(SearchCriteria{Kinds: kinds, Filters: &filters})
 	if err != nil || r.Scope != in.Scope || !live(r) || r.ContentErased || r.PrivacyQuarantined || r.Sensitivity == "restricted" || !criteria.matchesRecord(r) {
@@ -72,7 +84,7 @@ func (s *Service) verifyReflectSources(ctx context.Context, token string, run *r
 		return nil
 	}
 	for _, snapshot := range run.sourceRecords {
-		if !s.reflectSourceReadableFor(ctx, token, run.in, snapshot.record, snapshot.transfer, snapshot.dateOnly) {
+		if !s.reflectSnapshotReadable(ctx, token, run.in, snapshot) {
 			return ErrDenied
 		}
 	}
@@ -84,6 +96,14 @@ func (s *Service) verifyReflectSources(ctx context.Context, token string, run *r
 		}
 		return nil
 	})
+}
+
+// Expanded tools may read any source kind, but retain every admission and transfer gate.
+func (s *Service) reflectSnapshotReadable(ctx context.Context, token string, in ReflectInput, snapshot reflectSourceSnapshot) bool {
+	if snapshot.expanded {
+		return s.reflectSourceReadableKinds(ctx, token, in, snapshot.record, snapshot.transfer, false, nil)
+	}
+	return s.reflectSourceReadableFor(ctx, token, in, snapshot.record, snapshot.transfer, snapshot.dateOnly)
 }
 
 // Verify and fence one source plus its dependencies inside the delivery transaction.
