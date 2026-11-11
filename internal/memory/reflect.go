@@ -171,6 +171,7 @@ type reflectRun struct {
 	sourceRecords map[string]reflectSourceSnapshot
 	sourceNotes   []ReflectToolStep
 	memoryRecords map[Ref]string
+	modelRecords  map[string]reflectModelSnapshot
 }
 
 // add keeps new hits; walked marks a tool that follows links (related memories, entity mentions),
@@ -322,12 +323,7 @@ func (s *Service) reflect(ctx context.Context, token string, in ReflectInput) (R
 	if err = s.reflectGuidance(ctx, token, run); err != nil {
 		return ReflectOutput{}, err
 	}
-	run.add(bundle.Items, false)
-	s.reflectPassages(ctx, token, run, bundle.Degraded)
-	if err := s.reflectAbout(ctx, token, run); err != nil {
-		return ReflectOutput{}, err
-	}
-	if err := s.verifyReflectMemories(ctx, token, run); err != nil {
+	if err := s.prepareReflectEvidence(ctx, token, run, bundle); err != nil {
 		return ReflectOutput{}, err
 	}
 	s.decisionReflect(ctx, token, run)
@@ -421,10 +417,7 @@ func (s *Service) reflectPromptOnly(ctx context.Context, token string, run *refl
 	}
 	s.reflectSourceAnchors(ctx, token, run)
 	run.boundSources()
-	if err := s.verifyReflectMemories(ctx, token, run); err != nil {
-		return ReflectOutput{}, err
-	}
-	if err := s.verifyReflectSources(ctx, token, run); err != nil {
+	if err := s.verifyReflectEvidence(ctx, token, run); err != nil {
 		return ReflectOutput{}, err
 	}
 	system, user := reflectPrompt(run, run.in.MaxIterations == 1)
@@ -454,10 +447,7 @@ func (s *Service) reflectLoop(ctx context.Context, token string, run *reflectRun
 		final := i == run.in.MaxIterations
 		s.reflectSourceAnchors(ctx, token, run)
 		run.boundSources()
-		if err := s.verifyReflectMemories(ctx, token, run); err != nil {
-			return ReflectOutput{}, err
-		}
-		if err := s.verifyReflectSources(ctx, token, run); err != nil {
+		if err := s.verifyReflectEvidence(ctx, token, run); err != nil {
 			return ReflectOutput{}, err
 		}
 		if len(run.passages) == 0 {
@@ -476,10 +466,7 @@ func (s *Service) reflectLoop(ctx context.Context, token string, run *reflectRun
 		if err != nil {
 			return out, err
 		}
-		if err := s.verifyReflectMemories(ctx, token, run); err != nil {
-			return ReflectOutput{}, err
-		}
-		if err := s.verifyReflectSources(ctx, token, run); err != nil {
+		if err := s.verifyReflectEvidence(ctx, token, run); err != nil {
 			return ReflectOutput{}, err
 		}
 		calls, isTool := parseReflectToolCalls(text)
@@ -698,4 +685,13 @@ func (s *Service) contextDirectives(ctx context.Context, token string, scope Sco
 		sec.Tokens += n
 	}
 	return sec, nil
+}
+
+func (s *Service) prepareReflectEvidence(ctx context.Context, token string, run *reflectRun, bundle ContextBundle) error {
+	run.add(bundle.Items, false)
+	s.reflectPassages(ctx, token, run, bundle.Degraded)
+	if err := s.reflectAbout(ctx, token, run); err != nil {
+		return err
+	}
+	return s.verifyReflectEvidence(ctx, token, run)
 }
