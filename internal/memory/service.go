@@ -1914,6 +1914,9 @@ func HitFromRecord(col string, r Record) Hit {
 	if r.Generator != nil {
 		hit.GeneratorModel = r.Generator.Model
 	}
+	if col == colMemories || col == colObservations {
+		hit.reflectRecordHash = reflectMemoryRecordHash(r)
+	}
 	return hit
 }
 func recordContent(r Record) string {

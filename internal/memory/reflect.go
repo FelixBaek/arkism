@@ -170,6 +170,7 @@ type reflectRun struct {
 	passages      []string
 	sourceRecords map[string]reflectSourceSnapshot
 	sourceNotes   []ReflectToolStep
+	memoryRecords map[Ref]string
 }
 
 // add keeps new hits; walked marks a tool that follows links (related memories, entity mentions),
@@ -187,6 +188,12 @@ func (r *reflectRun) add(hits []Hit, walked bool) []string {
 		if !r.seen[h.ID] {
 			r.seen[h.ID] = true
 			r.hits = append(r.hits, h)
+			if h.Collection == colMemories || h.Collection == colObservations {
+				if r.memoryRecords == nil {
+					r.memoryRecords = map[Ref]string{}
+				}
+				r.memoryRecords[Ref{Collection: h.Collection, ID: h.ID, Revision: h.Revision}] = h.reflectRecordHash
+			}
 		}
 	}
 	return ids
@@ -320,6 +327,9 @@ func (s *Service) reflect(ctx context.Context, token string, in ReflectInput) (R
 	if err := s.reflectAbout(ctx, token, run); err != nil {
 		return ReflectOutput{}, err
 	}
+	if err := s.verifyReflectMemories(ctx, token, run); err != nil {
+		return ReflectOutput{}, err
+	}
 	s.decisionReflect(ctx, token, run)
 	out := ReflectOutput{CitedMemoryIDs: []string{}, DirectivesApplied: []string{}, Retrieved: []ReflectRetrieved{}, ToolTrace: []ReflectToolStep{}}
 	for _, r := range run.rules {
@@ -411,6 +421,9 @@ func (s *Service) reflectPromptOnly(ctx context.Context, token string, run *refl
 	}
 	s.reflectSourceAnchors(ctx, token, run)
 	run.boundSources()
+	if err := s.verifyReflectMemories(ctx, token, run); err != nil {
+		return ReflectOutput{}, err
+	}
 	if err := s.verifyReflectSources(ctx, token, run); err != nil {
 		return ReflectOutput{}, err
 	}
@@ -441,6 +454,9 @@ func (s *Service) reflectLoop(ctx context.Context, token string, run *reflectRun
 		final := i == run.in.MaxIterations
 		s.reflectSourceAnchors(ctx, token, run)
 		run.boundSources()
+		if err := s.verifyReflectMemories(ctx, token, run); err != nil {
+			return ReflectOutput{}, err
+		}
 		if err := s.verifyReflectSources(ctx, token, run); err != nil {
 			return ReflectOutput{}, err
 		}
@@ -459,6 +475,9 @@ func (s *Service) reflectLoop(ctx context.Context, token string, run *reflectRun
 		out.Iterations = i
 		if err != nil {
 			return out, err
+		}
+		if err := s.verifyReflectMemories(ctx, token, run); err != nil {
+			return ReflectOutput{}, err
 		}
 		if err := s.verifyReflectSources(ctx, token, run); err != nil {
 			return ReflectOutput{}, err
