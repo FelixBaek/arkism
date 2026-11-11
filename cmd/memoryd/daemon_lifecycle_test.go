@@ -214,6 +214,7 @@ func TestDaemonRefusesInvalidServiceSettings(t *testing.T) {
 		"vector distance":         {db.env("MEMORY_VECTOR_MAX_DISTANCE", "2"), nil},
 		"topic digest":            {db.env("MEMORY_TOPIC_DIGEST_MAX", "0"), nil},
 		"candidate limit":         {db.env("MEMORY_CANDIDATE_DAILY_LIMIT", "-1"), nil},
+		"reread limit":            {db.env("ARKISM_REFLECT_REREAD_DAILY_LIMIT", "0"), nil},
 		"merge similarity":        {db.env("MEMORY_CAPTURE_MERGE_SIMILARITY", "1.5"), nil},
 		"capture gate budget":     {db.env("MEMORY_CAPTURE_GATE_BUDGET", "1m"), nil},
 		"cost rates":              {db.env("SKILL_LLM_INPUT_USD_PER_MILLION_TOKENS", "0.5"), nil},
@@ -260,5 +261,14 @@ func TestDaemonWorkerRunsRoundsUntilSIGTERM(t *testing.T) {
 	}
 	if code := serveUntilSIGTERM(t, db.env("MEMORY_EMBEDDER", "none"), iterated, "-worker", "-recovery", "-log-level", "debug"); code != 0 {
 		t.Fatal("recovery worker stop", code)
+	}
+}
+
+func TestRereadLimitFromEnv(t *testing.T) {
+	for raw, want := range map[string]int{"": 0, "250": 250, "0": -1, "-3": -1, "many": -1, "100001": -1} {
+		t.Setenv("ARKISM_REFLECT_REREAD_DAILY_LIMIT", raw)
+		if n, err := rereadLimitFromEnv(); (want < 0) != (err != nil) || (want >= 0 && n != want) {
+			t.Fatal(raw, n, err)
+		}
 	}
 }

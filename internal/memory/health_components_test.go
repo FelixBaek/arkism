@@ -62,6 +62,34 @@ func TestComponentHealthRequiresOperatorAndKeepsPublicReadinessOpaque(t *testing
 	}
 }
 
+// models=1 calls each configured model once and reports only fixed codes.
+func TestComponentHealthProbesModelsOnRequest(t *testing.T) {
+	f := newFixture(t)
+	f.auth.actors[f.human] = actor("operator", "human", false, "ops")
+	llm := &fakeWikiLLM{answers: []string{"OK"}}
+	f.svc.Wiki = llm
+	get := func(query string) (got ComponentHealth) {
+		r := httptest.NewRequest("GET", "/metrics/health?workspace_id=ws-a&project_id=proj-a"+query, nil)
+		r.Header.Set("Authorization", "Bearer "+f.human)
+		w := httptest.NewRecorder()
+		Handler(f.svc).ServeHTTP(w, r)
+		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &got) != nil || strings.Contains(w.Body.String(), "fake") {
+			t.Fatal(w.Code, w.Body)
+		}
+		return got
+	}
+	if got := get(""); got.ServerModel != "" || len(llm.prompts) != 0 {
+		t.Fatal("probed without models=1", got)
+	}
+	if got := get("&models=1"); got.ServerModel != "ready" || got.Embedder != "ready" || got.Reranker != "disabled" {
+		t.Fatal(got)
+	}
+	f.emb.err = ErrUnavailable // the fake model has no second answer either
+	if got := get("&models=1"); got.ServerModel != "unavailable" || got.Embedder != "unavailable" {
+		t.Fatal(got)
+	}
+}
+
 func TestPostgresComponentHealthDetectsSchemaAndClosedDatabase(t *testing.T) {
 	p := isolatedPostgres(t)
 	if got := p.componentHealth(testCtx); got.Database != "ready" || got.Schema != "ready" || got.Search != "ready" || got.WriteGate != "ready" {

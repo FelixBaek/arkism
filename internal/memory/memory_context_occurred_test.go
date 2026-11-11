@@ -163,3 +163,18 @@ func TestObservationSpansTheEventDaysOfItsCitedNotes(t *testing.T) {
 		t.Fatal("undated notes give an undated observation")
 	}
 }
+func TestResolveOccurredTakesTheFirstTimePhrase(t *testing.T) {
+	ref := time.Date(2026, 12, 3, 10, 0, 0, 0, time.UTC)
+	day := func(d int) time.Time { return time.Date(2026, 12, d, 0, 0, 0, 0, time.UTC) }
+	for text, want := range map[string]time.Time{
+		"어제 회의에서 출시일을 12월 3일로 정했다":                       day(2),
+		"Yesterday we set the launch date to December 5": day(2),
+		"출시일을 12월 1일로 정했다":                               day(1),
+		"12월 1일에 점검했고 내일 다시 본다":                          day(1),
+	} {
+		w := resolveOccurred("", "", text, ref)
+		if w == nil || !w.From.Equal(want) || !w.To.Equal(want.AddDate(0, 0, 1)) {
+			t.Errorf("%q occurred = %+v, want the day %s", text, w, want.Format(time.DateOnly))
+		}
+	}
+}

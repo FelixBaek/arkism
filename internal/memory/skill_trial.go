@@ -140,10 +140,9 @@ func (s *Service) StartSkillTrial(ctx context.Context, token string, in SkillTri
 		if e = tx.Insert(ctx, colSkillTrials, result); e != nil {
 			return e
 		}
-		if d.Role == roleService {
-			if e = enqueueSkillTrialCheck(ctx, tx, result); e != nil {
-				return e
-			}
+		// A person's trial gets the same check job, so its end is acted on and not only computed on a read.
+		if e = enqueueSkillTrialCheck(ctx, tx, result); e != nil {
+			return e
 		}
 		return audit(ctx, tx, in.Scope, d.PrincipalID, "start:skill_trials", id)
 	})

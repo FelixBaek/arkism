@@ -478,11 +478,15 @@ func (s *Service) extractPlan(settings SpaceConfig, opts ExtractOptions, overrid
 	if err != nil {
 		return FileExtractJob{}, err
 	}
-	if st.Mode != spaceExtractChunks && s.Wiki == nil {
+	if st.Mode != spaceExtractChunks && s.extractLLM() == nil {
 		return FileExtractJob{}, ErrModelNotConfigured
 	}
 	return FileExtractJob{Settings: st, Options: opts, Zone: settings.zone().String(), Language: settings.MemoryLanguage, DropText: !settings.keepsDocumentText()}, nil
 }
+
+// extractLLM is the model file extraction calls: the server model, or ExtractModel where the
+// wiki features are off. A person asked for the extraction, so it needs no feature switch.
+func (s *Service) extractLLM() WikiLLM { return cmp.Or(s.Wiki, s.ExtractModel) }
 
 // agentUploadTool is the MCP tool a space must list to let agents upload files for extraction.
 const agentUploadTool = "add_document"
@@ -506,14 +510,17 @@ func (s *Service) extractChunk(ctx context.Context, token string, d Decision, sc
 	if plan.Settings.Mode == spaceExtractChunks {
 		return chunkClaims(ch), nil
 	}
-	if s.Wiki == nil {
+	if s.extractLLM() == nil {
 		return ExtractPreviewResult{}, ErrModelNotConfigured
 	}
 	if err := s.modelTransfer(ctx, token, d, "generate:memory_candidates", scope, "", ch.Text); err != nil {
 		return ExtractPreviewResult{}, err
 	}
 	system, user := extractPrompt(ch.Text, plan)
-	answer, err := s.wikiCall(ctx, scope, budget, fileExtractOperation, system, user)
+	estimate := int64(utf8.RuneCountInString(system)+utf8.RuneCountInString(user))/3 + wikiMaxCallTokens
+	answer, err := s.budgetedCall(budget, estimate, func() (string, ProviderUsage, error) {
+		return s.modelCallWith(ctx, s.extractLLM(), scope, fileExtractOperation, system, user, wikiMaxCallTokens)
+	})
 	if errors.Is(err, errWikiBudget) {
 		return ExtractPreviewResult{}, ErrModelBudget
 	}
@@ -589,7 +596,7 @@ func (s *Service) ExtractPreview(ctx context.Context, token string, in ExtractPr
 	if in.PromptOnly {
 		return ExtractPreviewResult{Claims: []ExtractedClaim{}, Skipped: extractRedactionNote(redacted), Prompt: extractPromptView(settings, in.Strategy, plan, chunks)}, nil
 	}
-	if st.Mode != spaceExtractChunks && s.Wiki == nil {
+	if st.Mode != spaceExtractChunks && s.extractLLM() == nil {
 		return ExtractPreviewResult{}, ErrModelNotConfigured
 	}
 	out := FileMemoriesResult{Skipped: extractRedactionNote(redacted)}
@@ -1073,7 +1080,7 @@ func (s *Service) captureExtracted(ctx context.Context, token string, scope Scop
 	}
 	gen := Generator{Model: "none", PromptVersion: extractChunksVersion, PipelineVersion: fileExtractPipelineVersion}
 	if plan.Settings.Mode != spaceExtractChunks {
-		gen = s.Wiki.Generator()
+		gen = s.extractLLM().Generator()
 		gen.PromptVersion, gen.PipelineVersion = fileExtractPromptVersion, fileExtractPipelineVersion
 	}
 	at, o := plan.refTime().UTC(), plan.Options

@@ -71,6 +71,18 @@ func TestRecallQueryTimeAnchorsTimeWordsAndRecency(t *testing.T) {
 	}
 }
 
+// A body locale reads an ambiguous slashed date for callers that send no Accept-Language.
+func TestRecallBodyLocaleReadsSlashDates(t *testing.T) {
+	f, _ := recallFixture(t)
+	seoul := recallLocation("")
+	for locale, want := range map[string]*time.Time{"en-GB": new(time.Date(2026, 4, 3, 0, 0, 0, 0, seoul)), "en-US": new(time.Date(2026, 3, 4, 0, 0, 0, 0, seoul)), "": nil} {
+		out, err := f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "meeting 03/04/2026", Explain: true, Locale: locale})
+		if err != nil || out.Explain == nil || (want == nil) != (out.Explain.TimeWindow == nil) || (want != nil && !out.Explain.TimeWindow.From.Equal(*want)) {
+			t.Fatalf("%q: %+v %v", locale, out.Explain, err)
+		}
+	}
+}
+
 func TestTagsMatchModes(t *testing.T) {
 	want := []string{"a", "b"}
 	for _, tc := range []struct {
@@ -134,7 +146,63 @@ func tagFilterCases() (filters []SearchFilters, stored [][]string) {
 		// (exact {a,b} and not all_strict {c}) or not (any_strict z): two groups, nested both sides
 		SearchFilters{TagGroups: [][]TagTest{{{And: []TagTest{{Tags: []string{"a", "b"}, Match: "exact"}, {Tags: []string{"c"}, Match: "all_strict", Not: true}}}, {Not: true, Or: []TagTest{{Tags: []string{"z"}}}}}, {{Not: true, And: []TagTest{{Tags: []string{"z"}, Match: "all"}}}}}},
 	)
-	return filters, [][]string{nil, {}, {"a"}, {"b"}, {"c"}, {"a", "b"}, {"b", "a"}, {"a", "c"}, {"a", "b", "c"}, {"z"}}
+	// Metadata leaves: every op, numbers and text, alone and under and/or/not.
+	meta := func(key, op, value string, values ...string) TagTest {
+		return TagTest{Meta: &MetaTest{Key: key, Op: op, Value: value, Values: values}}
+	}
+	for _, test := range []TagTest{
+		meta("p", "", "5"), meta("p", "eq", "5"), meta("p", "ne", "5"), meta("p", "in", "", "5", "x"), meta("p", "exists", ""), meta("p", "contains", "0"),
+		meta("p", "gt", "5"), meta("p", "gte", "5"), meta("p", "lt", "5"), meta("p", "lte", "5"), meta("p", "gt", "-1.5"), meta("p", "lt", "m"), meta("d", "gte", "2026-06-01"),
+		{Not: true, And: []TagTest{meta("p", "gte", "5"), {Or: []TagTest{{Tags: []string{"a"}}, meta("d", "lt", "2026-06-01")}}}},
+	} {
+		filters = append(filters, SearchFilters{TagGroups: [][]TagTest{{test}}})
+	}
+	return filters, [][]string{nil, {}, {"a"}, {"b"}, {"c"}, {"a", "b"}, {"b", "a"}, {"a", "c"}, {"a", "b", "c"}, {"z"},
+		{"meta:p=5"}, {"meta:p=10", "a"}, {"meta:p=4.5"}, {"meta:p=-2"}, {"meta:p=x"}, {"meta:p="}, {"meta:pp=5"}, {"meta:p=05", "meta:d=2026-07-01"}, {"meta:d=2026-05-31", "a"}, {"p=5"}}
+}
+
+func TestMetaTests(t *testing.T) {
+	holds := func(test MetaTest, tags ...string) bool {
+		f := SearchFilters{TagGroups: [][]TagTest{{{Meta: &test}}}}
+		return (SearchCriteria{Filters: &f}).matches("", tags, time.Time{}, time.Time{})
+	}
+	for _, tc := range []struct {
+		test MetaTest
+		tag  string
+		ok   bool
+	}{
+		{MetaTest{Key: "p", Op: "gte", Value: "5"}, "meta:p=10", true}, // numbers, not text: "10" < "5" as bytes
+		{MetaTest{Key: "p", Op: "gte", Value: "5"}, "meta:p=4.99", false},
+		{MetaTest{Key: "p", Op: "lt", Value: "5"}, "meta:p=high", false}, // a number never orders against text
+		{MetaTest{Key: "p", Op: "lte", Value: "5"}, "meta:p=5.0", true},
+		{MetaTest{Key: "d", Op: "lt", Value: "2026-06-01"}, "meta:d=2026-05-31", true},
+		{MetaTest{Key: "p", Op: "ne", Value: "5"}, "meta:q=1", false}, // a missing key fails every op
+		{MetaTest{Key: "p", Op: "exists"}, "meta:p=", true},
+		{MetaTest{Key: "p", Op: "in", Values: []string{"a", "b"}}, "meta:p=b", true},
+		{MetaTest{Key: "p", Op: "contains", Value: "ee"}, "meta:p=green", true},
+		{MetaTest{Key: "p"}, "meta:pp=5", false},
+	} {
+		if got := holds(tc.test, tc.tag); got != tc.ok {
+			t.Errorf("%+v %s: got %v", tc.test, tc.tag, got)
+		}
+	}
+	for _, bad := range []TagTest{
+		{Meta: &MetaTest{Key: "P", Value: "1"}}, {Meta: &MetaTest{Key: "p", Op: "like", Value: "1"}}, {Meta: &MetaTest{Key: "p"}},
+		{Meta: &MetaTest{Key: "p", Op: "exists", Value: "1"}}, {Meta: &MetaTest{Key: "p", Op: "in"}}, {Meta: &MetaTest{Key: "p", Op: "eq", Values: []string{"1"}}},
+		{Meta: &MetaTest{Key: "p", Value: "1"}, Tags: []string{"a"}}, {Meta: &MetaTest{Key: "p", Value: "1"}, Match: "all"},
+	} {
+		if validTagGroups([][]TagTest{{bad}}) {
+			t.Errorf("%+v must be refused", bad)
+		}
+	}
+	// End to end through the service: a caller's metadata narrows search by comparison.
+	f, _ := recallFixture(t)
+	f.editRecord(colMemories, "alpha", func(r *Record) { r.Tags = []string{"meta:priority=10"} })
+	f.editRecord(colMemories, "delta", func(r *Record) { r.Tags = []string{"meta:priority=3"} })
+	out, err := f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "alpha deploy", SearchCriteria: SearchCriteria{Filters: &SearchFilters{TagGroups: [][]TagTest{{{Meta: &MetaTest{Key: "priority", Op: "gte", Value: "5"}}}}}}})
+	if got := ids(out.Items); err != nil || !slices.Equal(got, []string{"alpha"}) {
+		t.Fatal(got, err)
+	}
 }
 
 func TestTagGroups(t *testing.T) {

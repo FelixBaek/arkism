@@ -35,6 +35,7 @@ func validateSyntheticDaemon(cfg daemonOptions, store string) (string, error) {
 
 func configureDaemonPostgres(pg *memory.Postgres, cfg daemonOptions) error {
 	pg.SetRecoveryMode(cfg.Recovery)
+	pg.SetVectorMaxDistance(memory.DefaultVectorMaxDistance)
 	if raw := os.Getenv("MEMORY_VECTOR_MAX_DISTANCE"); raw != "" {
 		d, err := strconv.ParseFloat(raw, 64)
 		if err != nil || d <= 0 || d >= 2 {

@@ -70,11 +70,11 @@ func validSkillBundle(b *SkillBundle) bool {
 			previous = f.Path
 			continue
 		}
-		if f.Size != 0 || !utf8.ValidString(f.Content) || strings.ContainsRune(f.Content, 0) || len(f.Content) > 200000 || f.SHA256 != ContentHash(f.Content) {
+		if f.Size != 0 || !utf8.ValidString(f.Content) || strings.ContainsRune(f.Content, 0) || len(f.Content) > maxSkillFileBytes || f.SHA256 != ContentHash(f.Content) {
 			return false
 		}
 		total += len(f.Content)
-		if total > 1<<20 {
+		if total > maxSkillBundleBytes {
 			return false
 		}
 		previous = f.Path

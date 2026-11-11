@@ -28,6 +28,26 @@ var (
 	ErrCandidateQuota     = errors.New("candidate_daily_limit")
 )
 
+// reasonError adds a client-safe reason to a sentinel. respond writes it as
+// "detail"; errors.Is still matches the sentinel.
+type reasonError struct {
+	base   error
+	detail string
+}
+
+func (e reasonError) Error() string { return e.base.Error() + ": " + e.detail }
+func (e reasonError) Unwrap() error { return e.base }
+
+// invalidf is ErrInvalid with a "field: reason" detail for the 400 body.
+func invalidf(format string, a ...any) error {
+	return reasonError{ErrInvalid, fmt.Sprintf(format, a...)}
+}
+
+// revisionConflict is ErrConflict naming the revision the caller sent and the stored one.
+func revisionConflict(sent, stored int64) error {
+	return reasonError{ErrConflict, fmt.Sprintf("revision: sent %d, stored %d", sent, stored)}
+}
+
 var Collections = []string{"skill_trials", "knowledge_sources", "knowledge_documents", "knowledge_chunks", "knowledge_bindings", "retrieval_logs", "consultations", "agent_handoffs", "sources", "memories", "memory_candidates", "memory_relations", "skills", "skill_versions", "agent_runs", "execution_traces", "tool_calls", "evaluations", "reflections", "audit_events", "jobs", "provider_usage", "blobs", "artifacts", "agent_tools", "prompts", "design_systems", "crew", "crew_runs", "providers", "crew_assists", "code_reviews", "maintenance_proposals", "routing", "routing_calls", "skill_routes", "usage_sessions", "crew_meetings", "discord_bots", "merge_proposals", "topic_digests", "user_digests", "wiki_pages", "wiki_links", "eval_tasks", "eval_runs", "eval_trials", "judge_calibrations", "directives", "observations", "mental_models", "ext_data"}
 
 const (
@@ -139,6 +159,7 @@ type Record struct {
 	Wiki                 *WikiRecord            `json:"wiki,omitempty" bson:"wiki,omitempty"`
 	Directive            *Directive             `json:"directive,omitempty" bson:"directive,omitempty"`
 	FileExtract          *FileExtractJob        `json:"file_extract,omitempty" bson:"file_extract,omitempty"`
+	Deferred             *DeferredCall          `json:"deferred,omitempty" bson:"deferred,omitempty"`
 	Consultation         *Consultation          `json:"consultation,omitempty" bson:"consultation,omitempty"`
 	Handoff              *SpecialistHandoff     `json:"handoff,omitempty" bson:"handoff,omitempty"`
 	Audit                *AuditMetadata         `json:"audit,omitempty" bson:"audit,omitempty"`
@@ -234,49 +255,55 @@ type Record struct {
 	// Skill hub: ordered version IDs on the parent skill (index+1 is the
 	// public version number), import origin and runtime compatibility on a
 	// version. Content stays immutable; only lifecycle status moves.
-	VersionHistory     []string             `json:"version_history,omitempty" bson:"version_history,omitempty"`
-	SkillOrigin        *SkillOrigin         `json:"skill_origin,omitempty" bson:"skill_origin,omitempty"`
-	AgentTools         *AgentTools          `json:"agent_tools,omitempty" bson:"agent_tools,omitempty"`
-	Providers          *Providers           `json:"providers,omitempty" bson:"providers,omitempty"`
-	ImagePrompt        *ImagePrompt         `json:"image_prompt,omitempty" bson:"image_prompt,omitempty"`
-	Crew               *Crew                `json:"crew,omitempty" bson:"crew,omitempty"`
-	CrewRun            *CrewRun             `json:"crew_run,omitempty" bson:"crew_run,omitempty"`
-	FlowDelivery       *FlowDelivery        `json:"delivery,omitempty" bson:"delivery,omitempty"`
-	Webhook            *Webhook             `json:"-" bson:"webhook,omitempty"`
-	WebhookDelivery    *WebhookDelivery     `json:"-" bson:"webhook_delivery,omitempty"`
-	LLMRequest         *LLMRequest          `json:"-" bson:"llm_request,omitempty"`
-	FlowEffect         *FlowEffect          `json:"flow_effect,omitempty" bson:"flow_effect,omitempty"`
-	FlowAttempt        *FlowAttempt         `json:"flow_attempt,omitempty" bson:"flow_attempt,omitempty"`
-	FlowBudget         *FlowBudget          `json:"flow_budget,omitempty" bson:"flow_budget,omitempty"`
-	FlowImprovement    *FlowImprovement     `json:"flow_improvement,omitempty" bson:"flow_improvement,omitempty"`
-	CrewAssist         *CrewAssist          `json:"crew_assist,omitempty" bson:"crew_assist,omitempty"`
-	CrewMeeting        *CrewMeeting         `json:"crew_meeting,omitempty" bson:"crew_meeting,omitempty"`
-	DiscordBot         *DiscordBot          `json:"discord_bot,omitempty" bson:"discord_bot,omitempty"`
-	DiscordSettings    *DiscordSettings     `json:"discord_settings,omitempty" bson:"discord_settings,omitempty"`
-	Routing            *Routing             `json:"routing,omitempty" bson:"routing,omitempty"`
-	RoutingCall        *RoutingCall         `json:"routing_call,omitempty" bson:"routing_call,omitempty"`
-	SkillRoute         *SkillRoute          `json:"skill_route,omitempty" bson:"skill_route,omitempty"`
-	UsageSession       *UsageSession        `json:"usage_session,omitempty" bson:"usage_session,omitempty"`
-	CodeReviews        *CodeReviews         `json:"code_reviews,omitempty" bson:"code_reviews,omitempty"`
-	DesignSystem       *DesignSystem        `json:"design_system,omitempty" bson:"design_system,omitempty"`
-	Maintenance        *MaintenanceProposal `json:"maintenance,omitempty" bson:"maintenance,omitempty"`
-	Merge              *MergeRecord         `json:"merge,omitempty" bson:"merge,omitempty"`
-	Digest             *DigestData          `json:"digest,omitempty" bson:"digest,omitempty"`
-	Observation        *ObservationData     `json:"observation,omitempty" bson:"observation,omitempty"`
-	MentalModel        *MentalModelData     `json:"mental_model,omitempty" bson:"mental_model,omitempty"`
-	AutoDerive         *AutoDeriveJob       `json:"-" bson:"auto_derive,omitempty"`
-	DeriveSchedule     *DeriveScheduleJob   `json:"-" bson:"derive_schedule,omitempty"`
-	SkillCompatibility map[string]string    `json:"skill_compatibility,omitempty" bson:"skill_compatibility,omitempty"`
-	ApprovedBy         string               `json:"approved_by,omitempty" bson:"approved_by,omitempty"`
-	ValidationID       string               `json:"validation_id,omitempty" bson:"validation_id,omitempty"`
-	Evaluation         *Evaluation          `json:"evaluation,omitempty" bson:"evaluation,omitempty"`
-	Passed             bool                 `json:"passed,omitempty" bson:"passed"`
-	Embedding          *Embedding           `json:"embedding,omitempty" bson:"embedding,omitempty"`
-	Target             *Ref                 `json:"target,omitempty" bson:"target,omitempty"`
-	RunAt              *time.Time           `json:"-" bson:"run_at,omitempty"`
-	LeaseUntil         time.Time            `json:"-" bson:"lease_until"`
-	LeaseToken         string               `json:"-" bson:"lease_token"`
-	Attempts           int                  `json:"-" bson:"attempts"`
+	VersionHistory  []string             `json:"version_history,omitempty" bson:"version_history,omitempty"`
+	SkillOrigin     *SkillOrigin         `json:"skill_origin,omitempty" bson:"skill_origin,omitempty"`
+	AgentTools      *AgentTools          `json:"agent_tools,omitempty" bson:"agent_tools,omitempty"`
+	Providers       *Providers           `json:"providers,omitempty" bson:"providers,omitempty"`
+	ImagePrompt     *ImagePrompt         `json:"image_prompt,omitempty" bson:"image_prompt,omitempty"`
+	Crew            *Crew                `json:"crew,omitempty" bson:"crew,omitempty"`
+	CrewRun         *CrewRun             `json:"crew_run,omitempty" bson:"crew_run,omitempty"`
+	FlowDelivery    *FlowDelivery        `json:"delivery,omitempty" bson:"delivery,omitempty"`
+	Webhook         *Webhook             `json:"-" bson:"webhook,omitempty"`
+	WebhookDelivery *WebhookDelivery     `json:"-" bson:"webhook_delivery,omitempty"`
+	LLMRequest      *LLMRequest          `json:"-" bson:"llm_request,omitempty"`
+	FlowEffect      *FlowEffect          `json:"flow_effect,omitempty" bson:"flow_effect,omitempty"`
+	FlowAttempt     *FlowAttempt         `json:"flow_attempt,omitempty" bson:"flow_attempt,omitempty"`
+	FlowBudget      *FlowBudget          `json:"flow_budget,omitempty" bson:"flow_budget,omitempty"`
+	FlowImprovement *FlowImprovement     `json:"flow_improvement,omitempty" bson:"flow_improvement,omitempty"`
+	CrewAssist      *CrewAssist          `json:"crew_assist,omitempty" bson:"crew_assist,omitempty"`
+	CrewMeeting     *CrewMeeting         `json:"crew_meeting,omitempty" bson:"crew_meeting,omitempty"`
+	DiscordBot      *DiscordBot          `json:"discord_bot,omitempty" bson:"discord_bot,omitempty"`
+	DiscordSettings *DiscordSettings     `json:"discord_settings,omitempty" bson:"discord_settings,omitempty"`
+	Routing         *Routing             `json:"routing,omitempty" bson:"routing,omitempty"`
+	RoutingCall     *RoutingCall         `json:"routing_call,omitempty" bson:"routing_call,omitempty"`
+	SkillRoute      *SkillRoute          `json:"skill_route,omitempty" bson:"skill_route,omitempty"`
+	UsageSession    *UsageSession        `json:"usage_session,omitempty" bson:"usage_session,omitempty"`
+	CodeReviews     *CodeReviews         `json:"code_reviews,omitempty" bson:"code_reviews,omitempty"`
+	DesignSystem    *DesignSystem        `json:"design_system,omitempty" bson:"design_system,omitempty"`
+	Maintenance     *MaintenanceProposal `json:"maintenance,omitempty" bson:"maintenance,omitempty"`
+	Merge           *MergeRecord         `json:"merge,omitempty" bson:"merge,omitempty"`
+	Digest          *DigestData          `json:"digest,omitempty" bson:"digest,omitempty"`
+	Observation     *ObservationData     `json:"observation,omitempty" bson:"observation,omitempty"`
+	MentalModel     *MentalModelData     `json:"mental_model,omitempty" bson:"mental_model,omitempty"`
+	AutoDerive      *AutoDeriveJob       `json:"-" bson:"auto_derive,omitempty"`
+	DeriveSchedule  *DeriveScheduleJob   `json:"-" bson:"derive_schedule,omitempty"`
+	Dream           *DreamJob            `json:"-" bson:"dream,omitempty"`
+	DreamRun        *DreamRun            `json:"dream_run,omitempty" bson:"dream_run,omitempty"`
+	// DreamPromoted is the dream run that made this skill version active without a trial (dream_skill.go).
+	DreamPromoted string `json:"-" bson:"dream_promoted,omitempty"`
+	// DreamDerivedFrom are the memories a dream merged or derived this one from; erasing one erases this too.
+	DreamDerivedFrom   []string          `json:"-" bson:"dream_derived_from,omitempty"`
+	SkillCompatibility map[string]string `json:"skill_compatibility,omitempty" bson:"skill_compatibility,omitempty"`
+	ApprovedBy         string            `json:"approved_by,omitempty" bson:"approved_by,omitempty"`
+	ValidationID       string            `json:"validation_id,omitempty" bson:"validation_id,omitempty"`
+	Evaluation         *Evaluation       `json:"evaluation,omitempty" bson:"evaluation,omitempty"`
+	Passed             bool              `json:"passed,omitempty" bson:"passed"`
+	Embedding          *Embedding        `json:"embedding,omitempty" bson:"embedding,omitempty"`
+	Target             *Ref              `json:"target,omitempty" bson:"target,omitempty"`
+	RunAt              *time.Time        `json:"-" bson:"run_at,omitempty"`
+	LeaseUntil         time.Time         `json:"-" bson:"lease_until"`
+	LeaseToken         string            `json:"-" bson:"lease_token"`
+	Attempts           int               `json:"-" bson:"attempts"`
 	// ManualRetries counts operator retries of a failed job (ops_jobs.go), bounded by maxManualJobRetries.
 	ManualRetries int `json:"-" bson:"manual_retries,omitempty"`
 
@@ -481,6 +508,8 @@ type Hit struct {
 	Relations   []Ref       `json:"relations,omitempty" bson:"relations"`
 	Reasons     []string    `json:"reasons" bson:"reasons"`
 	Authority   string      `json:"authority" bson:"authority"`
+	// laneRanks is the hit's best 1-based position in each lane that found it (fusion fills it).
+	laneRanks map[string]int
 	// Repository-only evidence that its configured vector distance gate ran.
 	// Service rehydrates, authorizes and recomputes before exposing VectorMatch.
 	vectorDistanceLimit float64
@@ -511,6 +540,7 @@ type ContextBundle struct {
 	Authority               string          `json:"authority"`
 	Items                   []Hit           `json:"items"`
 	Degraded                []string        `json:"degraded,omitempty"`
+	budgetDropped           int             // approved items left out because the token budget was too small
 	Explain                 *RecallExplain  `json:"explain,omitempty"`
 	// EmptyReason says why a recall that found hits returned none (recall_quality.go).
 	EmptyReason string `json:"empty_reason,omitempty"`

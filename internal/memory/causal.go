@@ -173,6 +173,13 @@ func (s *Service) saveCausalLink(ctx context.Context, r Record, revive bool, act
 				return ErrConflict
 			}
 		}
+		// "A causes B" and "B causes A" cannot both stand; the reverse pair must be rejected first.
+		// shortcut: only the direct reverse is refused, walk the links when longer loops show up.
+		if back, e := tx.Get(ctx, colMemoryRelations, r.Scope, causalLinkID(r.Scope, r.Relations[1].ID, r.Relations[0].ID)); e == nil && back.Status != "rejected" {
+			return ErrConflict
+		} else if e != nil && !errors.Is(e, ErrNotFound) {
+			return e
+		}
 		cur, e := tx.Get(ctx, colMemoryRelations, r.Scope, r.ID)
 		switch {
 		case errors.Is(e, ErrNotFound):
@@ -310,12 +317,13 @@ func decideCausal(ctx context.Context, tx Tx, r *Record, action, actor string) e
 	return nil
 }
 
-// ListCausalLinks pages the scope's links of one status (default candidate, the
-// review queue), newest first, keeping only links whose memories the caller may
-// read. cursor is the offset next_cursor gave (observations use the same paging).
+// ListCausalLinks pages the scope's links of one status, newest first, keeping only
+// links whose memories the caller may read. With no status it lists the links that
+// stand and the ones waiting for review (active, then candidate). cursor is the offset next_cursor gave (observations use the same paging).
 func (s *Service) ListCausalLinks(ctx context.Context, token string, scope Scope, status, cursor string, limit int) (CausalLinkPage, error) {
+	statuses := []string{status}
 	if status == "" {
-		status = "candidate"
+		statuses, status = []string{statusActive, "candidate"}, statusActive
 	}
 	if limit == 0 {
 		limit = causalListDefault
@@ -328,9 +336,13 @@ func (s *Service) ListCausalLinks(ctx context.Context, token string, scope Scope
 	if err != nil {
 		return CausalLinkPage{}, err
 	}
-	rows, err := s.Repo.ListRecordsByStatus(ctx, scope, colMemoryRelations, status, causalScanMax)
-	if err != nil {
-		return CausalLinkPage{}, err
+	var rows []Record
+	for _, st := range statuses {
+		part, err := s.Repo.ListRecordsByStatus(ctx, scope, colMemoryRelations, st, causalScanMax)
+		if err != nil {
+			return CausalLinkPage{}, err
+		}
+		rows = append(rows, part...)
 	}
 	visible, err := s.readableCausal(ctx, token, d, scope, rows, offset+limit+1)
 	if err != nil {

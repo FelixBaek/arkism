@@ -81,6 +81,10 @@ func (s *Service) mergeGateCheck(ctx context.Context, token string, actor Decisi
 	if cand.Kind == "lesson" {
 		threshold = min(threshold, lessonNearDuplicateSimilarity)
 	}
+	similar, vec, err = s.mergeGateVectors(ctx, scope, cand, similar)
+	if err != nil {
+		return false, err
+	}
 	targets, bestSim := mergeGateTargets(similar, vec, space, threshold, cand.Kind == "lesson")
 	if len(targets) == 0 {
 		return false, nil
@@ -103,6 +107,34 @@ func (s *Service) mergeGateCheck(ctx context.Context, token string, actor Decisi
 		return false, err
 	}
 	return true, nil
+}
+
+// mergeGateVectors embeds the candidate's text and each nearby memory's text the same way
+// (text only, as documents) for the comparison. A memory's stored vector also covers its
+// summary and context and the search vector is a query, so the same sentence scored far
+// below the bar against either; comparing like with like needs no reindex.
+func (s *Service) mergeGateVectors(ctx context.Context, scope Scope, cand Record, similar []Record) ([]Record, []float64, error) {
+	texts, kept := []string{mergeQueryText(cand)}, []Record{}
+	for _, m := range similar {
+		// Only text this embedder already holds (the memory is embedded) and may be sent again.
+		if t := mergeQueryText(m); m.Embedding != nil && t != "" && safeTransfer(t) {
+			texts, kept = append(texts, t), append(kept, m)
+		}
+	}
+	if len(kept) == 0 {
+		return nil, nil, nil
+	}
+	batch, callErr, err := s.meteredEmbed(ctx, scope, "embedding_document", texts, "document")
+	if err != nil {
+		return nil, nil, err
+	}
+	if callErr != nil || len(batch.Items) != len(texts) {
+		return nil, nil, errMergeGateUnembedded
+	}
+	for i := range kept {
+		kept[i].Embedding = &batch.Items[i+1]
+	}
+	return kept, batch.Items[0].Vector, nil
 }
 
 var errMergeGateUnembedded = fmt.Errorf("%w: candidate not embedded", ErrUnavailable)

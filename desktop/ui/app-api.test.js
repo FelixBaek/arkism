@@ -65,3 +65,17 @@ test("a form upload goes to the app bridge as multipart bytes with its boundary,
   assert.equal(fetched[0][0], "http://s/v1/files/memories/batch");
   assert.match(fetched[0][1].headers["Content-Type"], /^multipart\/form-data; boundary=/);
 });
+
+test("a call the server answers later (202) is followed to its operation: the result comes back, a failure keeps its code", async () => {
+  const { createAppApi } = await import("./modules/appApi.mjs");
+  const sent = [], accepted = { status: 202, body: JSON.stringify({ operation_id: "deferred-1", kind: "deferred_call", status: "running", location: "/v1/operations/deferred-1?workspace_id=w" }) };
+  const replies = [accepted, { status: 200, body: "{\"status\":\"running\"}" }, { status: 200, body: "{\"status\":\"done\",\"result\":{\"draft\":7}}" },
+    accepted, { status: 200, body: "{\"status\":\"failed\",\"error\":\"conflict\"}" }, { status: 202, body: "{\"job_id\":\"j\"}" }];
+  const deps = { state: { server: "http://s", token: "t", scope: {} }, trimSlash: (s) => s, readJSON: (t) => JSON.parse(t), wait: async () => {},
+    tauri: { invoke: async (cmd, a) => { sent.push(`${a.method} ${a.path}`); return replies.shift(); } } };
+  const api = createAppApi(deps);
+  assert.deepEqual(await api.request("/v1/skills/generate", { method: "POST", body: "{}" }), { draft: 7 });
+  assert.deepEqual(sent, ["POST /v1/skills/generate", "GET /v1/operations/deferred-1?workspace_id=w", "GET /v1/operations/deferred-1?workspace_id=w"]);
+  await assert.rejects(api.request("/v1/skills/generate", { method: "POST", body: "{}" }), (e) => e.code === "conflict" && e.status === 500);
+  assert.deepEqual(await api.request("/v1/spaces/w/p/export", { method: "POST" }), { job_id: "j" }); // other 202 answers pass through
+});

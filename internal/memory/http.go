@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"mime"
@@ -68,6 +69,7 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 	registerMemoryCoreHTTP(mux, s, stats)
 	registerMemoryreachsuggestionsCoreHTTP(mux, s, stats)
 	registerMaintenanceProposalsCoreHTTP(mux, s, stats)
+	registerDreamRunsCoreHTTP(mux, s)
 	registerSkillsCoreHTTP(mux, s, stats)
 	registerSkilltrialsCoreHTTP(mux, s, stats)
 	registerSkilltrialoutcomesCoreHTTP(mux, s, stats)
@@ -255,15 +257,38 @@ func decodeLimit(w http.ResponseWriter, r *http.Request, v any, limit int64) boo
 	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
-	if d.Decode(v) != nil {
-		respond(w, nil, ErrInvalid)
+	if e := d.Decode(v); e != nil {
+		respond(w, nil, invalidf("%s", decodeReason(e, limit)))
 		return false
 	}
 	if d.Decode(new(any)) != io.EOF {
-		respond(w, nil, ErrInvalid)
+		respond(w, nil, invalidf("body: more than one JSON value"))
 		return false
 	}
 	return true
+}
+
+// decodeReason names the field a request body got wrong without echoing Go type names.
+func decodeReason(e error, limit int64) string {
+	var syntax *json.SyntaxError
+	var typ *json.UnmarshalTypeError
+	var tooBig *http.MaxBytesError
+	const unknown = "json: unknown field "
+	switch {
+	case errors.As(e, &tooBig):
+		return fmt.Sprintf("body: larger than %d bytes", limit)
+	case errors.As(e, &typ):
+		return fmt.Sprintf("%s: wrong JSON type, got %s", typ.Field, typ.Value)
+	case errors.As(e, &syntax):
+		return fmt.Sprintf("body: malformed JSON at offset %d", syntax.Offset)
+	case errors.Is(e, io.EOF):
+		return "body: empty"
+	case errors.Is(e, io.ErrUnexpectedEOF):
+		return "body: JSON ends early"
+	case strings.HasPrefix(e.Error(), unknown):
+		return "body: unknown field " + strings.TrimPrefix(e.Error(), unknown)
+	}
+	return "body: not valid JSON for this request"
 }
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set(headerContentType, "application/json")
@@ -276,7 +301,14 @@ func respond(w http.ResponseWriter, v any, e error) {
 		return
 	}
 	code, status := errorResponse(e)
-	writeJSON(w, status, map[string]string{"code": code})
+	body := map[string]string{"code": code}
+	var why reasonError
+	if errors.As(e, &why) {
+		body["detail"] = why.detail
+	} else if errors.As(e, new(rlsRefusal)) {
+		body["detail"] = "the database row policy refused a write this call needs (reads write an audit row); the token lacks write access to this scope"
+	}
+	writeJSON(w, status, body)
 }
 func errorResponse(e error) (string, int) {
 	var flowLimit flowLimitError
@@ -307,7 +339,7 @@ func errorResponse(e error) (string, int) {
 		code, status = "semantic_lane_unavailable", 503
 	case errors.Is(e, ErrInvalid):
 		code, status = "invalid_request", 400
-	case errors.Is(e, ErrDenied):
+	case errors.Is(e, ErrDenied), errors.As(e, new(rlsRefusal)): // a row the database policy refused
 		code, status = "access_denied", 403
 	case errors.Is(e, ErrNotFound):
 		code, status = "not_found", 404

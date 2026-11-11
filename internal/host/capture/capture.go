@@ -145,11 +145,15 @@ func searchMemories(query, project string, limit int, timeout float64) (items []
 func searchMemoriesObserved(query, project string, limit int, timeout float64, observe searchResponseObserver) (items []any, vectorRan bool, err error) {
 	deadline := monotonic() + timeout
 	body := map[string]any{"scope": capScope(), "query": head(query, 1000), "modes": []any{"exact", "fts", "vector"},
-		"purpose": "answer", "destination": "internal", "limit": limit, "max_chars": 6000}
+		"purpose": "answer", "destination": "internal", "limit": limit, "max_chars": 6000, "aggregate_items": true}
 	if project != "" { // older servers reject unknown fields; no key already means personal and general only
 		body["project_key"] = project
 	}
-	return recallPostObserved("/v1/search", body, timeout, deadline, observe)
+	items, vectorRan, err = recallPostObserved("/v1/search", body, timeout, deadline, observe)
+	if host.DropAggregateOptIn(body, err) && deadline > monotonic() {
+		return recallPostObserved("/v1/search", body, deadline-monotonic(), deadline, observe)
+	}
+	return items, vectorRan, err
 }
 func recallPostObserved(path string, body map[string]any, timeout, deadline float64, observe searchResponseObserver) (items []any, vectorRan bool, err error) {
 	res, err := capPost(path, body, secs(timeout))

@@ -93,6 +93,11 @@ func TestExtractPreviewFiltersPrivacyAndStoresNothing(t *testing.T) {
 	if _, err = f.svc.ExtractPreview(testCtx, f.human, ExtractPreviewInput{Scope: scopeA, Text: text}); !errors.Is(err, ErrModelNotConfigured) {
 		t.Fatalf("no model: %v", err)
 	}
+	// The wiki features off but a model configured: extraction still runs.
+	f.svc.ExtractModel = &fakeWikiLLM{answers: []string{extractAnswer(extractRuleClaim)}}
+	if out, err = f.svc.ExtractPreview(testCtx, f.human, ExtractPreviewInput{Scope: scopeA, Text: text}); err != nil || len(out.Claims) != 1 {
+		t.Fatalf("extraction without the wiki switch: %+v %v", out, err)
+	}
 }
 
 func TestFileMemoriesDryRunAndCapture(t *testing.T) {

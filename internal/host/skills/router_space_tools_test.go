@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/FelixBaek/arkism/internal/host"
 	"time"
 )
 
@@ -57,7 +59,8 @@ func TestSpaceToolAllowlistEmptyKeepsAllUnreadableClosesUnlessOpen(t *testing.T)
 	if spaceToolAllowed("remember") {
 		t.Fatal("unreadable settings with nothing read before must allow no tool")
 	}
-	if _, err := callTool("remember", map[string]any{"text": "x"}); err == nil || !strings.Contains(err.Error(), "tool_not_enabled") {
+	// The refusal names the unreachable server, not the space's settings.
+	if _, err := callTool("remember", map[string]any{"text": "x"}); err == nil || !strings.Contains(err.Error(), "tool_not_enabled") || !strings.Contains(err.Error(), "could not be read") {
 		t.Fatalf("remember err = %v", err)
 	}
 	t.Setenv("ARKISM_MCP_TOOLS_ON_ERROR", "open")
@@ -120,5 +123,15 @@ func TestExtensionToolsListedAndCalledThroughServer(t *testing.T) {
 	}
 	if _, err := callTool("ext_house_other", map[string]any{}); err == nil {
 		t.Fatal("an extension tool the server did not list must be refused")
+	}
+}
+
+// A refused request says what to try next and still carries its status.
+func TestRouterRefusalHintsNextStep(t *testing.T) {
+	for code, want := range map[int]string{404: "list or search", 409: "current revision", 403: "ask the user", 418: "(HTTP 418)"} {
+		err := error(routerRefusal(code))
+		if !strings.Contains(err.Error(), want) || host.HTTPCode(err) != code {
+			t.Fatalf("%d: %v", code, err)
+		}
 	}
 }

@@ -89,7 +89,7 @@ func meteredCall[T any](ctx context.Context, s *Service, m modelCallSpec, call f
 	if ctx, callErr = s.Extensions.beforeModelCall(ctx, &m); callErr != nil {
 		return out, ProviderUsage{}, callErr, nil
 	}
-	rows, err := s.reserveProviderCalls(ctx, m.scope, m.operation, m.provider, m.model, 1, operationCap(m.operation))
+	rows, err := s.reserveProviderCalls(ctx, m.scope, m.operation, m.provider, m.model, 1, s.modelCallCap(m.operation))
 	if err != nil {
 		return out, ProviderUsage{}, nil, err
 	}

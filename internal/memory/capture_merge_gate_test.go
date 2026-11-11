@@ -7,17 +7,18 @@ import (
 	"time"
 )
 
-// embedText stores the memory's vector for its own text, as the worker would.
+// embedText stores the memory's vector as the worker does: over its whole content
+// (text, summary and context), not the text alone.
 func (f *fixture) embedText(m Record) {
 	f.t.Helper()
-	out, err := f.emb.Embed(testCtx, []string{m.Text}, "document")
-	if err != nil {
-		f.t.Fatal(err)
-	}
 	f.repo.mu.Lock()
 	defer f.repo.mu.Unlock()
 	key := recKey(m.Scope, m.ID)
 	r := f.repo.store["memories"][key]
+	out, err := f.emb.Embed(testCtx, []string{recordContent(r)}, "document")
+	if err != nil {
+		f.t.Fatal(err)
+	}
 	out[0].ContentHash = ContentHash(recordContent(r))
 	r.Embedding = &out[0]
 	f.repo.store["memories"][key] = r
@@ -217,4 +218,21 @@ func (f *fixture) drainWorker() {
 		}
 	}
 	f.t.Fatal("the worker did not drain its queue")
+}
+
+// A memory's stored vector also covers its summary; the gate must still see the same sentence.
+func TestCaptureMergeGateComparesSentenceWithSentence(t *testing.T) {
+	f := newFixture(t)
+	f.emb.semantic = true
+	m := f.activeMemory("응답은 항상 쉬운 한국어로 짧게 쓴다")
+	f.repo.mu.Lock()
+	r := f.repo.store["memories"][recKey(m.Scope, m.ID)]
+	r.Summary = "전혀 다른 낱말로 길게 적어 둔 요약 하나 둘 셋 넷 다섯 여섯 일곱"
+	f.repo.store["memories"][recKey(m.Scope, m.ID)] = r
+	f.repo.mu.Unlock()
+	f.embedText(m)
+	got := f.capture(f.human, captureInput(scopeA, "evt-same", explicit("응답은 항상 쉬운 한국어로 짧게 쓴다 알겠지")))
+	if got[0].Reason != "merge_proposed" {
+		t.Fatal("same sentence did not reach a merge proposal", got)
+	}
 }

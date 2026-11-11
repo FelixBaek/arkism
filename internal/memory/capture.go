@@ -71,6 +71,8 @@ type CaptureClaim struct {
 	Tags     []string          `json:"tags,omitempty"`
 	Metadata map[string]string `json:"metadata,omitempty"`
 	occurred *RecallTimeWindow
+	// effectiveAt and expiresAt are the times a space bundle recorded for the memory; only import sets them.
+	effectiveAt, expiresAt *time.Time
 	// locator names where in the source the claim came from (a file page or
 	// chunk); only server-side extraction sets it, clients always get "original".
 	locator string
@@ -279,6 +281,10 @@ func (s *Service) capture(ctx context.Context, token string, in CaptureInput) (C
 	}
 	if capturedAny(out) {
 		s.autoApplySpaceTemplate(ctx, token, actor, in.Scope, false)
+		s.noteDreamActivity(ctx, in.Scope)
+		if in.Scope.AgentID != "" { // a user's own statement lands without the agent (captureClaimScope)
+			s.noteDreamActivity(ctx, Scope{WorkspaceID: in.Scope.WorkspaceID, ProjectID: in.Scope.ProjectID, UserID: in.Scope.UserID})
+		}
 	}
 	return out, nil
 }
@@ -385,8 +391,8 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 		capture:       write,
 		MemoryContext: c.MemoryContext, Occurred: c.occurred,
 		Scope: scope, Kind: c.Kind, Text: c.Text, Summary: c.Reason, Keywords: []string{c.Subject}, Tags: tags, Entities: c.Entities, entityRelations: c.Relations,
-		ExpiresAt: claimExpiry(c, time.Now()),
-		Sources:   canonicalSources, Confidence: c.Confidence, Generated: true, Generator: in.Generator,
+		EffectiveAt: c.effectiveAt, ExpiresAt: cmp.Or(c.expiresAt, claimExpiry(c, time.Now())),
+		Sources: canonicalSources, Confidence: c.Confidence, Generated: true, Generator: in.Generator,
 		SourceEventID: src.ID, Relations: c.SourceRefs, OnSecret: "block", Classification: c.classification(),
 	})
 	if err != nil {

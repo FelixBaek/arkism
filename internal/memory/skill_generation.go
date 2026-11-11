@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"slices"
@@ -18,6 +19,8 @@ type GenerateSkillInput struct {
 	Path           string               `json:"path"`
 	Lessons        []Ref                `json:"lessons"`
 	ComparisonPlan *SkillComparisonPlan `json:"comparison_plan"`
+	// drafter replaces Service.Drafter for a server-side caller (the dream drafts with its own model).
+	drafter SkillDrafter
 }
 
 func (s *Service) GenerateSkill(ctx context.Context, token string, in GenerateSkillInput) (ImportSkillResult, error) {
@@ -47,7 +50,7 @@ func (s *Service) GenerateSkill(ctx context.Context, token string, in GenerateSk
 	s.draftMu.Lock()
 	defer s.draftMu.Unlock()
 	requestHash := ContentHash(structuredText(in))
-	receiptID := "skill-generation-" + ContentHash(structuredText(in.Scope)+"\n"+actor.PrincipalID+"\n"+actor.Role+"\n"+in.EventID)
+	receiptID := skillGenerationReceiptID(in.Scope, actor, in.EventID)
 	if receipt, e := s.Repo.Get(ctx, colJobs, in.Scope, receiptID); e == nil {
 		if skillGenerationReceiptConflicts(receipt, requestHash, actor) {
 			return out, ErrConflict
@@ -68,15 +71,16 @@ func (s *Service) GenerateSkill(ctx context.Context, token string, in GenerateSk
 	if !allowed.ExternalTransfer || !allowed.ContentSafe || !safeTransfer(snapshot) {
 		return out, ErrDenied
 	}
-	if s.Drafter == nil {
+	drafter := cmp.Or(in.drafter, s.Drafter)
+	if drafter == nil {
 		return out, ErrUnavailable
 	}
-	generation := s.Drafter.Generator()
+	generation := drafter.Generator()
 	if !validGenerator(&generation) {
 		return out, ErrUnavailable
 	}
 	preparedHash := ContentHash(requestHash + "\n" + snapshot + "\n" + structuredText(generation))
-	draft, err := s.draftSkill(ctx, token, in, actor, material, generation, preparedHash)
+	draft, err := s.draftSkill(ctx, token, drafter, in, actor, material, generation, preparedHash)
 	if err != nil {
 		return out, err
 	}
@@ -98,6 +102,11 @@ func (s *Service) GenerateSkill(ctx context.Context, token string, in GenerateSk
 	return s.ProposeSkill(ctx, token, proposal)
 }
 
+// skillGenerationReceiptID names the receipt of one actor's generation event.
+func skillGenerationReceiptID(scope Scope, actor Decision, eventID string) string {
+	return "skill-generation-" + ContentHash(structuredText(scope)+"\n"+actor.PrincipalID+"\n"+actor.Role+"\n"+eventID)
+}
+
 func invalidGenerateSkillInput(in GenerateSkillInput) bool {
 	return !validScope(in.Scope) || !workCheckpointIDPattern.MatchString(in.EventID) || !validRunLabel(in.SkillID, 256) || len(in.Path) > 4096 || strings.TrimSpace(in.Path) != in.Path || strings.IndexFunc(in.Path, unicode.IsControl) >= 0 || !strings.HasSuffix(in.Path, "SKILL.md") || in.ComparisonPlan == nil || !validComparisonPlan(in.ComparisonPlan) || len(in.Lessons) < improvementMinRuns || len(in.Lessons) > 16 || !safeTransfer(structuredText(in))
 }
@@ -107,8 +116,8 @@ func skillGenerationReceiptConflicts(receipt Record, requestHash string, actor D
 }
 
 // draftSkill recovers a durable prepared draft or makes one metered provider call.
-func (s *Service) draftSkill(ctx context.Context, token string, in GenerateSkillInput, actor Decision, material SkillDraftInput, generation Generator, preparedHash string) (SkillDraft, error) {
-	_, durable := s.Drafter.(*AnthropicSkillDrafter)
+func (s *Service) draftSkill(ctx context.Context, token string, drafter SkillDrafter, in GenerateSkillInput, actor Decision, material SkillDraftInput, generation Generator, preparedHash string) (SkillDraft, error) {
+	_, durable := drafter.(*AnthropicSkillDrafter)
 	if durable {
 		draft, recovered, err := s.readPreparedDraft(ctx, token, in, actor, preparedHash)
 		if err != nil || recovered {
@@ -117,12 +126,12 @@ func (s *Service) draftSkill(ctx context.Context, token string, in GenerateSkill
 	}
 	m := modelCallSpec{scope: in.Scope, operation: "skill_draft", kind: "draft", provider: "skill_llm", model: generation.Model, prompt: structuredText(material)}
 	draft, _, draftErr, err := meteredCall(ctx, s, m, func(ctx context.Context) (draft SkillDraft, usage ProviderUsage, err error) {
-		if direct, ok := s.Drafter.(interface {
+		if direct, ok := drafter.(interface {
 			DraftAuthorized(context.Context, string, Scope, string, []Ref, SkillDraftInput) (SkillDraft, ProviderUsage, error)
 		}); ok {
 			draft, usage, err = direct.DraftAuthorized(ctx, token, in.Scope, in.EventID, in.Lessons, material)
 		} else {
-			draft, usage, err = s.Drafter.Draft(ctx, material)
+			draft, usage, err = drafter.Draft(ctx, material)
 		}
 		if invalidSkillDraftUsage(usage, generation.Model) {
 			usage = ProviderUsage{Provider: "skill_llm", Model: generation.Model, Requests: 1}

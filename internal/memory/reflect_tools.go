@@ -5,6 +5,7 @@ package memory
 // per-record external-transfer gate as the first search before it reaches a prompt.
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"slices"
@@ -203,7 +204,8 @@ func (s *Service) reflectRecall(ctx context.Context, token string, in ReflectInp
 		if search.Filters != nil {
 			f = *search.Filters
 		}
-		f.CreatedFrom, f.CreatedTo = call.Args.From, call.Args.To
+		// The request's own window wins over the tool's.
+		f.CreatedFrom, f.CreatedTo = cmp.Or(f.CreatedFrom, call.Args.From), cmp.Or(f.CreatedTo, call.Args.To)
 		search.Filters = &f
 	}
 	if call.Name == reflectToolObservations {

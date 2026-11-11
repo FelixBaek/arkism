@@ -417,6 +417,13 @@ func enableTool(kind, name string) (host.Obj, error) {
 		}
 	}
 	if len(done) == 0 {
+		for _, agent := range kitMCPAgents {
+			for _, n := range names {
+				if _, live := agentMCPNames(agent, stash)[n]; live {
+					return nil, runtimeError{"이미 켜져 있어요: " + n}
+				}
+			}
+		}
 		return nil, runtimeError{"꺼 둔 곳이 없어요: 설치가 안 됐다면 sync-skills --execute로 먼저 배포하세요"}
 	}
 	return host.Obj{{Key: "enabled", Value: done}, {Key: "usable", Value: "next_session"}}, nil

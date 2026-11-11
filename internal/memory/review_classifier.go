@@ -204,7 +204,7 @@ func (s *Service) TrainReviewClassifier(ctx context.Context, token string, scope
 		for i, r := range batch {
 			texts[i] = r.Text
 		}
-		vecs, err := s.embedReviewTexts(ctx, scope, texts)
+		vecs, err := s.embedReviewTexts(ctx, scope, texts, embedInputDocument)
 		if err != nil || len(vecs) != len(batch) {
 			return nil, ReviewClassifierReport{}, ErrUnavailable
 		}
@@ -284,7 +284,7 @@ func (s *Service) computeReviewScores(ctx context.Context, scope Scope, c *Revie
 			keys = append(keys, key)
 		}
 	}
-	items, err := s.embedReviewTexts(ctx, scope, texts)
+	items, err := s.embedReviewTexts(ctx, scope, texts, embedInputDocument)
 	if err != nil || len(items) != len(keys) {
 		return nil
 	}
@@ -359,8 +359,8 @@ func (s *Service) reviewTrainingRows(ctx context.Context, token string, scope Sc
 	return rows, nil
 }
 
-func (s *Service) embedReviewTexts(ctx context.Context, scope Scope, texts []string) ([]Embedding, error) {
-	batch, callErr, err := s.meteredEmbed(ctx, scope, "embedding_review", texts, "document")
+func (s *Service) embedReviewTexts(ctx context.Context, scope Scope, texts []string, purpose string) ([]Embedding, error) {
+	batch, callErr, err := s.meteredEmbed(ctx, scope, "embedding_review", texts, purpose)
 	if err != nil {
 		return nil, err
 	}

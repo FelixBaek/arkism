@@ -43,11 +43,11 @@ func TestCollaborationMCPHandoff(t *testing.T) {
 		}
 		return map[string]any{"authority": "data_only_untrusted", "status": "completed"}, nil
 	}
-	call(t, "handoff_work", `{"id":"handoff-1"}`)
+	call(t, "handoff_work", `{"id":"handoff-1","parent_work_id":"w1","sender":"claude_code","recipient":"codex","session_id":"s1","task":"check","model":"m","cwd":"/tmp"}`)
 	host.RunHandoff = func(map[string]any, host.Requester) (map[string]any, error) {
 		return nil, errors.New("evidence revoked")
 	}
-	if _, err := callTool("handoff_work", map[string]any{"id": "handoff-1"}); err == nil {
+	if _, err := callTool("handoff_work", j(t, `{"id":"handoff-1","parent_work_id":"w1","sender":"claude_code","recipient":"codex","session_id":"s1","task":"check","model":"m","cwd":"/tmp"}`)); err == nil {
 		t.Fatal("handoff denial hidden")
 	}
 }

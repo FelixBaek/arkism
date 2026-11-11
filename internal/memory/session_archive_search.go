@@ -353,6 +353,27 @@ func archiveSafeContent(content json.RawMessage, role string) (string, string, b
 	return b.String(), role, true
 }
 
+// archiveQueryAt finds query in a message: the exact phrase first, otherwise every word of
+// it in any order, ignoring letter case and a trailing Korean particle. It returns a byte
+// offset near the first word, or -1.
+// shortcut: oversized messages still match the exact phrase only (session_archive_large.go); widen there if such sessions matter.
+func archiveQueryAt(text, query string) int {
+	if at := strings.Index(text, query); at >= 0 {
+		return at
+	}
+	lower, first := strings.ToLower(text), -1
+	for _, word := range strings.Fields(strings.ToLower(query)) {
+		at := strings.Index(lower, stripKoreanSuffix(word, entityKoreanKeepLen))
+		if at < 0 {
+			return -1
+		}
+		if first < 0 {
+			first = at
+		}
+	}
+	return min(first, len(text)-1)
+}
+
 func archiveSupported(format string) bool {
 	return format == "sqlite_snapshot" || format == "jsonl" || format == "reconstructed_agentsview" || format == "reconstructed_zcode"
 }
@@ -577,7 +598,7 @@ func (s *Service) SearchSessionArchiveMessages(ctx context.Context, token string
 					if containsSecret(text) {
 						out.Secrets++
 						out.SecretRefs = append(out.SecretRefs, start)
-					} else if at := strings.Index(text, in.Query); at >= 0 {
+					} else if at := archiveQueryAt(text, in.Query); at >= 0 {
 						begin := max(0, at-256)
 						for begin > 0 && !utf8.RuneStart(text[begin]) {
 							begin--

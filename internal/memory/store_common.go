@@ -161,9 +161,9 @@ func checkReplaceRevision(recRevision, revision int64) error {
 	case recRevision == revision || recRevision == revision+1:
 		return nil
 	case recRevision < revision:
-		return ErrConflict
+		return revisionConflict(recRevision, revision)
 	default:
-		return ErrInvalid
+		return invalidf("revision: sent %d, ahead of stored %d", recRevision, revision)
 	}
 }
 

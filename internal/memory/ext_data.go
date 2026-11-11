@@ -146,6 +146,10 @@ func (s *Service) ListExtensionData(ctx context.Context, token string, scope Sco
 			out.Items = append(out.Items, extDataItem(r))
 		}
 	}
+	// A name with no entries that no loaded extension answers to is a typo, not an empty store.
+	if loaded, ok := s.Extensions.Endpoints.(interface{ Has(string) bool }); len(rows) == 0 && cursor == "" && (!ok || !loaded.Has(extension)) {
+		return out, reasonError{ErrNotFound, fmt.Sprintf("extension: %q is not loaded and has no data in this space", extension)}
+	}
 	out.NextCursor = next
 	return out, nil
 }

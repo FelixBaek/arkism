@@ -85,3 +85,39 @@ func TestRerankRecordsProtocolAndKeyFile(t *testing.T) {
 		t.Fatal("missing key file", err)
 	}
 }
+
+// A self-hosted reranker refuses more than 32 texts per request, so a longer list goes in batches.
+func TestRerankBatchesLongLists(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var in teiRerankRequest
+		if json.NewDecoder(r.Body).Decode(&in) != nil || len(in.Texts) > teiRerankBatch {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			return
+		}
+		calls++
+		rows := make([]map[string]any, len(in.Texts))
+		for i, text := range in.Texts {
+			rows[i] = map[string]any{"index": i, "score": float64(len(text)) / 100}
+		}
+		_ = json.NewEncoder(w).Encode(rows)
+	}))
+	defer srv.Close()
+	rr, err := NewTEIReranker(TEIRerankConfig{URL: srv.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	texts := make([]string, 2*teiRerankBatch+3)
+	for i := range texts {
+		texts[i] = string(make([]byte, i+1))
+	}
+	scores, err := rr.Rerank(testCtx, "q", texts)
+	if err != nil || len(scores) != len(texts) || calls != 3 {
+		t.Fatal(len(scores), calls, err)
+	}
+	for i, s := range scores {
+		if math.Abs(s-float64(i+1)/100) > 1e-9 {
+			t.Fatalf("score %d = %v", i, s)
+		}
+	}
+}

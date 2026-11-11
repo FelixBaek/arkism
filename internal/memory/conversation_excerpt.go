@@ -93,11 +93,7 @@ func excerptLineMatches(lines, terms []string) ([][]bool, []int, []int) {
 }
 
 func lineHasTerm(have map[string]bool, term string) bool {
-	found := false
-	for _, word := range searchConceptWords(term) {
-		found = found || have[word]
-	}
-	return found
+	return termInTokens(term, func(word string) bool { return have[word] })
 }
 
 // excerptWindow is a sliding run of complete lines [start, end] and its term counts.

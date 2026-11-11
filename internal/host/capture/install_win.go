@@ -626,7 +626,11 @@ func instCodexConfig(text, client, origin string) (string, error) {
 		if !ok {
 			return "", errInstTOML
 		}
-		text = text[:span[0]] + stanza + "\n" + text[span[1]:]
+		rest := text[span[1]:]
+		if rest != "" { // the blank line separates sections; at the end of the file it would grow by one each install
+			rest = "\n" + rest
+		}
+		text = text[:span[0]] + stanza + rest
 	} else {
 		text = pyRstrip(text) + "\n\n" + stanza
 	}
@@ -1138,7 +1142,11 @@ func instRoaming(userRoot string) string {
 func instMain(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 	deepseekOnly := false
 	for _, a := range args {
-		deepseekOnly = deepseekOnly || a == "--deepseek-only"
+		if a != "--deepseek-only" { // --help used to install: anything unknown stops before a file changes
+			fmt.Fprintln(stderr, "usage: arkism install-arkism [--deepseek-only]")
+			return 2
+		}
+		deepseekOnly = true
 	}
 	summary, err := instInstall("", "", "", deepseekOnly)
 	if err != nil {

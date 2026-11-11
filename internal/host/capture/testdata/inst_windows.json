@@ -84,12 +84,12 @@
   {
    "in": "developer_instructions = \"\"\"\n[not a table]\n\"\"\"\n\n[mcp_servers.skill-router]\ncommand = \"a\" # old\n",
    "origin": "codex",
-   "out": "developer_instructions = \"\"\"\n[not a table]\n\"\"\"\n\n[mcp_servers.skill-router]\ncommand = \"C:\\\\Users\\\\u\\\\.config\\\\arkism\\\\arkism.exe\"\nargs = [\"windows\", \"mcp\", \"codex\"]\nenabled = true\n\n"
+   "out": "developer_instructions = \"\"\"\n[not a table]\n\"\"\"\n\n[mcp_servers.skill-router]\ncommand = \"C:\\\\Users\\\\u\\\\.config\\\\arkism\\\\arkism.exe\"\nargs = [\"windows\", \"mcp\", \"codex\"]\nenabled = true\n"
   },
   {
    "in": "developer_instructions = \"\"\"\n[not a table]\n\"\"\"\n\n[mcp_servers.skill-router]\ncommand = \"a\" # old\n",
    "origin": "grok",
-   "out": "developer_instructions = \"\"\"\n[not a table]\n\"\"\"\n\n[mcp_servers.skill-router]\ncommand = \"C:\\\\Users\\\\u\\\\.config\\\\arkism\\\\arkism.exe\"\nargs = [\"windows\", \"mcp\", \"grok\"]\nenabled = true\n\n"
+   "out": "developer_instructions = \"\"\"\n[not a table]\n\"\"\"\n\n[mcp_servers.skill-router]\ncommand = \"C:\\\\Users\\\\u\\\\.config\\\\arkism\\\\arkism.exe\"\nargs = [\"windows\", \"mcp\", \"grok\"]\nenabled = true\n"
   },
   {
    "in": "[mcp_servers.skill-router]\ncommand = \"\"\"\n[x]\n\"\"\"\n",
@@ -104,12 +104,12 @@
   {
    "in": "[mcp_servers.honcho]\nenabled = true\nurl = \"u\"\n[mcp_servers.skill-router]\ncommand = \"a\"\n",
    "origin": "codex",
-   "out": "[mcp_servers.honcho]\nenabled = false\nurl = \"u\"\n[mcp_servers.skill-router]\ncommand = \"C:\\\\Users\\\\u\\\\.config\\\\arkism\\\\arkism.exe\"\nargs = [\"windows\", \"mcp\", \"codex\"]\nenabled = true\n\n"
+   "out": "[mcp_servers.honcho]\nenabled = false\nurl = \"u\"\n[mcp_servers.skill-router]\ncommand = \"C:\\\\Users\\\\u\\\\.config\\\\arkism\\\\arkism.exe\"\nargs = [\"windows\", \"mcp\", \"codex\"]\nenabled = true\n"
   },
   {
    "in": "[mcp_servers.honcho]\nenabled = true\nurl = \"u\"\n[mcp_servers.skill-router]\ncommand = \"a\"\n",
    "origin": "grok",
-   "out": "[mcp_servers.honcho]\nenabled = false\nurl = \"u\"\n[mcp_servers.skill-router]\ncommand = \"C:\\\\Users\\\\u\\\\.config\\\\arkism\\\\arkism.exe\"\nargs = [\"windows\", \"mcp\", \"grok\"]\nenabled = true\n\n"
+   "out": "[mcp_servers.honcho]\nenabled = false\nurl = \"u\"\n[mcp_servers.skill-router]\ncommand = \"C:\\\\Users\\\\u\\\\.config\\\\arkism\\\\arkism.exe\"\nargs = [\"windows\", \"mcp\", \"grok\"]\nenabled = true\n"
   },
   {
    "in": "[mcp_servers]\nother = { command = \"x\" }\n",

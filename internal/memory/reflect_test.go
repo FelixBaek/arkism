@@ -156,6 +156,16 @@ func TestReflectPromptOnlyMakesNoModelCall(t *testing.T) {
 	}
 }
 
+func TestReflectEmptyAnswerIsAnError(t *testing.T) {
+	f, llm := reflectFixture(t)
+	f.activeMemory("empty needle", "needle")
+	llm.answers = []string{"  "}
+	_, err := f.svc.Reflect(testCtx, f.human, ReflectInput{Scope: scopeA, Query: "needle"})
+	if code, status := errorResponse(err); code != "invalid_model_output" || status != 502 {
+		t.Fatal(code, status, err)
+	}
+}
+
 func TestReflectWithoutModel(t *testing.T) {
 	f := newFixture(t)
 	_, err := f.svc.Reflect(testCtx, f.human, ReflectInput{Scope: scopeA, Query: "needle"})

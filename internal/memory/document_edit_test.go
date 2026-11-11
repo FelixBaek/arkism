@@ -193,3 +193,14 @@ func TestListDocumentsTextFilter(t *testing.T) {
 		t.Fatalf("long q = %v", err)
 	}
 }
+
+func TestExtractDocumentCountsCandidatesAcrossUploads(t *testing.T) {
+	f, _ := wikiFixture(t, extractAnswer(extractRuleClaim), extractAnswer(extractRuleClaim))
+	f.svc.Repo = opsFakeRepo{f.repo}
+	up := extractUpload(t, f, "선택 상태에는 주황 강조선을 쓰지 않는다.")
+	again := extractUpload(t, f, "선택 상태에는 주황 강조선을 쓰지 않는다.")
+	list, err := f.svc.ListExtractDocuments(testCtx, f.human, scopeA, DocumentPage{Limit: 10})
+	if err != nil || len(list.Items) != 1 || again.DocumentID != up.DocumentID || again.JobID == up.JobID || again.CandidatesCreated != 0 || list.Items[0].CandidatesCreated != 1 {
+		t.Fatalf("list %+v again %+v %v", list, again, err)
+	}
+}

@@ -90,3 +90,32 @@ func TestOutcomeWeightsReadStoredSignals(t *testing.T) {
 		t.Fatalf("off switch still weighs: %v", got)
 	}
 }
+
+func TestKeepPeriodHitsRestoresTheTimeLane(t *testing.T) {
+	row := func(id string, at time.Time) ScoredHit {
+		return ScoredHit{Hit: Hit{ID: id, Collection: colMemories, CreatedAt: &at}}
+	}
+	aug, sep := time.Date(2026, 8, 10, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
+	all := []ScoredHit{row("a", time.Time{}), row("b", time.Time{}), row("c", time.Time{}), row("d", time.Time{}), row("sep1", sep), row("sep2", sep), row("aug", aug)}
+	trace := &recallTrace{lanes: []string{"vector", "temporal"}, windows: []timeWindow{
+		{From: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), To: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)},
+		{From: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), To: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)},
+	}}
+	lists := [][]Hit{nil, {all[4].Hit, all[5].Hit, all[6].Hit}}
+	ids := func(rows []ScoredHit) string {
+		out := ""
+		for _, r := range rows {
+			out += r.ID + " "
+		}
+		return out
+	}
+	if got := ids(keepPeriodHits(all[:4], all, lists, trace, time.UTC)); got != "a b aug sep1 " {
+		t.Fatalf("one hit per window replaces the tail, got %q", got)
+	}
+	if got := ids(keepPeriodHits(all[:1], all, lists, trace, time.UTC)); got != "a " {
+		t.Fatalf("a single result is never replaced, got %q", got)
+	}
+	if got := ids(keepPeriodHits(all[:4], all, lists[:1], &recallTrace{lanes: []string{"vector"}}, time.UTC)); got != "a b c d " {
+		t.Fatalf("no time lane, no change, got %q", got)
+	}
+}

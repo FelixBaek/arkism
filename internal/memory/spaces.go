@@ -266,11 +266,16 @@ type SpaceBundleRecord struct {
 	Summary       string         `json:"summary,omitempty"`
 	Keywords      []string       `json:"keywords,omitempty"`
 	Tags          []string       `json:"tags,omitempty"`
+	Entities      []EntityInput  `json:"entities,omitempty"`
 	MemoryContext *MemoryContext `json:"memory_context,omitempty"`
 	Directive     *Directive     `json:"directive,omitempty"`
 	// MentalModel carries only the definition; a person refreshes and approves the text in the new space.
 	MentalModel *MentalModelInput `json:"mental_model,omitempty"`
 	CreatedAt   time.Time         `json:"created_at"`
+	// EffectiveAt and ExpiresAt keep a memory's own time across the move; without them every
+	// imported memory would start at the import time and a temporary one would never expire.
+	EffectiveAt *time.Time `json:"effective_at,omitempty"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
 }
 
 type spaceBundleLine struct {
@@ -556,9 +561,6 @@ func (s *Service) changeSpaceConfig(ctx context.Context, scope Scope, d Decision
 		if err != nil && !fresh {
 			return err
 		}
-		if expected >= 0 && rec.Revision != expected {
-			return ErrConflict
-		}
 		now := time.Now().UTC()
 		config := defaultSpaceConfig()
 		if !fresh && rec.SpaceConfig != nil {
@@ -566,7 +568,10 @@ func (s *Service) changeSpaceConfig(ctx context.Context, scope Scope, d Decision
 			config.Aliases = slices.Clone(config.Aliases)
 		}
 		if err = change(&config); err != nil {
-			return err
+			return err // a wrong value is reported before a stale revision: fixing it comes first
+		}
+		if expected >= 0 && rec.Revision != expected {
+			return ErrConflict
 		}
 		if fresh {
 			rec = Record{ID: scopedSingletonID(spaceConfigID, scope), Scope: scope, Kind: "space_config", Status: statusActive, CreatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role}
@@ -996,10 +1001,44 @@ func spaceClaim(bundleID, section string, r SpaceBundleRecord) CaptureClaim {
 	}
 	c := CaptureClaim{Subject: subject, Text: r.Text, Kind: kind, Basis: "inferred", MemoryContext: copyMemoryContext(r.MemoryContext),
 		Reason: cutUTF8("space bundle "+bundleID+" original "+section+"/"+r.ID, 500)}
+	// A memory with no time of its own began when it was made, so that is the time it keeps.
+	from := r.EffectiveAt
+	if from == nil && !r.CreatedAt.IsZero() {
+		from = &r.CreatedAt
+	}
+	if from != nil && storableTime(*from) && (r.ExpiresAt == nil || r.ExpiresAt.After(*from) && storableTime(*r.ExpiresAt)) {
+		c.effectiveAt, c.expiresAt = from, r.ExpiresAt
+	}
 	if !validCaptureClaim(c) {
 		c.MemoryContext = nil
 	}
+	// The person's own labels and entities move too; the system's tags are made again here.
+	// A label this server would refuse is left behind rather than failing the memory.
+	labelled := c
+	labelled.Tags, labelled.Metadata = spaceClaimLabels(r.Tags)
+	if validCaptureClaim(labelled) {
+		c = labelled
+	}
+	labelled = c
+	labelled.Entities = r.Entities
+	if validCaptureClaim(labelled) {
+		c = labelled
+	}
 	return c
+}
+
+// spaceClaimLabels splits exported tags back into plain tags and "meta:key=value" metadata.
+func spaceClaimLabels(tags []string) ([]string, map[string]string) {
+	var plain []string
+	meta := map[string]string{}
+	for _, t := range tags {
+		if k, v, ok := strings.Cut(strings.TrimPrefix(t, "meta:"), "="); ok && strings.HasPrefix(t, "meta:") {
+			meta[k] = v
+		} else if !strings.Contains(t, ":") {
+			plain = append(plain, t)
+		}
+	}
+	return plain, meta
 }
 
 func (s *Service) importSpaceChunk(ctx context.Context, token string, scope Scope, m SpaceManifest, n int, claims []CaptureClaim, origin []bool, approved bool, report *SpaceReport) error {

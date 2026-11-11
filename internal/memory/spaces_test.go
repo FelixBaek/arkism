@@ -430,3 +430,40 @@ func TestSpaceConfigKeyedPerSpaceWithLegacyRow(t *testing.T) {
 		t.Fatal("two spaces share one settings id")
 	}
 }
+
+func TestSpaceBundleRoundTripKeepsMemoryTimes(t *testing.T) {
+	f := newFixture(t)
+	effective := time.Date(2023, 3, 1, 0, 0, 0, 0, time.UTC)
+	expires := time.Now().UTC().Add(48 * time.Hour).Truncate(time.Millisecond)
+	cand := f.create(f.human, "memory_candidates", candidateInput(CreateInput{Scope: scopeA, Text: "the office moved in march", Sources: refs(f.source()), EffectiveAt: &effective, ExpiresAt: &expires}))
+	approved := f.transition(f.human, "memory_candidates", cand.ID, ChangeInput{Scope: scopeA, ExpectedRevision: cand.Revision, Status: "approved"})
+	f.transition(f.human, "memories", approved.ID, ChangeInput{Scope: scopeA, ExpectedRevision: approved.Revision, Status: "active"})
+	importBundle(t, f, scopeB, exportBundle(t, f, scopeA, SpaceExportInput{}), "")
+	got := scopeRecords(f, "memory_candidates", scopeB)
+	if len(got) != 1 || got[0].EffectiveAt == nil || !got[0].EffectiveAt.Equal(effective) || got[0].ExpiresAt == nil || !got[0].ExpiresAt.Equal(expires) {
+		t.Fatalf("imported times lost: %+v", got)
+	}
+}
+
+func TestSpaceBundleRoundTripKeepsLabelsEntitiesAndCreationTime(t *testing.T) {
+	f := newFixture(t)
+	cand := f.create(f.human, "memory_candidates", candidateInput(CreateInput{Scope: scopeA, Text: "the launch is owned by the platform team", Sources: refs(f.source()),
+		Tags: []string{"launch", "meta:team=platform", "event_id:evt-1"}, Entities: []EntityInput{{Name: "platform team"}}}))
+	approved := f.transition(f.human, "memory_candidates", cand.ID, ChangeInput{Scope: scopeA, ExpectedRevision: cand.Revision, Status: "approved"})
+	active := f.transition(f.human, "memories", approved.ID, ChangeInput{Scope: scopeA, ExpectedRevision: approved.Revision, Status: "active"})
+	importBundle(t, f, scopeB, exportBundle(t, f, scopeA, SpaceExportInput{}), "")
+	got := scopeRecords(f, "memory_candidates", scopeB)
+	if len(got) != 1 {
+		t.Fatalf("imported %d candidates", len(got))
+	}
+	r := got[0]
+	if !slices.Contains(r.Tags, "launch") || !slices.Contains(r.Tags, "meta:team=platform") || slices.Contains(r.Tags, "event_id:evt-1") {
+		t.Fatalf("labels not carried, or a system tag copied: %v", r.Tags)
+	}
+	if len(r.Entities) != 1 || r.Entities[0].Name != "platform team" {
+		t.Fatalf("entities lost: %+v", r.Entities)
+	}
+	if r.EffectiveAt == nil || r.EffectiveAt.Sub(active.CreatedAt).Abs() > time.Millisecond { // the bundle keeps milliseconds
+		t.Fatalf("creation time lost: %v want %v", r.EffectiveAt, active.CreatedAt)
+	}
+}

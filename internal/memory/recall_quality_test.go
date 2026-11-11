@@ -211,7 +211,7 @@ func TestCorrectionCategoryWalk(t *testing.T) {
 // person accepts it (or the space closes it), and valid-time and record-time queries both answer.
 func TestChangingFactCategoryWalk(t *testing.T) {
 	f := newFixture(t)
-	held, item := heldCorrection(t, f, "felix-home", "Felix lives in Seoul", "Felix moved to Busan in November")
+	held, item := heldCorrection(t, f, "Rowan-home", "Rowan lives in Seoul", "Rowan moved to Busan in November")
 	beforeMove := time.Now().UTC()
 	// Recorded times have millisecond precision; approval must be in a later tick.
 	time.Sleep(2 * time.Millisecond)
@@ -220,7 +220,7 @@ func TestChangingFactCategoryWalk(t *testing.T) {
 	if old.ExpiresAt != nil || old.ValidToProposal == nil || old.ValidToProposal.By.ID != newer.ID {
 		t.Fatal("approving the new fact did not propose ending the old one", old.ExpiresAt, old.ValidToProposal)
 	}
-	query := SearchInput{Scope: scopeA, Query: "where does Felix live", Modes: []string{"exact", "fts"}, Limit: 5}
+	query := SearchInput{Scope: scopeA, Query: "where does Rowan live", Modes: []string{"exact", "fts"}, Limit: 5}
 	if h := hitByID(f.search(f.agent, query).Items, old.ID); h != nil && h.ValidToProposal == nil {
 		t.Fatal("recall hid the valid_to proposal", h)
 	}
@@ -255,7 +255,7 @@ func assertBitemporalFact(t *testing.T, f *fixture, held, old, newer Record, bef
 	t.Helper()
 	now := time.Now().UTC()
 	at := func(asOf, validAt time.Time) []string {
-		page, err := f.svc.MemoriesAt(testCtx, f.human, MemoryAtInput{Scope: scopeA, AsOf: asOf, ValidAt: &validAt, Query: "Felix", Limit: 10})
+		page, err := f.svc.MemoriesAt(testCtx, f.human, MemoryAtInput{Scope: scopeA, AsOf: asOf, ValidAt: &validAt, Query: "Rowan", Limit: 10})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -323,7 +323,7 @@ func TestRecallQualityLiveStyleScenario(t *testing.T) {
 	f := newFixture(t)
 	held, fix := heldCorrection(t, f, "release", "릴리스 노트는 영어로만 쓴다", "릴리스 노트는 영어 다음에 한국어도 쓴다")
 	moved, change := heldCorrection(t, f, "ci-runner", "CI runs on the self-hosted runner", "CI moved to hosted runners in October")
-	f.activeMemory("Felix prefers short answers in Korean", "answer", "style", "korean")
+	f.activeMemory("Rowan prefers short answers in Korean", "answer", "style", "korean")
 
 	ask := func(q string) ContextBundle {
 		return f.search(f.agent, SearchInput{Scope: scopeA, Query: q, Modes: []string{"exact", "fts"}, Limit: 5})
@@ -404,6 +404,19 @@ func TestReflectPromptLabelsPendingCorrection(t *testing.T) {
 	_, user := reflectPrompt(run, true)
 	if !strings.Contains(user, langnote.Text(langnote.PendingCorrection, "ko")) || strings.Contains(user, "후보 원문") {
 		t.Fatal("reflect prompt lost the pending-correction label or sent candidate text", user)
+	}
+}
+
+// The answer model gets each record's own dates, and is told to infer from the records and to resolve relative time words.
+func TestReflectPromptCarriesRecordDatesAndInferenceRule(t *testing.T) {
+	at := time.Date(2023, 8, 13, 0, 0, 0, 0, time.UTC)
+	run := &reflectRun{in: ReflectInput{Query: "when"}, hits: []Hit{{ID: "m1", Text: "adopted a dog last week", CollectedAt: &at, Occurred: &RecallTimeWindow{From: at.AddDate(0, 0, -7), To: at}}}}
+	system, user := reflectPrompt(run, true)
+	if !strings.Contains(user, `"recorded_at":"2023-08-13T00:00:00Z"`) || !strings.Contains(user, `"from":"2023-08-06T00:00:00Z"`) {
+		t.Fatal("reflect prompt lost a record's dates", user)
+	}
+	if !strings.Contains(system, "most likely answer") || !strings.Contains(system, "recorded_at") || strings.Contains(system, "Use only the records") {
+		t.Fatal("reflect prompt lost the inference or date rule", system)
 	}
 }
 

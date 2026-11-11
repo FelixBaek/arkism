@@ -32,7 +32,7 @@ func (s *Service) reflectFailedUsage(ctx context.Context, in TraceIngestInput, s
 		return nil, nil
 	}
 	token := s.ReflectionToken
-	ctx = ContextWithPostgresToken(ctx, token)
+	ctx = reflectionContext(ctx, token)
 	var evaluation *Record
 	rows, err := s.Repo.EvaluationsFor(ctx, in.Scope, stored.Run)
 	if err != nil {
@@ -70,7 +70,7 @@ func (s *Service) reflectFailedUsage(ctx context.Context, in TraceIngestInput, s
 	}
 	out := &UsageLearning{Evaluation: Ref{Collection: "evaluations", ID: evaluation.ID, Revision: evaluation.Revision}}
 	learned, err := s.Learn(ctx, token, LearningInput{Scope: in.Scope, Run: stored.Run, Evaluation: out.Evaluation, TaskType: "skill:" + failed.SkillID,
-		Lesson: "Skill " + ref + " ended " + failed.Status + " with " + code + "; review its instructions for this failure.", FailureReason: code,
+		Lesson: "Skill " + ref + " ended " + failed.Status + " with " + code + usageLessonEnd, FailureReason: code,
 		VerificationMethod: "skill.usage status reported by the runtime (deterministic)"})
 	if errors.Is(err, ErrConflict) {
 		return out, nil // this run's lesson already exists
@@ -80,4 +80,11 @@ func (s *Service) reflectFailedUsage(ctx context.Context, in TraceIngestInput, s
 	}
 	out.Learning = &learned
 	return out, nil
+}
+
+// reflectionContext detaches the hub's own follow-up from the writer's HTTP
+// identity: without it the route's identity-change guard discards the stored
+// trace's 200 and the runtime retries a write that already succeeded.
+func reflectionContext(ctx context.Context, token string) context.Context {
+	return context.WithValue(ContextWithPostgresToken(ctx, token), httpActorKey{}, nil)
 }

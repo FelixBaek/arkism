@@ -443,3 +443,15 @@ func TestDiffLines(t *testing.T) {
 		t.Fatal("a body past the cap shows as replaced whole")
 	}
 }
+
+func TestDigestRecallFollowsItsMembersAcrossLanguages(t *testing.T) {
+	f := newFixture(t)
+	a, b := f.digestMemory("decision", "배포는 금요일 오후에 금지한다"), f.digestMemory("decision", "배포 금지 시간에는 승인이 필요하다")
+	f.approveDigest("topic", f.proposeTopic("Deploy policy", "No Friday afternoon deploys without sign-off.", memRefs(a, b)))
+	if rec, err := f.svc.RecallDigests(testCtx, f.agent, DigestRecallInput{Scope: scopeA, Query: "배포 금지"}); err != nil || len(rec.Items) != 1 {
+		t.Fatalf("a Korean question about the members found %+v %v", rec.Items, err)
+	}
+	if rec, _ := f.svc.RecallDigests(testCtx, f.agent, DigestRecallInput{Scope: scopeA, Query: "쿠버네티스 차트"}); len(rec.Items) != 0 {
+		t.Fatal("unrelated query recalled a digest")
+	}
+}

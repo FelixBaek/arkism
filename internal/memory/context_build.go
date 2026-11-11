@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -145,6 +146,10 @@ func contextPack(view *ContextInvocationView, bundle ContextBundle, directives *
 	if directives != nil && len(directives.Omitted) > 0 {
 		out.Partial = true
 		out.Notice += " 토큰 예산이 모자라 사람이 정한 규칙 일부(directives.omitted)를 넣지 못했습니다."
+	}
+	if bundle.budgetDropped > 0 {
+		out.Partial = true
+		out.Notice += fmt.Sprintf(" 토큰 예산이 모자라 찾은 항목 %d건을 넣지 못했습니다. budget_tokens를 늘려 다시 요청하세요.", bundle.budgetDropped)
 	}
 	return out
 }

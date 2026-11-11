@@ -79,3 +79,19 @@ func TestOldVersionComparisonIncludesBundle(t *testing.T) {
 		t.Fatal("old bundle not matched")
 	}
 }
+
+// A refused scope names the scope and the flags, not just the status.
+func TestSyncRefusedScopeNamesTheFlags(t *testing.T) {
+	f := newBundleFixture(t)
+	d := swapSync(t)
+	token := filepath.Join(d, "token")
+	os.WriteFile(token, []byte("synthetic-local-token"), 0o600)
+	syncPost = func(url, token, path string, payload any) (map[string]any, error) {
+		return nil, &host.HTTPError{Code: 403}
+	}
+	syncRoots = func() []skillRoot { return []skillRoot{{"agent-skills", f.root, "generic"}} }
+	var out, errOut strings.Builder
+	if code := syncMain([]string{"--token-file", token}, nil, &out, &errOut); code != 1 || !strings.Contains(errOut.String(), `workspace "default", project "default"; pass --workspace and --project`) {
+		t.Fatal(code, errOut.String())
+	}
+}

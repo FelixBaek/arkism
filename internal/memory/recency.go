@@ -87,19 +87,74 @@ func (s *Service) fuseRecallHits(ctx context.Context, token string, lists [][]Hi
 	if recall {
 		now, weights := s.recallClock(in), s.policyOutcomeWeights(ctx, in, rows)
 		trace.noteBoosts(rows, now, weights)
-		if earlierStateIntent(in.Query) {
-			now = time.Time{} // no hit is before the zero time, so no age discount: the older state is the answer
+		// No hit is before the zero time, so no age discount: for an earlier-state question the older
+		// state is the answer, and with rerank off the fused scores sit so close together that the
+		// discount alone would reorder them.
+		if earlierStateIntent(in.Query) || in.Rerank == rerankOff {
+			now = time.Time{}
 		}
 		rows = decayByRecency(rows, now, weights, len(rows))
 		if s.evidenceSelectionStatus(in, collection) == "ready" {
 			trace.evidenceCandidates = slices.Clone(rows)
 		}
+		kept := rows[:min(aggregateItemLimit(in), len(rows))]
 		if in.space.recallQuality().diversityOn() {
-			return selectDiverse(rows, in.Limit), nil
+			kept = selectDiverse(rows, aggregateItemLimit(in))
 		}
-		return rows[:min(in.Limit, len(rows))], nil
+		return keepPeriodHits(kept, rows, lists, trace, recallLocation(in.Timezone)), nil
 	}
 	return rows[:min(in.Limit, len(rows))], nil
+}
+
+// periodKeep is how many time-lane hits a recall that names a period keeps in its result.
+const periodKeep = 2
+
+// keepPeriodHits puts the time lane's best-ranked hits back into kept when the cut dropped them:
+// rerankers score text, not dates, so the memory from the named period can fall below the limit.
+// It takes the best row of each searched window first, then the next best, periodKeep at most and
+// never more than half the result; they replace the tail. all is the ranked pool kept was cut from.
+func keepPeriodHits(kept, all []ScoredHit, lists [][]Hit, trace *recallTrace, loc *time.Location) []ScoredHit {
+	lane := slices.Index(trace.lanes, "temporal")
+	room := min(periodKeep, len(kept)/2)
+	if lane < 0 || lane >= len(lists) || room == 0 {
+		return kept
+	}
+	inLane := map[string]bool{}
+	for _, h := range lists[lane] {
+		inLane[hitKey(h)] = true
+	}
+	picked := []ScoredHit{}
+	pick := func(match func(Hit) bool) {
+		for _, row := range all {
+			if len(picked) < room && inLane[hitKey(row.Hit)] && match(row.Hit) && !slices.ContainsFunc(picked, func(p ScoredHit) bool { return hitKey(p.Hit) == hitKey(row.Hit) }) {
+				picked = append(picked, row)
+				return
+			}
+		}
+	}
+	for _, w := range trace.windows {
+		pick(func(h Hit) bool { return hitInWindow(h, w, loc) })
+	}
+	for range room {
+		pick(func(Hit) bool { return true })
+	}
+	missing := []ScoredHit{}
+	for _, p := range picked {
+		if !slices.ContainsFunc(kept, func(k ScoredHit) bool { return hitKey(k.Hit) == hitKey(p.Hit) }) {
+			missing = append(missing, p)
+		}
+	}
+	if len(missing) == 0 {
+		return kept
+	}
+	out := slices.Clone(kept)
+	for i := len(out) - 1; i >= 0 && len(missing) > 0; i-- {
+		if slices.ContainsFunc(picked, func(p ScoredHit) bool { return hitKey(p.Hit) == hitKey(out[i].Hit) }) {
+			continue // a picked row is never the one replaced
+		}
+		out[i], missing = missing[len(missing)-1], missing[:len(missing)-1]
+	}
+	return out
 }
 
 // Existing rerankers evaluate a bounded head, not the complete fused pool.

@@ -16,10 +16,10 @@ var serverEmail = regexp.MustCompile(`(?i)[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}`
 
 func TestMaskEmailsClearsServerFilterAndKeepsOtherText(t *testing.T) {
 	in := []any{
-		map[string]any{"source_id": "archive-1", "revision": 1, "role": "user", "text": "커밋 작성자는 Felix.Baek+ark@atelier-felix.co.kr 로 해줘"},
-		host.Obj{{Key: "role", Value: "tool"}, {Key: "text", Value: "Author: Seungyong Baek <me@atelierfelix.dev>\nDate: today"}},
-		map[string]any{"role": "assistant", "text": "줄바꿈 뒤\n@atelierfelix.dev 와 탭\t@x.io, Important\nme@example.com, me@\nx.com"},
-		map[string]any{"role": "assistant", "text": "@app.route('/v1') 와 user@localhost, npm @types/node 는 그대로"},
+		map[string]any{"source_id": "archive-1", "revision": 1, "role": "user", "text": "커밋 작성자는 author.name+fixture@example-mail.test 로 해줘"},
+		host.Obj{{Key: "role", Value: "tool"}, {Key: "text", Value: "Author: Rowan Example <author@example.test>\nDate: today"}},
+		map[string]any{"role": "assistant", "text": "줄바꿈 뒤\n@example.test 와 탭\t@x.io, Important\nme@example.com, me@\nx.com"},
+		map[string]any{"role": "assistant", "text": "@example.test('/v1') 와 user@localhost, npm @types/node 는 그대로"},
 	}
 	out := maskSensitive(in).([]any)
 	content := dumps(map[string]any{"authority": "data_only_untrusted", "data": map[string]any{"records": out}})
@@ -29,16 +29,16 @@ func TestMaskEmailsClearsServerFilterAndKeepsOtherText(t *testing.T) {
 	if got := autosaveGet(out[0], "text"); got != "커밋 작성자는 [email] 로 해줘" {
 		t.Fatal(got)
 	}
-	if got := autosaveGet(out[1], "text"); got != "Author: Seungyong Baek <[email]>\nDate: today" {
+	if got := autosaveGet(out[1], "text"); got != "Author: Rowan Example <[email]>\nDate: today" {
 		t.Fatal(got)
 	}
 	if got := autosaveGet(out[2], "text"); got != "줄바꿈 뒤[email] 와 탭[email], Important[email], me@\nx.com" {
 		t.Fatal("text before an address must stay:", got)
 	}
-	if got := autosaveGet(out[3], "text"); got != "@app.route('/v1') 와 user@localhost, npm @types/node 는 그대로" {
+	if got := autosaveGet(out[3], "text"); got != "@example.test('/v1') 와 user@localhost, npm @types/node 는 그대로" {
 		t.Fatal("text without an address changed:", got)
 	}
-	if !strings.Contains(autosaveGet(in[0], "text").(string), "@atelier-felix.co.kr") {
+	if !strings.Contains(autosaveGet(in[0], "text").(string), "@example-mail.test") {
 		t.Fatal("input records were mutated")
 	}
 }
@@ -47,21 +47,21 @@ func TestSessionPrepareSendsMaskedContentWithinServerLimit(t *testing.T) {
 	request, output := sessionFixture(t)
 	capFake(t)
 	records := request["records"].([]any)
-	records[0].(map[string]any)["text"] = "한국어로 답해, 연락처 me@atelierfelix.dev"
+	records[0].(map[string]any)["text"] = "한국어로 답해, 연락처 me@example.test"
 	output["session_state"].(map[string]any)["source_refs"] = []any{map[string]any{"source_id": "s1", "revision": 1, "quote": "한국어로 답해"}}
 	var authorized, sent string
 	llm = func(_, content, _ string, _ time.Duration, _, _ string) (any, error) {
 		sent = content
 		return output, nil
 	}
-	previous := map[string]any{"goal": "이전 요약 me@atelierfelix.dev"}
+	previous := map[string]any{"goal": "이전 요약 me@example.test"}
 	if _, err := sessionPrepare(map[string]any{}, "s", records, 0, 1, 0, previous, nil, "", func(c string) error { authorized = c; return nil }); err != nil {
 		t.Fatal(err)
 	}
-	if authorized == "" || authorized != sent || strings.Contains(sent, "@atelierfelix.dev") || !strings.Contains(sent, "연락처 [email]") {
+	if authorized == "" || authorized != sent || strings.Contains(sent, "@example.test") || !strings.Contains(sent, "연락처 [email]") {
 		t.Fatal("authorized and model content must match and be masked:", sent)
 	}
-	if !strings.Contains(records[0].(map[string]any)["text"].(string), "me@atelierfelix.dev") || previous["goal"] != "이전 요약 me@atelierfelix.dev" {
+	if !strings.Contains(records[0].(map[string]any)["text"].(string), "me@example.test") || previous["goal"] != "이전 요약 me@example.test" {
 		t.Fatal("caller data mutated")
 	}
 
@@ -177,7 +177,7 @@ func TestSessionWindowOnPrivateTranscriptIsTerminal(t *testing.T) {
 	t.Cleanup(func() { capProjects = keep })
 	capProjects = root
 	sid := "0f6c2a64-6f3b-4c55-9d7e-3f4a2b1c9e10"
-	path := filepath.Join(root, "-home-felix-110-arkism", sid+".jsonl")
+	path := filepath.Join(root, "-home-fixture-project", sid+".jsonl")
 	os.MkdirAll(filepath.Dir(path), 0o700)
 	write := func(text string) {
 		row := dumps(map[string]any{"type": "user", "sessionId": sid, "message": map[string]any{"role": "user", "content": text}})

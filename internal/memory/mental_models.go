@@ -236,17 +236,17 @@ func validMentalModelInput(in MentalModelInput) error {
 	title, query := strings.TrimSpace(in.Title), strings.TrimSpace(in.Query)
 	switch {
 	case !validScope(in.Scope) || title == "" || query == "" || !validMentalModelRefresh(in.Refresh):
-		return ErrInvalid
+		return invalidf("scope, title and query are required, and refresh.mode must be one of %v", mmRefreshModes)
 	case utf8.RuneCountInString(title) > mmTitleMax || strings.ContainsAny(title, "\r\n") || utf8.RuneCountInString(query) > mmQueryMax:
-		return ErrInvalid
+		return invalidf("title: at most %d characters on one line; query: at most %d", mmTitleMax, mmQueryMax)
 	case !utf8.ValidString(title) || !utf8.ValidString(query):
-		return ErrInvalid
+		return invalidf("title, query: must be valid UTF-8")
 	case containsSecret(title) || containsSecret(query) || redactSessionPrivate(title+"\n"+query) != title+"\n"+query:
 		return ErrSecretDetected
 	}
 	if in.Folder != nil {
 		if _, ok := normalizeWikiFolder(*in.Folder); !ok || in.NoFolder {
-			return ErrInvalid
+			return invalidf("folder: not a valid folder, or sent together with no_folder")
 		}
 	}
 	return nil
@@ -377,7 +377,10 @@ func (s *Service) mentalModelWrite(ctx context.Context, d Decision, scope Scope,
 		if err != nil {
 			return err
 		}
-		if r.MentalModel == nil || (expected != 0 && r.Revision != expected) {
+		if r.MentalModel != nil && expected != 0 && r.Revision != expected {
+			return revisionConflict(expected, r.Revision)
+		}
+		if r.MentalModel == nil {
 			return ErrConflict
 		}
 		m := *r.MentalModel
@@ -526,7 +529,22 @@ func (s *Service) refreshMentalModelByID(ctx context.Context, token, id string, 
 	if r.Status == obsProposed {
 		return MentalModelView{}, ErrConflict // no model call for a topic nobody approved yet
 	}
-	return s.refreshMentalModel(ctx, token, d, r, in.DryRun, mmTriggerManual, &WikiJob{MaxTotalTokens: obsRunTokens})
+	v, err := s.refreshMentalModel(ctx, token, d, r, in.DryRun, mmTriggerManual, &WikiJob{MaxTotalTokens: obsRunTokens})
+	if !errors.Is(err, ErrNotFound) {
+		return v, err
+	}
+	// No evidence to summarize is how the attempt ended, not a missing model: answer with
+	// the model as it stands and last_outcome (stored unless this was a dry run).
+	if cur, rerr := s.mentalModelRead(ctx, token, in.Scope, id); rerr == nil && cur.MentalModel != nil {
+		if in.DryRun {
+			m := *cur.MentalModel
+			m.LastOutcome, cur.MentalModel = &MentalModelOutcome{Code: mmOutcomeNoFacts, Trigger: mmTriggerManual, At: time.Now().UTC().Truncate(time.Millisecond)}, &m
+		}
+		v = s.mentalModelView(ctx, cur)
+		v.DryRun = in.DryRun
+		return v, nil
+	}
+	return v, err
 }
 
 // refreshMentalModel asks for a draft. trigger names why (manual, a scheduled trigger);

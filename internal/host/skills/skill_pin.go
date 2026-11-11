@@ -18,10 +18,7 @@ import (
 //     or a hub answer that no longer matches the pin, is refused naming both versions.
 // Pins live with the capture session state (host.SessionStore), not only in this process.
 
-var (
-	skillMaxChars  = envInt("ARKISM_SKILL_MAX_CHARS", 40000)
-	routerSessions = host.DefaultSessionStore
-)
+var routerSessions = host.DefaultSessionStore
 
 // routerSessionKey is the agent session this MCP server serves: the id its hooks linked (or
 // ARKISM_SESSION_ID), else this process's own thread.
@@ -32,11 +29,16 @@ func routerSessionKey() string {
 	return "mcp:" + sessionThread
 }
 
-// skillFits refuses a skill body over the load budget instead of truncating it.
+// skillFits refuses a skill this runtime is marked unable to run (route_skills already leaves
+// it out) and a skill body over the load budget instead of truncating it.
 func skillFits(item map[string]any) error {
-	if n := host.Len(str(item["instructions"])); n > skillMaxChars {
+	if routerRuntime != "" && orMap(item["compatibility"])[routerRuntime] == "unsupported" {
+		return fmt.Errorf("skill_unsupported_runtime: %s@%s is marked unsupported on %s; not loaded",
+			pyStr(item["skill_id"]), pyStr(item["resolved_version"]), routerRuntime)
+	}
+	if n := host.Len(str(item["instructions"])); n > host.SkillMaxChars {
 		return fmt.Errorf("skill_too_large: %s@%s is %d chars, over the %d-char load budget (ARKISM_SKILL_MAX_CHARS); not loaded, a partial skill is riskier than none",
-			pyStr(item["skill_id"]), pyStr(item["resolved_version"]), n, skillMaxChars)
+			pyStr(item["skill_id"]), pyStr(item["resolved_version"]), n, host.SkillMaxChars)
 	}
 	return nil
 }

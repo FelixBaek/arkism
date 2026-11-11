@@ -21,7 +21,7 @@ type AnthropicSkillDrafter struct {
 }
 
 func (a *AnthropicSkillDrafter) Generator() Generator {
-	return Generator{Model: "claude-sonnet-5-5", PromptVersion: "anthropic-skill-draft-v2", PipelineVersion: "arkism-skill-draft-v1"}
+	return Generator{Model: "claude-sonnet-5-5", PromptVersion: "anthropic-skill-draft-v4", PipelineVersion: "arkism-skill-draft-v1"}
 }
 func (a *AnthropicSkillDrafter) Draft(context.Context, SkillDraftInput) (SkillDraft, ProviderUsage, error) {
 	return SkillDraft{}, ProviderUsage{}, ErrDenied

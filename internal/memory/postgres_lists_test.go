@@ -32,7 +32,7 @@ func TestPostgresListsLiteralLiveAndCursors(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	old, newer, future, expired := now.Add(-2*time.Hour), now.Add(-time.Hour), now.Add(time.Hour), now.Add(-time.Minute)
 	sources := []Record{
-		{ID: x + "source-new", Scope: scope, Kind: "note", Status: statusActive, Revision: 1, Text: "Literal_% match", CollectedAt: &newer, CreatedAt: newer, UpdatedAt: newer},
+		{ID: x + "source-new", Scope: scope, Kind: "note", Status: statusActive, Revision: 1, Text: "Literal_% match", SourceRef: "capture-turns:ev1", CollectedAt: &newer, CreatedAt: newer, UpdatedAt: newer},
 		{ID: x + "source-old", Scope: scope, Kind: "note", Status: statusActive, Revision: 1, Text: "Literal_% second", CollectedAt: &old, CreatedAt: old, UpdatedAt: old},
 		{ID: x + "source-case", Scope: scope, Kind: "note", Status: statusActive, Revision: 1, Text: "literal_% match", CollectedAt: &old, CreatedAt: old, UpdatedAt: old},
 		{ID: x + "source-expired", Scope: scope, Kind: "note", Status: statusActive, Revision: 1, Text: "Literal_% match", CollectedAt: &old, ExpiresAt: &expired, CreatedAt: old, UpdatedAt: old},
@@ -52,9 +52,12 @@ func TestPostgresListsLiteralLiveAndCursors(t *testing.T) {
 	if err != nil || len(next) != 1 || next[0].ID != x+"source-old" {
 		t.Fatalf("source cursor: ids=%v err=%v", recordIDs(next), err)
 	}
+	if batch, err := p.ListSources(ctx, SourceListInput{Scope: scope, SourceRef: "capture-turns:ev1", Limit: 10}); err != nil || len(batch) != 1 || batch[0].ID != x+"source-new" {
+		t.Fatalf("source_ref list: ids=%v err=%v", recordIDs(batch), err)
+	}
 
 	memories := []Record{
-		{ID: x + "memory-live", Scope: scope, Kind: "fact", Status: statusActive, Revision: 1, Text: "100%_literal", CreatedAt: old, UpdatedAt: old},
+		{ID: x + "memory-live", Scope: scope, Kind: "fact", Status: statusActive, Revision: 1, Text: "100%_literal", Tags: []string{"capture", "session:s1"}, CreatedAt: old, UpdatedAt: old},
 		{ID: x + "memory-case", Scope: scope, Kind: "fact", Status: statusActive, Revision: 1, Text: "100%_LITERAL", CreatedAt: old, UpdatedAt: old},
 		{ID: x + "memory-erased", Scope: scope, Kind: "fact", Status: statusActive, Revision: 1, Text: "100%_literal", ContentErased: true, CreatedAt: old, UpdatedAt: old},
 		{ID: x + "memory-expired", Scope: scope, Kind: "fact", Status: statusActive, Revision: 1, Text: "100%_literal", ExpiresAt: &expired, CreatedAt: old, UpdatedAt: old},
@@ -63,6 +66,12 @@ func TestPostgresListsLiteralLiveAndCursors(t *testing.T) {
 	listed, err := p.ListMemories(ctx, MemoryListInput{Scope: scope, Query: "100%_literal", Limit: 10})
 	if err != nil || len(listed) != 1 || listed[0].ID != x+"memory-live" {
 		t.Fatalf("memory list: ids=%v err=%v", recordIDs(listed), err)
+	}
+	if tagged, err := p.ListMemories(ctx, MemoryListInput{Scope: scope, Tag: "session:s1", Limit: 10}); err != nil || len(tagged) != 1 || tagged[0].ID != x+"memory-live" {
+		t.Fatalf("tag list: ids=%v err=%v", recordIDs(tagged), err)
+	}
+	if other, err := p.ListMemories(ctx, MemoryListInput{Scope: scope, Tag: "session:s2", Limit: 10}); err != nil || len(other) != 0 {
+		t.Fatalf("other tag list: ids=%v err=%v", recordIDs(other), err)
 	}
 	artifactIDs := []string{"artifact-" + ContentHash(x+"artifact-a"), "artifact-" + ContentHash(x+"artifact-b")}
 	slices.Sort(artifactIDs)

@@ -334,6 +334,10 @@ func TestWikiFromMemoriesTransferIsCheckedPerMemory(t *testing.T) {
 // Past the row window the tree says it is truncated, and a slug rename is
 // refused because an inbound link could be outside the window.
 func TestWikiTreeAndRenameAtTheRowCap(t *testing.T) {
+	// The probe row past the window must be a size the store accepts.
+	if wikiListLimit+1 > maxListRows {
+		t.Fatalf("probe %d exceeds the store's %d", wikiListLimit+1, maxListRows)
+	}
 	f, scope := wikiPrintReviewed(t)
 	bleed := wikiPageID(scope, "bleed")
 	tree, err := f.svc.WikiTree(testCtx, f.human, scope)

@@ -3,6 +3,7 @@ package capture
 import (
 	"encoding/json"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -145,6 +146,23 @@ func TestSkillSectionNeverCutsADescription(t *testing.T) {
 	p := skillSection("s1", 800)
 	if !strings.Contains(p.Full, "- long (id: agent/long)") || strings.Contains(p.Full, "설명") {
 		t.Fatal(p.Full)
+	}
+}
+
+func TestSkillSectionSkipsABodyTooLargeToLoad(t *testing.T) {
+	stableFake(t)
+	capGet = func(string, time.Duration) (map[string]any, error) {
+		return map[string]any{"items": []any{
+			map[string]any{"id": "agent/big", "version_id": "v", "name": "big", "content_chars": json.Number(strconv.Itoa(host.SkillMaxChars + 1))},
+			map[string]any{"id": "agent/ok", "version_id": "v", "name": "ok", "content_chars": json.Number("10")},
+		}}, nil
+	}
+	p := skillSection("s1", 800)
+	if strings.Contains(p.Full, "agent/big") || !strings.Contains(p.Full, "- ok (id: agent/ok)") {
+		t.Fatal(p.Full)
+	}
+	if _, ok := sessionStore().SkillPin("s1", "agent/big"); ok {
+		t.Fatal("an unloadable skill was pinned")
 	}
 }
 

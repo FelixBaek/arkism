@@ -85,7 +85,7 @@ func (b *SpaceRecallBudget) valid() bool {
 }
 
 // limit is the records a recall at level reads, or shipped when the space sets no budget
-// (shipped is the caller's own count for the level; 0 means the search default).
+// (shipped is the caller's own count for the level).
 // tokens is the answer's max_tokens, the base of the adaptive ratio (round(tokens × ratio),
 // clamped to [min, max]).
 func (b *SpaceRecallBudget) limit(level string, tokens, shipped int) int {

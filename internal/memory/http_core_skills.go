@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"context"
 	"encoding/base64"
 	"net/http"
 )
@@ -61,8 +62,7 @@ func (s *Service) coreHTTPPostV1SkillsAnalyze(w http.ResponseWriter, r *http.Req
 	if !decode(w, r, &in) {
 		return
 	}
-	v, e := s.AnalyzeSkill(r.Context(), bearer(r), in)
-	respond(w, v, e)
+	s.respondLater(w, r, in.Scope, func(ctx context.Context, token string) (any, error) { return s.AnalyzeSkill(ctx, token, in) })
 }
 
 func (s *Service) coreHTTPPostV1SkillsComparisonsRecord(w http.ResponseWriter, r *http.Request) {
@@ -88,8 +88,7 @@ func (s *Service) coreHTTPPostV1SkillsGenerate(w http.ResponseWriter, r *http.Re
 	if !decode(w, r, &in) {
 		return
 	}
-	v, e := s.GenerateSkill(r.Context(), bearer(r), in)
-	respond(w, v, e)
+	s.respondLater(w, r, in.Scope, func(ctx context.Context, token string) (any, error) { return s.GenerateSkill(ctx, token, in) })
 }
 
 func (s *Service) coreHTTPPostV1SkillsImport(w http.ResponseWriter, r *http.Request) {

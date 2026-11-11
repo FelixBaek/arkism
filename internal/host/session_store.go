@@ -32,6 +32,14 @@ const SessionStateTTL = 24 * time.Hour
 
 // SkillPin is the approved skill version a session uses. Version is the 1-based history
 // number when known; VersionID is the immutable version record id when known.
+// SkillMaxChars is the largest skill body load_skill returns; the session-start list leaves out larger ones.
+var SkillMaxChars = func() int {
+	if n, err := strconv.Atoi(strings.TrimSpace(os.Getenv("ARKISM_SKILL_MAX_CHARS"))); err == nil {
+		return n
+	}
+	return 40000
+}()
+
 type SkillPin struct {
 	SkillID   string `json:"skill_id"`
 	VersionID string `json:"version_id,omitempty"`

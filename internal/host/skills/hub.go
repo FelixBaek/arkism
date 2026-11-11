@@ -34,6 +34,7 @@ validated local cache, runtime projection and usage evidence.
 
   arkism skills inventory [--root LABEL=DIR ...]
   arkism skills resolve REF [REF ...]      # needs ARKISM_URL/ARKISM_API_TOKEN
+                                          # and ARKISM_SKILL_SCOPE, e.g. {"workspace_id":"w","project_id":"p"}
   arkism skills project REF --runtime codex --target DIR
 `
 

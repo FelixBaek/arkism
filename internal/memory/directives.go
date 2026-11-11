@@ -214,7 +214,7 @@ func (s *Service) UpdateDirective(ctx context.Context, token, id string, in Dire
 			return err
 		}
 		if r.Revision != in.ExpectedRevision {
-			return ErrConflict
+			return revisionConflict(in.ExpectedRevision, r.Revision)
 		}
 		if directiveStatus(in.Active) == statusActive {
 			if e := checkDirectiveCapacity(ctx, tx, r.Scope, d.PrincipalID, r.ID); e != nil {
@@ -254,7 +254,7 @@ func (s *Service) DeleteDirective(ctx context.Context, token, id string, in Dire
 			return err
 		}
 		if r.Revision != in.ExpectedRevision {
-			return ErrConflict
+			return revisionConflict(in.ExpectedRevision, r.Revision)
 		}
 		if err = tx.Delete(ctx, colDirectives, r.Scope, r.ID, r.Revision); err != nil {
 			return err

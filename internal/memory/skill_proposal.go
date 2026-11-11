@@ -78,7 +78,7 @@ func skillLessons(ctx context.Context, tx Tx, scope Scope, lessons []Ref) (skill
 		return out, ErrInvalid
 	}
 	runs := map[string]bool{}
-	taskType, text := "", ""
+	taskType, text, texts := "", "", []string{}
 	for _, ref := range lessons {
 		if ref.Collection != "memory_candidates" || !validRunLabel(ref.ID, 256) || ref.Revision < 1 {
 			return out, ErrInvalid
@@ -102,9 +102,10 @@ func skillLessons(ctx context.Context, tx Tx, scope Scope, lessons []Ref) (skill
 		if taskType == "" {
 			taskType, text = reflection.Reflection.TaskType, row.Text
 		}
-		if reflection.Reflection.TaskType != taskType || row.Text != text {
+		if reflection.Reflection.TaskType != taskType || !sameLessons(texts, row.Text) {
 			return out, ErrInvalid
 		}
+		texts = append(texts, row.Text)
 		valid, err := validLearningCandidate(ctx, tx, learningCandidate{row: row, run: run, evaluation: evaluation}, scope, taskType, text)
 		if err != nil {
 			return out, err

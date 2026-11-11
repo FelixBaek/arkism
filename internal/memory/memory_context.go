@@ -148,10 +148,29 @@ func resolveOccurred(from, to, text string, ref time.Time) *RecallTimeWindow {
 			}
 		}
 	}
-	if w, ok := parseTimeIntent(text, "", ref); ok {
+	if w, ok := firstTimeIntent(text, ref); ok {
 		if out := (&RecallTimeWindow{Phrase: runeCutString(w.Phrase, 64), From: w.From, To: w.To}); validOccurred(out, ref) {
 			return out
 		}
 	}
 	return nil
+}
+
+// firstTimeIntent is the time phrase that comes first in text. parseTimeIntent picks by rule
+// order, so "yesterday we set the launch to December 3" would date the decision by the launch.
+func firstTimeIntent(text string, ref time.Time) (timeWindow, bool) {
+	q := foldTimeText(strings.Join(strings.Fields(text), " "))
+	w, ok := parseTimeIntent(q, "", ref)
+	for ok {
+		i := strings.Index(q, w.Phrase)
+		if i <= 0 {
+			break
+		}
+		earlier, found := parseTimeIntent(q[:i], "", ref)
+		if !found {
+			break
+		}
+		w, q = earlier, q[:i]
+	}
+	return w, ok
 }

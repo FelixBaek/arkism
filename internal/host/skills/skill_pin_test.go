@@ -98,13 +98,38 @@ func TestLoadSkillServesTheSessionStartVersion(t *testing.T) {
 	}
 }
 
+// A skill marked unsupported on this runtime is refused by name too, not only left unrouted.
+func TestLoadSkillRefusesAnUnsupportedRuntime(t *testing.T) {
+	swapRouter(t)
+	t.Setenv("ARKISM_SESSION_ID", "sess")
+	routerRuntime = "codex"
+	h := newHubFake(t)
+	h.answer = func(p map[string]any) any {
+		ref := asList(p["refs"])[0].(string)
+		return map[string]any{"items": []any{map[string]any{"ref": ref, "skill_id": "agent/u", "resolved_version": 1, "version_id": vid("1"),
+			"content_hash": digest([]byte("body")), "instructions": "body", "name": "u", "validation_status": "active",
+			"compatibility": map[string]any{"codex": "unsupported"}}}}
+	}
+	out, err := loadSkill("agent/u", "")
+	if err == nil || out != nil || !strings.Contains(err.Error(), "skill_unsupported_runtime") {
+		t.Fatal(out, err)
+	}
+	if _, ok := routerSessions().SkillPin("sess", "agent/u"); ok {
+		t.Fatal("a refused skill was pinned")
+	}
+	routerRuntime = "claude"
+	if out, err := loadSkill("agent/u", ""); err != nil || out == nil {
+		t.Fatal(out, err)
+	}
+}
+
 // An oversized body is refused whole, never cut, and nothing is pinned or registered.
 func TestLoadSkillRefusesABodyOverBudget(t *testing.T) {
 	swapRouter(t)
 	t.Setenv("ARKISM_SESSION_ID", "sess")
 	latest := 1
 	versionHub(t, &latest, map[int]string{1: vid("1")})
-	skillMaxChars = len("body v1") - 1
+	host.SkillMaxChars = len("body v1") - 1
 	out, err := loadSkill("agent/z", "")
 	if err == nil || out != nil || !strings.Contains(err.Error(), "skill_too_large") {
 		t.Fatal(out, err)
@@ -112,7 +137,7 @@ func TestLoadSkillRefusesABodyOverBudget(t *testing.T) {
 	if _, ok := routerSessions().SkillPin("sess", "agent/z"); ok || len(loadedSkills) != 0 {
 		t.Fatal("refused skill was pinned or registered")
 	}
-	skillMaxChars = len("body v1")
+	host.SkillMaxChars = len("body v1")
 	if _, err := loadSkill("agent/z", ""); err != nil {
 		t.Fatal(err)
 	}

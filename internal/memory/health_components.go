@@ -14,6 +14,10 @@ type ComponentHealth struct {
 	Search    string `json:"search"`
 	WriteGate string `json:"write_gate"`
 	Blobs     string `json:"blobs"`
+	// The three below are set only when the request asks for models=1: each is one tiny real call.
+	ServerModel string `json:"server_model,omitempty"`
+	Embedder    string `json:"embedder,omitempty"`
+	Reranker    string `json:"reranker,omitempty"`
 }
 
 type componentHealthStore interface {
@@ -44,10 +48,35 @@ func (p *Postgres) componentHealth(ctx context.Context) ComponentHealth {
 	return out
 }
 
+// probeModels makes one minimal call to each configured model, so a missing or unreachable
+// model is found before a capture or answer silently waits on it. "disabled" means not configured.
+func (s *Service) probeModels(ctx context.Context, scope Scope, out *ComponentHealth) {
+	out.ServerModel, out.Embedder, out.Reranker = "disabled", "disabled", "disabled"
+	if s.Wiki != nil {
+		_, _, err := s.modelCall(ctx, scope, healthProbeOperation, "Reply with the single word OK.", "ping", 8)
+		out.ServerModel = healthState(err)
+	}
+	if s.Embedder != nil {
+		_, err := s.Embedder.Embed(ctx, []string{"ping"}, "query")
+		out.Embedder = healthState(err)
+	}
+	if s.Reranker != nil {
+		_, err := s.Reranker.Rerank(ctx, "ping", []string{"ping"})
+		out.Reranker = healthState(err)
+	}
+}
+
+const healthProbeOperation = "health_probe"
+
 func (s *Service) serveComponentHealth(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
 	q := r.URL.Query()
+	models := q.Get("models") == "1"
+	limit := 10 * time.Second
+	if models {
+		limit = 60 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), limit)
+	defer cancel()
 	scope := Scope{WorkspaceID: q.Get("workspace_id"), ProjectID: q.Get("project_id"), UserID: q.Get("user_id"), AgentID: q.Get("agent_id")}
 	d, err := s.authorize(ctx, bearer(r), "ops:metrics", scope, "", "")
 	if err != nil {
@@ -75,6 +104,9 @@ func (s *Service) serveComponentHealth(w http.ResponseWriter, r *http.Request) {
 			blobCtx = ContextWithPostgresToken(ctx, s.ReadinessToken)
 		}
 		out.Blobs = healthState(s.CheckBlobStorage(blobCtx))
+	}
+	if models {
+		s.probeModels(ctx, scope, &out)
 	}
 	writeJSON(w, http.StatusOK, out)
 }

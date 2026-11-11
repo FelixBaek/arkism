@@ -121,9 +121,29 @@ func readToken(path string) (string, error) {
 var routerRequest = func(path string, payload any) (map[string]any, error) {
 	return postJSON(path, payload, routerTokenFile, func(code int) error {
 		// Keep conflict/denial visible without returning server bodies or secrets.
-		return fmt.Errorf("Arkism request failed (HTTP %d)", code)
+		return routerRefusal(code)
 	})
 }
+
+// routerRefusal keeps the status readable by host.HTTPCode without carrying the server body.
+type routerRefusal int
+
+func (e routerRefusal) Error() string {
+	return fmt.Sprintf("Arkism request failed (HTTP %d)", int(e)) + routerRefusalHints[int(e)]
+}
+
+// routerRefusalHints says what to try next for a status; the server body stays hidden.
+var routerRefusalHints = map[int]string{
+	400: ": an argument is missing or malformed; check this tool's required arguments and id formats",
+	401: ": the token was not accepted; check the token file (router_status)",
+	403: ": this token may not do that here; do not retry, ask the user for the permission",
+	404: ": nothing with that id in this space; list or search for the id first",
+	409: ": it changed or a matching request is already open; read it again and retry with the current revision",
+	429: ": too many requests; wait before retrying",
+	503: ": the server cannot serve this now (a model or index may be off); retry later or use another tool",
+}
+
+func (e routerRefusal) Unwrap() error { return &host.HTTPError{Code: int(e)} }
 
 func postJSON(path string, payload any, tokenFile string, refused func(int) error) (map[string]any, error) {
 	tok, err := readToken(tokenFile)
@@ -150,6 +170,9 @@ func postJSON(path string, payload any, tokenFile string, refused func(int) erro
 	res, err := host.DoJSON(http.DefaultClient, req)
 	if code := host.HTTPCode(err); code != 0 {
 		return nil, refused(code)
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return nil, errors.New("Arkism request failed (no answer within 15 seconds; the server may be busy, try again)")
 	}
 	if err != nil {
 		return nil, errors.New("Arkism request failed")
@@ -875,18 +898,20 @@ func recallSearchOptions(opts map[string]any) (map[string]any, error) {
 	return out, nil
 }
 
-// recallTimezoneOption checks timezone (an IANA name) into out; empty is left out.
+// recallTimezoneOption checks timezone (an IANA name) and locale (a BCP 47 tag) into out; empty is left out.
 func recallTimezoneOption(opts, out map[string]any) error {
-	v, ok := opts["timezone"]
-	if !ok || v == nil {
-		return nil
-	}
-	tz, isStr := v.(string)
-	if !isStr || len(tz) > 64 || strings.Trim(tz, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/_+-") != "" {
-		return errors.New("timezone must be an IANA name such as Asia/Seoul")
-	}
-	if tz != "" {
-		out["timezone"] = tz
+	for key, hint := range map[string]string{"timezone": "an IANA name such as Asia/Seoul", "locale": "a language tag such as en-GB"} {
+		v, ok := opts[key]
+		if !ok || v == nil {
+			continue
+		}
+		text, isStr := v.(string)
+		if !isStr || len(text) > 64 || strings.Trim(text, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/_+-") != "" {
+			return errors.New(key + " must be " + hint)
+		}
+		if text != "" {
+			out[key] = text
+		}
 	}
 	return nil
 }
@@ -1016,7 +1041,13 @@ func recallSearch(q string, isStr bool, relatedTo any, project string, opts map[
 	if relatedTo != nil {
 		payload["related_to"], payload["modes"] = relatedTo, []any{"relation"}
 	}
+	if relatedTo == nil { // the agent's own recall may get twice limit memories for a question asking for every instance
+		payload["aggregate_items"] = true
+	}
 	res, err := routerRequest("/v1/search", payload)
+	if host.DropAggregateOptIn(payload, err) {
+		res, err = routerRequest("/v1/search", payload)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1087,13 +1118,13 @@ func remember(text, kind any, supersedes, labels map[string]any) (host.Obj, erro
 	if origin == "" {
 		origin = "codex"
 	}
-	claim := map[string]any{"subject": "memory", "text": pyStrip(t), "kind": kind, "basis": "inferred",
-		"reason": "MCP로 제안한 기억. 사람의 검토가 필요합니다."}
+	// No "reason": the server keeps it as the memory's summary, so a review notice would outlive the approval.
+	claim := map[string]any{"subject": "memory", "text": pyStrip(t), "kind": kind, "basis": "inferred"}
 	for k, v := range labels {
 		claim[k] = v
 	}
 	if supersedes != nil {
-		claim["supersedes"], claim["reason"] = supersedes, "MCP로 제안한 기억 수정. 사람이 승인해야 이전 기억을 대신합니다."
+		claim["supersedes"] = supersedes
 	}
 	result, err := routerRequest("/v1/capture", map[string]any{
 		"scope":     host.Scope(),
@@ -1238,10 +1269,45 @@ func routerToolEnabled(n string) error {
 		return nil
 	}
 	if !routerToolNames()[n] {
-		return errors.New("unknown tool")
+		return rpcError{-32602, fmt.Sprintf("unknown tool %q; tools/list shows the tools this space has", n)}
 	}
 	if !spaceToolAllowed(n) {
+		if spaceToolsUnreachable() {
+			return errors.New("tool_not_enabled: the Arkism server could not be read (it is down, or it refused this token), so no tool is available; check the server and the token, then call again")
+		}
 		return errors.New("tool_not_enabled: this space's settings leave this tool out")
+	}
+	return nil
+}
+
+// rpcError is a failure with its own JSON-RPC code; every other failure answers -32000.
+type rpcError struct {
+	code int
+	msg  string
+}
+
+func (e rpcError) Error() string { return e.msg }
+
+// missingArgs names the required arguments (inputSchema.required) a call left out, so the answer says what to send.
+func missingArgs(name string, args map[string]any) error {
+	tools, _ := routerTools() // a bad list was already refused by routerToolEnabled
+	for _, raw := range tools {
+		var t struct {
+			Name        string
+			InputSchema struct{ Required []string }
+		}
+		if json.Unmarshal(raw, &t) != nil || t.Name != name {
+			continue
+		}
+		var missing []string
+		for _, k := range t.InputSchema.Required {
+			if args[k] == nil {
+				missing = append(missing, k)
+			}
+		}
+		if len(missing) > 0 {
+			return rpcError{-32602, fmt.Sprintf("%s: missing required argument(s): %s", name, strings.Join(missing, ", "))}
+		}
 	}
 	return nil
 }
@@ -1299,6 +1365,9 @@ func callTool(name, argsAny any) (host.Obj, error) {
 	}
 	args, err := toolArgs(n, argsAny)
 	if err != nil {
+		return nil, err
+	}
+	if err := missingArgs(n, args); err != nil {
 		return nil, err
 	}
 	if strings.HasPrefix(n, "ext_") {
@@ -1621,7 +1690,11 @@ func respond(w io.Writer, message map[string]any, result any, failure error) {
 	}
 	payload := host.Obj{{Key: "jsonrpc", Value: "2.0"}, {Key: "id", Value: id}}
 	if failure != nil {
-		payload = append(payload, host.KV{Key: "error", Value: host.Obj{{Key: "code", Value: -32000}, {Key: "message", Value: failure.Error()}}})
+		code := -32000
+		if e, ok := errors.AsType[rpcError](failure); ok {
+			code = e.code
+		}
+		payload = append(payload, host.KV{Key: "error", Value: host.Obj{{Key: "code", Value: code}, {Key: "message", Value: failure.Error()}}})
 	} else {
 		payload = append(payload, host.KV{Key: "result", Value: result})
 	}
@@ -1635,6 +1708,23 @@ func respond(w io.Writer, message map[string]any, result any, failure error) {
 // rawJSON is pre-encoded JSON that Dumps cannot reproduce from maps (key order matters to clients).
 type rawJSON string
 
+// handleBatch answers a JSON-RPC batch: each entry is handled as its own message and the
+// answers come back in one array. A batch of notifications alone has no answer.
+func handleBatch(batch []any) string {
+	var answers []string
+	for _, entry := range batch {
+		var out strings.Builder
+		handleMessage(&out, host.MustDumps(entry, host.DumpOpts{Compact: true, NoASCII: true}))
+		if s := strings.TrimSpace(out.String()); s != "" {
+			answers = append(answers, s)
+		}
+	}
+	if answers == nil {
+		return ""
+	}
+	return "[" + strings.Join(answers, ",") + "]"
+}
+
 func handleMessage(w io.Writer, line string) {
 	message := map[string]any{}
 	var result any
@@ -1646,11 +1736,18 @@ func handleMessage(w io.Writer, line string) {
 		}()
 		v, err := loadsStrict(strings.TrimPrefix(line, "\ufeff"))
 		if err != nil {
-			return err
+			message = map[string]any{"id": nil} // a line that is not JSON has no id to answer under
+			return rpcError{-32700, "parse error: each line must be one JSON-RPC message"}
+		}
+		if batch, ok := v.([]any); ok && len(batch) > 0 {
+			result = rawJSON(handleBatch(batch))
+			message = map[string]any{}
+			return nil
 		}
 		m, ok := v.(map[string]any)
 		if !ok {
-			return nil
+			message = map[string]any{"id": nil}
+			return rpcError{-32600, "invalid request: send one JSON-RPC object, or a non-empty array of them"}
 		}
 		message = m
 		method := m["method"]
@@ -1675,13 +1772,18 @@ func handleMessage(w io.Writer, line string) {
 		case "tools/call":
 			params, ok := getOr(m, "params", map[string]any{}).(map[string]any)
 			if !ok {
-				return attrErr(m["params"])
+				return rpcError{-32602, "params must be an object with name and arguments"}
 			}
 			result, err = callTool(getOr(params, "name", ""), getOr(params, "arguments", map[string]any{}))
 			return err
 		case "notifications/initialized":
 			message = map[string]any{} // a notification is never answered
+		case "ping":
+			result = map[string]any{}
 		default:
+			if name, ok := method.(string); ok && !strings.HasPrefix(name, "notifications/") {
+				return rpcError{-32601, fmt.Sprintf("method not found: %s (this server answers initialize, ping, tools/list and tools/call)", name)}
+			}
 			result = map[string]any{}
 		}
 		return nil
@@ -1694,6 +1796,10 @@ func handleMessage(w io.Writer, line string) {
 		return
 	}
 	if raw, ok := result.(rawJSON); ok {
+		if strings.HasPrefix(string(raw), "[") { // a batch answers as one array, under no id of its own
+			_, _ = io.WriteString(w, string(raw)+"\n")
+			return
+		}
 		if id, has := message["id"]; has {
 			enc := json.NewEncoder(w)
 			enc.SetEscapeHTML(false)

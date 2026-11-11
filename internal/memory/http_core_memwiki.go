@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 )
@@ -25,8 +26,7 @@ func registerMemwikiCoreHTTP(mux routeRegistrar, s *Service, _ *requestMetrics) 
 		if !decode(w, r, &in) {
 			return
 		}
-		out, e := s.BuildWikiFromMemories(r.Context(), bearer(r), in)
-		respond(w, out, e)
+		s.respondLater(w, r, in.Scope, func(ctx context.Context, token string) (any, error) { return s.BuildWikiFromMemories(ctx, token, in) })
 	})
 	mux.HandleFunc("GET /v1/wiki/tree", func(w http.ResponseWriter, r *http.Request) {
 		scope, _, e := parseWikiQuery(r.URL.RawQuery)

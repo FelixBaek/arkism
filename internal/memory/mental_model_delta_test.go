@@ -34,7 +34,7 @@ func TestMentalModelDeltaRefresh(t *testing.T) {
 		t.Fatalf("%+v %v", v, err)
 	}
 	// Nothing changed after the approval: nothing to send.
-	if _, err := f.svc.RefreshMentalModel(testCtx, f.human, mm.ID, MentalModelRefreshInput{Scope: scopeA}); !errors.Is(err, ErrNotFound) {
+	if v, err := f.svc.RefreshMentalModel(testCtx, f.human, mm.ID, MentalModelRefreshInput{Scope: scopeA}); err != nil || v.LastOutcome == nil || v.LastOutcome.Code != mmOutcomeNoFacts {
 		t.Fatalf("no new memories: %v", err)
 	}
 	time.Sleep(2 * time.Millisecond)

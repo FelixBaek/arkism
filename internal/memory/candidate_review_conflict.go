@@ -52,7 +52,8 @@ func (s *Service) resolveReviewConflict(ctx context.Context, tx Tx, candidate Re
 	if err != nil {
 		return Record{}, nil, err
 	}
-	if old.ContentErased || old.PrivacyQuarantined || !s.memoryReviewerAllowed(actor, in.Scope, old.Kind) {
+	// The reviewer grant (its kinds and expiry) gates a reviewer's call, never the dream (dream.go).
+	if old.ContentErased || old.PrivacyQuarantined || !dreamReview(ctx, &in, actor) && !s.memoryReviewerAllowed(actor, in.Scope, old.Kind) {
 		return Record{}, nil, ErrDenied
 	}
 	resolution := reviewConflictResolution(in.Action, candidateIndex)

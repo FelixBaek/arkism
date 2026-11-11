@@ -337,3 +337,15 @@ func lfText(t *testing.T, path string) string {
 	}
 	return strings.ReplaceAll(string(raw), "\r\n", "\n")
 }
+
+// Installing again must leave the file byte for byte the same (no blank line added at the end).
+func TestInstCodexConfigIsStableOnReinstall(t *testing.T) {
+	first, err := instCodexConfig("model = \"x\"\n", "C:/arkism.exe", "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := instCodexConfig(first, "C:/arkism.exe", "codex")
+	if err != nil || second != first {
+		t.Fatalf("%v\nfirst:  %q\nsecond: %q", err, first, second)
+	}
+}

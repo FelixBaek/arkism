@@ -105,6 +105,16 @@ type Service struct {
 	CostRates CostRates
 	// Wiki, when set, is the model the optional LLM-Wiki jobs call.
 	Wiki WikiLLM
+	// ExtractModel is the configured model for file extraction alone, set where Wiki is off.
+	ExtractModel WikiLLM
+	// DreamModel, when configured, is the model the dream's generative stages call (dream_model.go).
+	DreamModel LLMConfig
+	// ReflectReread, when set, is the model that copies source lines for a reflect answer (reflect_reread.go).
+	ReflectReread WikiLLM
+	// ReflectRereadDailyLimit caps those calls per project and day; 0 keeps the default of 1000.
+	ReflectRereadDailyLimit int
+	// ReflectPassages is how many matched conversation turns a reflect answer is also given, as said; 0 is off.
+	ReflectPassages int
 	// LLMTraceContent keeps redacted, clipped prompt and answer text in model
 	// call traces (llm_requests.go); off stores sizes and hashes only.
 	LLMTraceContent bool
@@ -139,6 +149,8 @@ type CreateInput struct {
 	Entities []EntityInput `json:"entities,omitempty"`
 	// entityRelations: server-owned, set by capture only (capture_labels.go).
 	entityRelations []EntityRelationInput
+	// derivedFrom: server-owned, the memories a dream run merged or derived this candidate from.
+	derivedFrom []string
 
 	TrustLevel     string      `json:"trust_level,omitempty"`
 	Confidence     *float64    `json:"confidence,omitempty"`
@@ -336,7 +348,7 @@ func audit(ctx context.Context, tx Tx, scope Scope, actor, action, id string) er
 // Match the Create source-reference limit; bound even legacy/direct DB inputs.
 func sourceMetadata(ctx context.Context, tx Tx, scope Scope, refs []SourceRef) ([]Record, error) {
 	if len(refs) == 0 || len(refs) > 64 {
-		return nil, ErrInvalid
+		return nil, invalidf("sources: %d given, need 1 to 64", len(refs))
 	}
 	return sourceMetadataBatch(ctx, tx, scope, refs)
 }
@@ -348,11 +360,11 @@ func sourceMetadataBatch(ctx context.Context, tx Tx, scope Scope, refs []SourceR
 	spans := map[string][]SourceSpan{}
 	for _, ref := range refs {
 		if ref.SourceID == "" || ref.Locator == "" {
-			return nil, ErrInvalid
+			return nil, invalidf("sources: each entry needs source_id and locator")
 		}
 		if ref.Span != nil {
 			if ref.Span.Start < 0 || ref.Span.End <= ref.Span.Start || ref.Span.End > 64000 || !sourceHashPattern.MatchString(ref.Span.ContentHash) {
-				return nil, ErrInvalid
+				return nil, invalidf("sources: span of %s needs start < end <= 64000 and a content_hash", ref.SourceID)
 			}
 			spans[ref.SourceID] = append(spans[ref.SourceID], *ref.Span)
 		}
@@ -555,12 +567,15 @@ func validTags(tags []string) bool {
 	return true
 }
 
+// memoryKinds are the kinds a memory candidate, and so a reviewed memory, can have.
+var memoryKinds = []string{"raw", "semantic", "episodic", "procedural", "user", "decision", "lesson"}
+
 func validCreateKind(collection, kind string) bool {
 	switch collection {
 	case "sources":
 		return slices.Contains([]string{"conversation", "message", "note", "document", "url", "image", "tool_result", "design_page"}, kind)
 	case "memory_candidates":
-		return slices.Contains([]string{"raw", "semantic", "episodic", "procedural", "user", "decision", "lesson"}, kind)
+		return slices.Contains(memoryKinds, kind)
 	case colMemoryRelations:
 		return kind != causalKind // causal links go through /v1/causal-links and human review
 	default:
@@ -571,7 +586,11 @@ func (s *Service) Create(ctx context.Context, token, col string, in CreateInput)
 	if ownRoutesOnly(col) {
 		return Record{}, ErrInvalid
 	}
-	return s.create(ctx, token, col, in, nil)
+	r, err := s.create(ctx, token, col, in, nil)
+	if err == nil && col == "memory_candidates" {
+		s.noteDreamActivity(ctx, r.Scope)
+	}
+	return r, err
 }
 
 func (s *Service) create(ctx context.Context, token, col string, in CreateInput, file *textArtifact) (Record, error) {
@@ -590,6 +609,7 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 	}
 	clean.capture = in.capture
 	clean.entityRelations = in.entityRelations // names were defended with the claim; a redacted end stops matching its entity
+	clean.derivedFrom = in.derivedFrom
 	in = clean
 	d, e := s.authorizeCreate(ctx, token, col, in, file)
 	if e != nil {
@@ -599,7 +619,7 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 	if e = normalizeCreateTimes(col, &in, now); e != nil {
 		return Record{}, e
 	}
-	r := Record{ConversationOrder: in.ConversationOrder, MemoryContext: copyMemoryContext(in.MemoryContext), ArchiveMessages: append([]ArchiveMessageRef(nil), in.ArchiveMessages...), Confidence: in.Confidence, Evaluation: in.Evaluation, Run: in.Run, ToolCall: in.ToolCall, OriginProduct: in.OriginProduct, SourceRef: in.SourceRef, SourceEventID: in.SourceEventID, TraceID: in.TraceID, CollectedAt: in.CollectedAt, Generator: in.Generator, CreatedByType: d.Role, Sensitivity: in.Sensitivity, Inspection: &inspection, ID: ID(), Scope: in.Scope, Kind: in.Kind, Status: "active", Revision: 1, Text: in.Text, Summary: in.Summary, Keywords: in.Keywords, Tags: in.Tags, Entities: in.Entities, EntityRelations: in.entityRelations, Sources: in.Sources, Relations: in.Relations, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, Trust: 0.5, EffectiveAt: in.EffectiveAt, Occurred: in.Occurred, ExpiresAt: in.ExpiresAt, SkillID: in.SkillID, BaseVersion: in.BaseVersion, Target: in.Target, Passed: in.Passed, Reflection: in.Reflection}
+	r := Record{ConversationOrder: in.ConversationOrder, MemoryContext: copyMemoryContext(in.MemoryContext), ArchiveMessages: append([]ArchiveMessageRef(nil), in.ArchiveMessages...), Confidence: in.Confidence, Evaluation: in.Evaluation, Run: in.Run, ToolCall: in.ToolCall, OriginProduct: in.OriginProduct, SourceRef: in.SourceRef, SourceEventID: in.SourceEventID, TraceID: in.TraceID, CollectedAt: in.CollectedAt, Generator: in.Generator, CreatedByType: d.Role, Sensitivity: in.Sensitivity, Inspection: &inspection, ID: ID(), Scope: in.Scope, Kind: in.Kind, Status: "active", Revision: 1, Text: in.Text, Summary: in.Summary, Keywords: in.Keywords, Tags: in.Tags, Entities: in.Entities, EntityRelations: in.entityRelations, Sources: in.Sources, Relations: in.Relations, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, Trust: 0.5, EffectiveAt: in.EffectiveAt, Occurred: in.Occurred, ExpiresAt: in.ExpiresAt, SkillID: in.SkillID, BaseVersion: in.BaseVersion, Target: in.Target, Passed: in.Passed, Reflection: in.Reflection, DreamDerivedFrom: in.derivedFrom}
 	if r.ExpiresAt != nil && !r.ExpiresAt.After(now) {
 		return Record{}, ErrInvalid
 	}
@@ -657,25 +677,33 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 
 func checkCreateRequest(col string, in *CreateInput, file *textArtifact) error {
 	if len(in.ArchiveMessages) > 0 && col != "sources" {
-		return ErrInvalid
+		return invalidf("archive_messages: only sources take them")
 	}
 	if in.TrustLevel != "" && (col != "sources" || in.TrustLevel != "external_untrusted" && in.TrustLevel != "user_authored") {
-		return ErrInvalid
+		return invalidf("trust_level: only sources take it, as external_untrusted or user_authored")
 	}
 	if err := normalizeCreateConfidence(col, in); err != nil {
 		return err
 	}
 	if col == "sources" && !validScope(in.Scope) {
-		return ErrInvalid
+		return invalidf("scope: workspace_id and project_id are required")
 	}
 	if in.IdempotencyKey != "" && (col != "sources" || !idempotencyPattern.MatchString(in.IdempotencyKey)) {
-		return ErrInvalid
+		return invalidf("idempotency_key: only sources take it, and it must match the key pattern")
 	}
-	if !validCandidateTime(col, in) {
-		return ErrInvalid
-	}
-	if !validTags(in.Tags) || !validEntityInputs(in.Entities) || createFieldsMisplaced(col, *in, file) || createLabelsInvalid(col, *in) || createFieldsOversized(*in, file) {
-		return ErrInvalid
+	switch {
+	case !validCandidateTime(col, in):
+		return invalidf("effective_at, occurred, expires_at: a time is out of range or not allowed in %s", col)
+	case !validTags(in.Tags):
+		return invalidf("tags: too many, too long or empty")
+	case !validEntityInputs(in.Entities):
+		return invalidf("entities: a name or type is missing or too long")
+	case createFieldsMisplaced(col, *in, file):
+		return invalidf("%s does not take one of the fields sent (tags, entities, evaluation, run, tool_call, reflection, file), or is not a collection to create in", col)
+	case createLabelsInvalid(col, *in):
+		return invalidf("source_event_id, trace_id: not allowed in %s, or not a short label", col)
+	case createFieldsOversized(*in, file):
+		return invalidf("text is empty or over 64000 bytes, or summary, sources, relations, keywords, skill_id or base_version is over its limit")
 	}
 	return nil
 }
@@ -684,7 +712,7 @@ func normalizeCreateConfidence(col string, in *CreateInput) error {
 	if in.Confidence != nil {
 		confidence := *in.Confidence
 		if col != "memory_candidates" || math.IsNaN(confidence) || math.IsInf(confidence, 0) || confidence < 0 || confidence > 1 {
-			return ErrInvalid
+			return invalidf("confidence: only memory_candidates take it, from 0 to 1")
 		}
 		in.Confidence = &confidence
 	}
@@ -764,7 +792,7 @@ func (s *Service) authorizeCreate(ctx context.Context, token, col string, in Cre
 		}
 	}
 	if (in.Generated || in.Generator != nil || requiresGenerator(d.Role, col)) && !validGenerator(in.Generator) {
-		return Decision{}, ErrInvalid
+		return Decision{}, invalidf("generator: model, prompt_version and pipeline_version are required for this caller")
 	}
 	if d.Role != "human" && d.Role != "agent" && d.Role != "service" && d.Role != "pipeline" {
 		return Decision{}, ErrDenied
@@ -773,7 +801,7 @@ func (s *Service) authorizeCreate(ctx context.Context, token, col string, in Cre
 		return Decision{}, ErrDenied
 	}
 	if !validCreateKind(col, in.Kind) {
-		return Decision{}, ErrInvalid
+		return Decision{}, invalidf("kind: %q is not a kind %s takes", in.Kind, col)
 	}
 	return d, nil
 }
@@ -794,35 +822,35 @@ func (s *Service) authorizeArtifactCreate(ctx context.Context, token string, sco
 
 func normalizeCreateTimes(col string, in *CreateInput, now time.Time) error {
 	if !validConversationOrder(in.ConversationOrder) || in.ConversationOrder != nil && (col != "sources" || in.Kind != conversationSourceKind) {
-		return ErrInvalid
+		return invalidf("conversation_order: only a conversation source can carry one")
 	}
 	if col == "memory_candidates" {
 		effective := now.Truncate(time.Millisecond)
 		if in.EffectiveAt != nil {
 			effective = in.EffectiveAt.UTC().Truncate(time.Millisecond)
 			if !storableTime(effective) {
-				return ErrInvalid
+				return invalidf("effective_at: outside the storable range")
 			}
 		}
 		in.EffectiveAt = &effective
 		if in.ExpiresAt != nil {
 			expires := in.ExpiresAt.UTC().Truncate(time.Millisecond)
 			if !expires.After(effective) || !storableTime(expires) {
-				return ErrInvalid
+				return invalidf("expires_at: must be after effective_at")
 			}
 			in.ExpiresAt = &expires
 		}
 	} else if in.EffectiveAt != nil {
-		return ErrInvalid
+		return invalidf("effective_at: only memory_candidates accept it")
 	}
 	if col == "sources" {
 		if !validSourceOrigin(in.OriginProduct, in.SourceRef, in.CollectedAt, now) {
-			return ErrInvalid
+			return invalidf("origin_product, source_ref and collected_at are required for a source, and collected_at cannot be in the future")
 		}
 		normalized := in.CollectedAt.UTC().Truncate(time.Millisecond)
 		in.CollectedAt = &normalized
 	} else if in.OriginProduct != "" || in.SourceRef != "" || in.CollectedAt != nil {
-		return ErrInvalid
+		return invalidf("origin_product, source_ref, collected_at: only sources accept them")
 	}
 	return nil
 }
@@ -833,13 +861,13 @@ func classifyCreatedCandidate(col string, r *Record, in CreateInput, d Decision,
 		if in.Classification != nil {
 			c := *in.Classification
 			if !validClassification(c) {
-				return ErrInvalid
+				return invalidf("classification: unknown value")
 			}
 			c.By, c.At = d.PrincipalID, &now
 			r.Classification = &c
 		}
 	} else if in.Classification != nil {
-		return ErrInvalid
+		return invalidf("classification: only memory_candidates accept it")
 	}
 	return nil
 }
@@ -853,12 +881,12 @@ func (s *Service) prepareCreateRecord(ctx context.Context, token, col string, r 
 		r.NormalizedKey = candidateNormalizedKey(*r)
 		for _, ref := range r.Sources {
 			if ref.Span == nil {
-				return ErrInvalid
+				return invalidf("sources: each source reference needs a span")
 			}
 		}
 	}
 	if col == "reflections" && r.Reflection == nil {
-		return ErrInvalid
+		return invalidf("reflection: required")
 	}
 	if col == "reflections" && r.Reflection != nil {
 		if err := prepareReflection(r, d); err != nil {
@@ -866,7 +894,7 @@ func (s *Service) prepareCreateRecord(ctx context.Context, token, col string, r 
 		}
 	}
 	if col == "reflections" && len(r.Relations) == 0 {
-		return ErrInvalid
+		return invalidf("relations: a reflection needs at least one")
 	}
 	if col == "agent_runs" {
 		if err := prepareAgentRun(r, now); err != nil {
@@ -1116,7 +1144,7 @@ func (s *Service) Get(ctx context.Context, token, col string, scope Scope, id st
 			return ErrNotFound
 		}
 		if cur.Revision != r.Revision {
-			return ErrConflict
+			return revisionConflict(r.Revision, cur.Revision)
 		}
 		if col != "sources" && col != "audit_events" && !(col == "memory_relations" && cur.ContentErased) {
 			if e = checkSources(ctx, tx, cur); e != nil {
@@ -1227,8 +1255,9 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 		return Record{}, e
 	}
 	if review != nil {
-		// Review is an explicit human decision; legacy service policies cannot approve or reject.
-		if review.Automated || d.Role != roleHuman || !d.ContentSafe {
+		// Review is an explicit human decision, or the worker's own dream run (dream.go); legacy service
+		// policies cannot approve or reject, so the reviewer policy check below never applies.
+		if !d.ContentSafe || !reviewerMayDecide(ctx, review, d) {
 			return Record{}, ErrDenied
 		}
 	} else if d.Role != roleHuman {
@@ -1267,9 +1296,6 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 		}
 
 		if review != nil {
-			if !s.memoryReviewerAllowed(d, in.Scope, r.Kind) {
-				return ErrDenied
-			}
 			var replay bool
 			result, replay, e = replayMemoryReview(ctx, tx, id, d.PrincipalID, *review)
 			if e != nil {
@@ -1284,7 +1310,7 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 		resolvedRejection := false
 		if review != nil && review.Conflict != nil {
 			if r.Revision != expectedRevision {
-				return ErrConflict
+				return revisionConflict(expectedRevision, r.Revision)
 			}
 			r, replaced, e = s.resolveReviewConflict(ctx, tx, r, *review, d)
 			if e != nil {
@@ -1371,10 +1397,13 @@ func checkTransition(ctx context.Context, tx Tx, col string, in ChangeInput, r *
 		normalizeMemoryProvenance(r)
 	}
 	if transitionConflict(in, *r, review, resolvedRejection, expectedRevision) {
-		return ErrConflict
+		if r.Revision != expectedRevision {
+			return revisionConflict(expectedRevision, r.Revision)
+		}
+		return reasonError{ErrConflict, fmt.Sprintf("status: the record is %q (or conflicted, or expired) and cannot take this change", r.Status)}
 	}
 	if transitionInvalid(col, in, *r, review, resolvedRejection) {
-		return ErrInvalid
+		return invalidf("status: %q cannot change to %q", r.Status, in.Status)
 	}
 	if review == nil || in.Status != "rejected" {
 		if e := checkSources(ctx, tx, *r); e != nil {
@@ -1442,7 +1471,11 @@ func validCandidateTime(col string, in *CreateInput) bool {
 }
 
 func applyReviewDecision(r *Record, review CandidateReviewInput, d Decision) {
-	r.Review = &ReviewDecision{ReceiptID: ID(), ActorRole: d.Role, Channel: "explicit_review_api", Action: review.Action, By: d.PrincipalID, At: r.UpdatedAt, Reason: review.Reason, ReasonCode: review.ReasonCode}
+	channel := "explicit_review_api"
+	if review.Automated { // only a dream run gets an automated review through transition
+		channel = "dream"
+	}
+	r.Review = &ReviewDecision{ReceiptID: ID(), ActorRole: d.Role, Channel: channel, Action: review.Action, By: d.PrincipalID, At: r.UpdatedAt, Reason: review.Reason, ReasonCode: review.ReasonCode}
 	if d.Role == roleHuman {
 		r.Review.Person, r.Review.Overturned = true, overturned(r.Classification, review.Action)
 		if r.Classification != nil {
@@ -1588,11 +1621,33 @@ func (s *Service) ApplySkill(ctx context.Context, token, id string, in ChangeInp
 			}
 		}
 	}
+	if rollback && in.VersionID == "" {
+		in.VersionID = s.restorableBaseVersion(ctx, in.Scope, id)
+	}
 	unvalidated := false
 	if rollback && d.Role == roleHuman && in.ValidationID == "" {
 		unvalidated = s.watchedPreviousVersion(ctx, in, id)
 	}
 	return s.applySkillVersion(ctx, d, automation, id, in, rollback, unvalidated)
+}
+
+// restorableBaseVersion names the version the active one replaced when a rollback can restore it,
+// so a rollback that names no version goes back one step instead of leaving the skill without a version.
+// It is "" (the skill is turned off) only when there is nothing to go back to.
+func (s *Service) restorableBaseVersion(ctx context.Context, scope Scope, skillID string) string {
+	skill, e := s.Repo.Get(ctx, colSkills, scope, skillID)
+	if e != nil || skill.ActiveVersion == "" {
+		return ""
+	}
+	active, e := s.Repo.Get(ctx, "skill_versions", scope, skill.ActiveVersion)
+	if e != nil || active.BaseVersion == "" {
+		return ""
+	}
+	base, e := s.Repo.Get(ctx, "skill_versions", scope, active.BaseVersion)
+	if e != nil || base.SkillID != skillID || base.Status != "superseded" || base.ValidationID == "" {
+		return ""
+	}
+	return base.ID
 }
 
 // applySkillVersion is ApplySkill after authorization. unvalidated is only for a skill watch's rollback on

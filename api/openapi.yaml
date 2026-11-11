@@ -4365,6 +4365,10 @@
                           "outcome": {
                             "type": "string",
                             "description": "Consolidation jobs: the last pass, ok, model_budget_exceeded, denied or model_not_configured."
+                          },
+                          "route": {
+                            "type": "string",
+                            "description": "Deferred calls (kind deferred_call): the route that was called."
                           }
                         }
                       }
@@ -4585,6 +4589,21 @@
                     "outcome": {
                       "type": "string",
                       "description": "Consolidation jobs: the last pass, ok, model_budget_exceeded, denied or model_not_configured."
+                    },
+                    "route": {
+                      "type": "string",
+                      "description": "Deferred calls (kind deferred_call): the route that was called."
+                    },
+                    "result": {
+                      "type": [
+                        "object",
+                        "array",
+                        "string",
+                        "number",
+                        "boolean",
+                        "null"
+                      ],
+                      "description": "Deferred calls, status done: the 200 body of the route that was called. A deferred call left running past its lease reads as failed with error interrupted."
                     }
                   }
                 }
@@ -7740,7 +7759,7 @@
     },
     "/v1/skills/{id}/rollback": {
       "post": {
-        "summary": "Select a previously approved superseded version; empty version_id disables the skill",
+        "summary": "Select a previously approved superseded version; empty version_id goes back to the version before the active one, or disables the skill when none can be restored",
         "parameters": [
           {
             "name": "id",
@@ -8025,7 +8044,7 @@
       "post": {
         "operationId": "generateSkill",
         "summary": "Generate a candidate from verified lessons; recover completed requests without repeating the provider call",
-        "description": "Configured model adapters improve an existing baseline using 1–8 non-overlapping literal edits, each linked to a supplied verified lesson. Anchors must occur exactly once in the original baseline. The server preserves untouched bytes and stores the resulting full candidate; the provider edit format is internal, not a request field. New skills still use full content. Generation neither approves nor applies a candidate; independent comparison and review remain required.",
+        "description": "Configured model adapters improve an existing baseline using 1–8 non-overlapping literal edits, each linked to a supplied verified lesson. Anchors must occur exactly once in the original baseline. The server preserves untouched bytes and stores the resulting full candidate; the provider edit format is internal, not a request field. New skills still use full content. Generation neither approves nor applies a candidate; independent comparison and review remain required. A call still running after about 20 seconds answers 202 with an operation to read (GET /v1/operations/{id}); the work continues and its result is this route's 200 body.",
         "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GenerateSkillInput"}}}},
         "responses": {
           "200": {"description": "Candidate or currently valid reused version", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportSkillResult"}}}},
@@ -8051,6 +8070,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Still running after the in-request wait: read the operation at location (GET /v1/operations/{id}) until its status leaves running; done carries this route's 200 body as result, failed carries the Error.code as error.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeferredAccepted"
                 }
               }
             }
@@ -8312,6 +8351,26 @@
                 }
               }
             }
+          },
+          "202": {
+            "description": "Still running after the in-request wait: read the operation at location (GET /v1/operations/{id}) until its status leaves running; done carries this route's 200 body as result, failed carries the Error.code as error.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeferredAccepted"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -8324,7 +8383,7 @@
             }
           }
         },
-        "description": " New source-backed records write an internal fence on each active, unexpired source in the same transaction. Concurrent source deletion aborts stale insertion; source semantic revisions are unchanged. Conflict marking also requires live source IDs. This prevents late copies; erasure coverage is determined by the deletion job kind and reported by the source deletion status endpoint. A deleted deterministic analysis source ID cannot be recreated: its deletion receipt is checked before the analyzer call and again in the storage transaction; a matching receipt returns 409. Successful dependent authorization decisions must match the initial principal and role; mismatch returns 403 without result data. Already incurred provider calls/costs are retained; no analysis records are published after identity mismatch.",
+        "description": " New source-backed records write an internal fence on each active, unexpired source in the same transaction. Concurrent source deletion aborts stale insertion; source semantic revisions are unchanged. Conflict marking also requires live source IDs. This prevents late copies; erasure coverage is determined by the deletion job kind and reported by the source deletion status endpoint. A deleted deterministic analysis source ID cannot be recreated: its deletion receipt is checked before the analyzer call and again in the storage transaction; a matching receipt returns 409. Successful dependent authorization decisions must match the initial principal and role; mismatch returns 403 without result data. Already incurred provider calls/costs are retained; no analysis records are published after identity mismatch. A call still running after about 20 seconds answers 202 with an operation to read (GET /v1/operations/{id}); the work continues and its result is this route's 200 body.",
         "operationId": "postV1SkillsAnalyze"
       }
     },
@@ -8975,6 +9034,52 @@
             }
           }},
         "operationId": "postV1MaintenanceProposalsByIdDecide"}},
+    "/v1/dream_runs": {"get": {"summary": "What dreaming did: the newest automatic consolidation runs of a scope (read:maintenance_proposals, human principals only)", "description": "Query scope fields and limit=1-50 (default 20). mode is auto (the worker applies the AI's judgements while the scope is idle, MEMORY_DREAM=auto, the default) or manual (every item waits for a person). Each item is {id, run}; run holds trigger idle|schedule, started_at, finished_at, outcome ok|item_limit|time_limit|model_limit|denied:<action>, model (the dream model, empty without one), model_calls, changes [{op approve|edit_approve|reject|supersede|expire|resolve|merge|insight|promote_skill|demote_skill, target, reason, confidence, before, after (statuses; reports hold no memory text), undone_at, undone_by}], skipped [{target, reason, confidence}] (up to MEMORY_DREAM_ITEMS; an item already reported at the same revision is not listed again) and skipped_more (new skips past those). The newest 50 runs per space are kept.", "parameters": [{"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 50}}], "responses": {"200": {"description": "Dream runs, newest first"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"},
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }},
+        "operationId": "getV1DreamRuns"}},
+    "/v1/dream_runs/{id}/undo": {"post": {"summary": "Undo one change of a dream run, or the whole run (human principals only)", "description": "Body {scope, change}. change is the index of one change in run.changes; without it every change of the run is undone, newest first. Each row the change wrote gets its earlier status back, only while nobody changed or deleted it since: an approval is withdrawn (the memory becomes rejected), a merged pair proposal is dismissed, a superseded, expired or rejected row gets its earlier status (a review entry also loses the dream's review). Undone rows are tagged dream-undone so a later dream leaves them alone. Needs write:maintenance_proposals and transition:memories. undone lists the changes undone now; conflicts the ones a later write blocks (left as they are).", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "{undone, conflicts, run}"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "404": {"description": "No such dream run"},
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }},
+        "operationId": "postV1DreamRunsByIdUndo"}},
     "/v1/context/pins": {"get": {"summary": "Resolved pins of a work agent or team (read:crew, context:read)", "description": "agent=@handle of a live agent or team in the scope. Pins come in priority order, each read now: status ok|not_found|not_approved|revision_mismatch|secret_blocked|denied; only ok pins carry item (a data-only hit shaped by injection full|summary|reference). Optional destination external:<name> runs the transfer policy as search does.", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "destination", "in": "query", "required": false, "schema": {"type": "string"}}], "responses": {"200": {"description": "{crew, handle, type, items[{pin, status, item?}], authority, notice}"}, "404": {"description": "not_found"},
           "401": {
             "description": "Missing bearer credentials.",
@@ -45563,7 +45668,7 @@
           "Management"
         ],
         "summary": "Wiki: build_from_memories",
-        "description": "A person asks for wiki page drafts written from approved memories recalled by exactly one of query, topic or entity_name. Every page must cite recalled memories as [mem:ID]; other citations are rejected. Locked pages are never sent or written. Without dry_run a wiki job is queued (run it with /v1/wiki/jobs/{id}/run or /v1/wiki/work) and its drafts wait for page review; dry_run runs the model now and returns the drafts unsaved. Answers model_not_configured (503) when no wiki model is set. topic and entity_name are search text like query (no cluster or entity lookup). The job runner token recalls the memories with its own permissions: it needs search and context read on memories in the scope and external transfer to external:wiki-llm; each memory is checked on its own (restricted or unclassified memories, memories with restricted sources and secrets are left out, private spans are masked) and a run that may send none fails with not_found.",
+        "description": "A person asks for wiki page drafts written from approved memories recalled by exactly one of query, topic or entity_name. Every page must cite recalled memories as [mem:ID]; other citations are rejected. Locked pages are never sent or written. Without dry_run a wiki job is queued (run it with /v1/wiki/jobs/{id}/run or /v1/wiki/work) and its drafts wait for page review; dry_run runs the model now and returns the drafts unsaved. A dry_run still running after about 20 seconds answers 202 with an operation to read (GET /v1/operations/{id}); its result is this 200 body. Answers model_not_configured (503) when no wiki model is set. topic and entity_name are search text like query (no cluster or entity lookup). The job runner token recalls the memories with its own permissions: it needs search and context read on memories in the scope and external transfer to external:wiki-llm; each memory is checked on its own (restricted or unclassified memories, memories with restricted sources and secrets are left out, private spans are masked) and a run that may send none fails with not_found.",
         "parameters": [],
         "responses": {
           "200": {
@@ -45703,6 +45808,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Still running after the in-request wait: read the operation at location (GET /v1/operations/{id}) until its status leaves running; done carries this route's 200 body as result, failed carries the Error.code as error.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeferredAccepted"
                 }
               }
             }
@@ -45875,7 +46000,27 @@
     },
     "/v1/observations": {"delete": {"operationId": "deleteObservations", "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["scope"], "properties": {"scope": {"$ref": "#/components/schemas/Scope"}, "ids": {"type": "array", "minItems": 1, "maxItems": 50, "items": {"type": "string", "maxLength": 256}}, "all": {"type": "boolean"}, "status": {"type": "string", "enum": ["proposed", "active", "rejected", "stale"], "description": "With all: only this status."}}}}}}, "tags": ["Management"], "summary": "Delete observations in bulk (human principals only)", "description": "Body {scope, ids[1-50]} or {scope, all: true, status?}. Deletes the named observations, or every observation (of one status) up to 500 per call; more is true when some remain. A deleted observation keeps its row and history with status deleted (listed with status=deleted): it is never recalled, refreshed or counted as covering its memories, so consolidation may propose it again. Each deletion is audited; already deleted ones are skipped. Agents and services cannot call it.", "parameters": [], "responses": {"200": {"description": "{deleted[], more}"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "404": {"description": "not_found"}, "409": {"description": "revision_conflict"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}, "get": {"summary": "Observations of one status (default active), newest change first, paginated (read:observations)", "description": "Filters: status proposed|active|rejected|stale|deleted, durability momentary|lasting, source_memory_id, q (substring). limit 1-100 (50), cursor from next_cursor; at most 500 rows per status are read.", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["proposed", "active", "rejected", "stale", "deleted"]}}, {"name": "durability", "in": "query", "schema": {"type": "string", "enum": ["momentary", "lasting"]}}, {"name": "source_memory_id", "in": "query", "schema": {"type": "string"}}, {"name": "q", "in": "query", "schema": {"type": "string", "maxLength": 200}}, {"name": "cursor", "in": "query", "schema": {"type": "string"}}, {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100}}], "responses": {"200": {"description": "{items[{id, status, revision, content, source_memories, source_memory_ids, durability, durability_reason, confidence, fresh, derived, diff, stale_mark, generator, review}], next_cursor, authority}"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         "operationId": "getV1Observations"}},
-    "/v1/observations/consolidate": {"post": {"summary": "Consolidate approved memories into proposed observations (human or service principals)", "description": "Body {scope, dry_run, max_groups 1-10 (3), plan_only}. plan_only previews the strategy: it makes no model call and writes nothing, and returns plan {stale_observations, groups (member memory ids), mental_models} in run order. Marks observations whose sources are no longer approved as stale, proposes a refresh of stale ones (with a diff against the previous text), clusters approved memories and asks the server model for observations citing at least two memories of the group. Citations outside the group are refused. Due mental models are refreshed too. Everything written is a proposal or draft a person reviews. dry_run stores no observation or mental model (the model call is still recorded in the usage ledger).", "parameters": [], "responses": {"200": {"description": "{dry_run, stale_marked, groups, proposed, refreshed, rejected[{group, code, target}], mental_models, plan, calls, tokens, authority}"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "429": {"description": "Model budget exhausted"}, "502": {"description": "invalid_model_output"}, "503": {"description": "model_not_configured"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
+    "/v1/observations/consolidate": {"post": {"summary": "Consolidate approved memories into proposed observations (human or service principals)", "description": "Body {scope, dry_run, max_groups 1-10 (3), plan_only}. plan_only previews the strategy: it makes no model call and writes nothing, and returns plan {stale_observations, groups (member memory ids), mental_models} in run order. Marks observations whose sources are no longer approved as stale, proposes a refresh of stale ones (with a diff against the previous text), clusters approved memories and asks the server model for observations citing at least two memories of the group. Citations outside the group are refused. Due mental models are refreshed too. Everything written is a proposal or draft a person reviews. dry_run stores no observation or mental model (the model call is still recorded in the usage ledger). A call still running after about 20 seconds answers 202 with an operation to read (GET /v1/operations/{id}); the work continues and its result is this route's 200 body.", "parameters": [], "responses": {"200": {"description": "{dry_run, stale_marked, groups, proposed, refreshed, rejected[{group, code, target}], mental_models, plan, calls, tokens, authority}"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "429": {"description": "Model budget exhausted"}, "502": {"description": "invalid_model_output"}, "503": {"description": "model_not_configured"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+          "202": {
+            "description": "Still running after the in-request wait: read the operation at location (GET /v1/operations/{id}) until its status leaves running; done carries this route's 200 body as result, failed carries the Error.code as error.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeferredAccepted"
+                }
+              }
+            }
+          }},
         "operationId": "postV1ObservationsConsolidate"}},
     "/v1/observations/review_batch": {"post": {"summary": "Review several observations (human principals only)", "description": "Body {scope, items[1-50]{id, expected_revision, action approve|reject|edit, content?, reason?}}. Each item stands alone and carries its own status and code.", "parameters": [], "responses": {"200": {"description": "{items[{id, status, code, observation}], reviewed, failed}"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         "operationId": "postV1ObservationsReviewBatch"}},
@@ -45907,7 +46052,27 @@
         "operationId": "deleteV1MentalModelsById"}},
     "/v1/mental-models/{id}/history": {"get": {"summary": "All summary revisions of one mental model with line diffs", "description": "Each revision carries the diff against the revision before it.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}], "responses": {"200": {"description": "{id, revisions[{version, status, action, text, citations, by, at, diff}], authority}"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "404": {"description": "not_found"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         "operationId": "getV1MentalModelsByIdHistory"}},
-    "/v1/mental-models/{id}/refresh": {"post": {"summary": "Write a new draft summary (human or service principals)", "description": "Body {scope, dry_run}. Recalls the query over approved memories and approved observations and asks the server model for a summary citing recalled ids only. dry_run returns the draft and stores nothing on the mental model; otherwise the draft waits for a person's review.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Mental model view (dry_run true for a dry run)"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "429": {"description": "Model budget exhausted"}, "502": {"description": "invalid_model_output"}, "503": {"description": "model_not_configured"}, "404": {"description": "not_found"}, "409": {"description": "revision_conflict"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
+    "/v1/mental-models/{id}/refresh": {"post": {"summary": "Write a new draft summary (human or service principals)", "description": "Body {scope, dry_run}. Recalls the query over approved memories and approved observations and asks the server model for a summary citing recalled ids only. dry_run returns the draft and stores nothing on the mental model; otherwise the draft waits for a person's review. A call still running after about 20 seconds answers 202 with an operation to read (GET /v1/operations/{id}); the work continues and its result is this route's 200 body.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Mental model view (dry_run true for a dry run)"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "429": {"description": "Model budget exhausted"}, "502": {"description": "invalid_model_output"}, "503": {"description": "model_not_configured"}, "404": {"description": "not_found"}, "409": {"description": "revision_conflict"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+          "202": {
+            "description": "Still running after the in-request wait: read the operation at location (GET /v1/operations/{id}) until its status leaves running; done carries this route's 200 body as result, failed carries the Error.code as error.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeferredAccepted"
+                }
+              }
+            }
+          }},
         "operationId": "postV1MentalModelsByIdRefresh"}},
     "/v1/mental-models/{id}/review": {"post": {"summary": "Approve or reject the draft summary (human principals only)", "description": "Body {scope, expected_revision, action approve|reject, reason?}. approve rechecks every citation and makes the draft the active revision; the previous active revision is kept in history as superseded.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Mental model view"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "404": {"description": "not_found"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         "operationId": "postV1MentalModelsByIdReview"}},
@@ -46089,7 +46254,7 @@
     "/v1/causal-links/propose": {
       "post": {
         "summary": "Ask the server model for causal links between approved memories (human or service, write:memory_relations)",
-        "description": "Body {scope, dry_run?, max_groups? 1-10 (3)}. Approved memories that pass the per-memory external transfer check are sent newest first in groups of 20, one budgeted model call per group. Every link is checked against its group and stored as a candidate that a person must approve; nothing becomes active here. Pairs that already have a row (any status, rejected included) are refused as conflict. 503 model_not_configured when no server model is set.",
+        "description": "Body {scope, dry_run?, max_groups? 1-10 (3)}. Approved memories that pass the per-memory external transfer check are sent newest first in groups of 20, one budgeted model call per group. Every link is checked against its group and stored as a candidate that a person must approve; nothing becomes active here. Pairs that already have a row (any status, rejected included) are refused as conflict. 503 model_not_configured when no server model is set. A call still running after about 20 seconds answers 202 with an operation to read (GET /v1/operations/{id}); the work continues and its result is this route's 200 body.",
         "requestBody": {
           "required": true,
           "content": {
@@ -46140,6 +46305,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Still running after the in-request wait: read the operation at location (GET /v1/operations/{id}) until its status leaves running; done carries this route's 200 body as result, failed carries the Error.code as error.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeferredAccepted"
                 }
               }
             }
@@ -48583,6 +48768,18 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "models",
+            "required": false,
+            "description": "Set to 1 to also make one minimal real call to the server model, the embedder and the reranker and report each as `server_model`, `embedder` and `reranker` (`disabled` means not configured). The server model call is filed in the usage ledger as `health_probe`. Meant for setup and troubleshooting, not for frequent polling.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
           }
         ],
         "responses": {
@@ -49206,7 +49403,7 @@
           "budget": {
             "type": "string",
             "enum": ["low", "mid", "high"],
-            "description": "Shapes the run when max_iterations or limit is unset: low 2 iterations and 5 records, mid as before, high 6 iterations and 20 records. The space's reflect_default_options.budget applies when absent."
+            "description": "Shapes the run when max_iterations or limit is unset: low 2 iterations and 5 records, mid (the default) 3 iterations and 20 records, high 6 iterations and 20 records. The space's reflect_default_options.budget applies when absent."
           },
           "fact_types": {
             "type": "array",
@@ -49242,7 +49439,21 @@
           },
           "disposition": {
             "$ref": "#/components/schemas/ReflectDisposition"
-          }
+          },
+          "about": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "Names one entity (a person, an agent, a thing). The approved memories that mention it join the first retrieval and the model is told the question is about it. An unknown name adds nothing."
+          },
+          "created_by": {
+            "type": "array",
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1, "maxLength": 256},
+            "description": "Answers from one recorder's view: only records these principals wrote are read, on the first search and on every tool. Mental models span recorders and are left out."
+          },
+          "created_from": {"type": "string", "format": "date-time", "description": "Reads only records created at or after this time; wins over a tool's own window."},
+          "created_to": {"type": "string", "format": "date-time", "description": "Reads only records created at or before this time; wins over a tool's own window."}
         }
       },
       "ReflectDisposition": {
@@ -52890,12 +53101,24 @@
       "TagTest": {
         "type": "object",
         "additionalProperties": false,
-        "description": "One tag test: a leaf (tags, matched as match says) or a nested group (every test of and, or any test of or); exactly one of tags, and, or. not negates the test.",
+        "description": "One tag test: a leaf (tags, matched as match says), a metadata comparison (meta), or a nested group (every test of and, or any test of or); exactly one of tags, meta, and, or. not negates the test.",
         "x-go-source": "internal/memory/search_filters.go",
         "properties": {
           "tags": {"type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 128}},
           "match": {"type": "string", "enum": ["any", "all", "any_strict", "all_strict", "exact"], "description": "As tags_match; default any_strict. Leaves only."},
           "resolve": {"type": "string", "enum": ["fuzzy"], "description": "fuzzy: each tag also matches the space's tags spelled alike (trigram similarity at least 0.45, same namespace, up to 8 each). Leaves only."},
+          "meta": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key"],
+            "description": "Compares the value a memory stores under one metadata key (the caller's metadata, kept as the tag meta:<key>=<value>). A memory without the key fails every op, ne included; wrap the test in not to pass those too. Example: priority at least 5 and not archived is [[{\"meta\":{\"key\":\"priority\",\"op\":\"gte\",\"value\":\"5\"}}],[{\"not\":true,\"meta\":{\"key\":\"state\",\"value\":\"archived\"}}]].",
+            "properties": {
+              "key": {"type": "string", "pattern": "^[a-z0-9_.-]{1,32}$"},
+              "op": {"type": "string", "enum": ["eq", "ne", "in", "gt", "gte", "lt", "lte", "contains", "exists"], "description": "Default eq. gt/gte/lt/lte compare as numbers when value is a decimal (a stored value that is not a decimal then fails), otherwise as text in byte order, which orders ISO dates. contains is a case-sensitive substring. exists takes no value; in takes values."},
+              "value": {"type": "string", "minLength": 1, "maxLength": 80},
+              "values": {"type": "array", "minItems": 1, "maxItems": 16, "items": {"type": "string", "minLength": 1, "maxLength": 80}, "description": "For in: the stored value equals any of these."}
+            }
+          },
           "not": {"type": "boolean", "description": "true passes the memories the test rejects."},
           "and": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"$ref": "#/components/schemas/TagTest"}},
           "or": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"$ref": "#/components/schemas/TagTest"}}
@@ -53578,7 +53801,12 @@
           "timezone": {
             "type": "string",
             "maxLength": 64,
-            "description": "IANA zone that time words in the query (yesterday, last week, 10월 말, 2026-W44) resolve in. Numeric dates with dots or dashes are day first (03-04-2026 is 3 April); slashed dates are not read. Empty means Asia/Seoul. Unknown names are rejected."
+            "description": "IANA zone that time words in the query (yesterday, last week, 10월 말, 2026-W44) resolve in. Numeric dates with dots or dashes are day first (03-04-2026 is 3 April); slashed dates need `locale`. Empty means Asia/Seoul. Unknown names are rejected."
+          },
+          "locale": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "The reader's language tag (en-GB, en-US, ko-KR) for callers that cannot send Accept-Language; it outranks that header. It decides the order of an ambiguous slashed date (03/04/2026) and the language of notices. A value that is not a short plain label is ignored."
           },
           "project_key": {
             "type": "string",
@@ -53814,6 +54042,11 @@
             "type": "boolean",
             "default": false,
             "description": "Opt in to partial success only for unavailable optional temporal/graph/causal storage reads. Degraded identifies failed lanes. Authorization, cancellation, final source checks, usage writes and errors in cleaning still fail the request. Explicitly selected base modes retain their existing contracts."
+          },
+          "aggregate_items": {
+            "type": "boolean",
+            "default": false,
+            "description": "Opt in to more memory items for a query that asks for every instance of something (a count, a total, or a plural or perfective which/what/where question, read from the query's shape only): up to twice limit, at most 50. Other queries, and every request without this option, return at most limit items. max_chars still bounds the item text. Native dynamic serving falls back to baseline."
           },
           "temporal_windows": {
             "type": "array",
@@ -61764,6 +61997,12 @@
           "memory_outcome_completed_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "dream_run": {
+            "$ref": "#/components/schemas/WireResponseDreamRun"
+          },
+          "deferred": {
+            "$ref": "#/components/schemas/WireResponseDeferredCall"
           }
         },
         "additionalProperties": false,
@@ -73004,6 +73243,9 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "content_chars": {
+            "type": "integer"
           }
         },
         "additionalProperties": false,
@@ -77796,12 +78038,15 @@
             "items": {
               "$ref": "#/components/schemas/WireResponseTagTest"
             }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/WireResponseMetaTest"
           }
         },
         "additionalProperties": false,
         "x-go-type": "memory.TagTest",
         "x-go-source": "internal/memory/search_filters.go",
-        "description": "TagTest is one test in a tag group: a leaf (Tags matched as Match says, tagsMatch) or a\nnested group (every test of And, or any test of Or), negated by Not. Resolve \"fuzzy\" lets a\nleaf's tags also match the space's tags spelled alike (tag_resolve.go)."
+        "description": "TagTest is one test in a tag group: a leaf (Tags matched as Match says, tagsMatch) or a\nnested group (every test of And, or any test of Or), negated by Not. Resolve \"fuzzy\" lets a\nleaf's tags also match the space's tags spelled alike (tag_resolve.go). A Meta leaf compares\na metadata value instead of naming tags."
       },
       "WireResponseMentalModelOutcome": {
         "type": "object",
@@ -79645,12 +79890,22 @@
             "items": {
               "$ref": "#/components/schemas/WireRequestTagTest"
             }
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WireRequestMetaTest"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
         "x-go-type": "memory.TagTest",
         "x-go-source": "internal/memory/search_filters.go",
-        "description": "TagTest is one test in a tag group: a leaf (Tags matched as Match says, tagsMatch) or a\nnested group (every test of And, or any test of Or), negated by Not. Resolve \"fuzzy\" lets a\nleaf's tags also match the space's tags spelled alike (tag_resolve.go)."
+        "description": "TagTest is one test in a tag group: a leaf (Tags matched as Match says, tagsMatch) or a\nnested group (every test of And, or any test of Or), negated by Not. Resolve \"fuzzy\" lets a\nleaf's tags also match the space's tags spelled alike (tag_resolve.go). A Meta leaf compares\na metadata value instead of naming tags."
       },
       "WireRequestSpaceConsolidation": {
         "type": "object",
@@ -80123,6 +80378,36 @@
               "unsupported",
               "disabled"
             ]
+          },
+          "server_model": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "unavailable",
+              "paused",
+              "unsupported",
+              "disabled"
+            ]
+          },
+          "embedder": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "unavailable",
+              "paused",
+              "unsupported",
+              "disabled"
+            ]
+          },
+          "reranker": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "unavailable",
+              "paused",
+              "unsupported",
+              "disabled"
+            ]
           }
         }
       },
@@ -80431,6 +80716,250 @@
           }
         },
         "description": "Opt-in declared disjoint development/holdout manifest. Server validates actual paired outcomes and every declared category; hashes alone do not prove semantic independence or complete development disclosure."
+      },
+      "WireResponseDreamRun": {
+        "type": "object",
+        "properties": {
+          "trigger": {
+            "type": "string",
+            "description": "idle | schedule"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finished_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "outcome": {
+            "type": "string",
+            "description": "running | ok | item_limit | time_limit | denied:<action>"
+          },
+          "changes": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireResponseDreamChange"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "skipped": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireResponseDreamSkip"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "skipped_more": {
+            "type": "integer"
+          },
+          "model": {
+            "type": "string"
+          },
+          "model_calls": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "trigger",
+          "started_at",
+          "outcome",
+          "changes",
+          "skipped",
+          "model_calls"
+        ],
+        "x-go-type": "memory.DreamRun",
+        "x-go-source": "internal/memory/dream.go",
+        "description": "DreamRun is one run's report: what it changed, what it skipped and why."
+      },
+      "WireResponseDreamChange": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "description": "approve | edit_approve | reject | supersede | expire | resolve | merge | insight | promote_skill | demote_skill"
+          },
+          "target": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number"
+          },
+          "before": {
+            "type": "string",
+            "description": "status before (\"\" when the change created the row)"
+          },
+          "after": {
+            "type": "string",
+            "description": "status after"
+          },
+          "undone_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "undone_by": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "op",
+          "target",
+          "reason",
+          "confidence",
+          "before",
+          "after"
+        ],
+        "x-go-type": "memory.DreamChange",
+        "x-go-source": "internal/memory/dream.go",
+        "description": "DreamChange is one automatic change. Rows hold what undo needs; the rest is the readable summary."
+      },
+      "WireResponseDreamSkip": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "target",
+          "reason"
+        ],
+        "x-go-type": "memory.DreamSkip",
+        "x-go-source": "internal/memory/dream.go",
+        "description": "DreamSkip is an item the run left for a person, with why."
+      },
+      "WireResponseMetaTest": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "op": {
+            "type": "string",
+            "description": "eq (default), ne, in, gt, gte, lt, lte, contains, exists"
+          },
+          "value": {
+            "type": "string"
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "in only"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key"
+        ],
+        "x-go-type": "memory.MetaTest",
+        "x-go-source": "internal/memory/search_filters.go",
+        "description": "MetaTest compares the value a memory holds for one metadata key (its meta:<key>=<value>\ntag, claimLabelTags). A memory without the key fails every op. gt, gte, lt and lte compare\nas numbers when Value is a plain decimal (then only decimal values pass) and as bytes\notherwise, which orders ISO dates."
+      },
+      "WireRequestMetaTest": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "op": {
+            "type": "string",
+            "description": "eq (default), ne, in, gt, gte, lt, lte, contains, exists"
+          },
+          "value": {
+            "type": "string"
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "in only"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.MetaTest",
+        "x-go-source": "internal/memory/search_filters.go",
+        "description": "MetaTest compares the value a memory holds for one metadata key (its meta:<key>=<value>\ntag, claimLabelTags). A memory without the key fails every op. gt, gte, lt and lte compare\nas numbers when Value is a plain decimal (then only decimal values pass) and as bytes\notherwise, which orders ISO dates."
+      },
+      "DeferredAccepted": {
+        "type": "object",
+        "required": [
+          "operation_id",
+          "kind",
+          "status",
+          "location"
+        ],
+        "properties": {
+          "operation_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "const": "deferred_call"
+          },
+          "status": {
+            "type": "string",
+            "const": "running"
+          },
+          "location": {
+            "type": "string",
+            "description": "Path and scope query of the operation to read."
+          }
+        }
+      },
+      "WireResponseDeferredCall": {
+        "type": "object",
+        "properties": {
+          "route": {
+            "type": "string"
+          },
+          "result": {
+            "type": [
+              "object",
+              "array",
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ],
+            "description": "Application-defined JSON value (Go json.RawMessage/any)."
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "route"
+        ],
+        "x-go-type": "memory.DeferredCall",
+        "x-go-source": "internal/memory/ops_deferred.go"
       }
     },
     "headers": {

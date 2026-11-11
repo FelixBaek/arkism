@@ -319,7 +319,11 @@ func stringsAnyCapture(in []string) []any {
 	return out
 }
 
-func uninstMain(_ []string, _ io.Reader, stdout, stderr io.Writer) int {
+func uninstMain(args []string, _ io.Reader, stdout, stderr io.Writer) int {
+	if len(args) > 0 { // --help used to uninstall
+		fmt.Fprintln(stderr, "usage: arkism uninstall-arkism")
+		return 2
+	}
 	summary, err := instUninstall("", "", "")
 	if err != nil {
 		fmt.Fprintln(stderr, "arkism uninstall-arkism:", err)

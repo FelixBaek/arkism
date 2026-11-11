@@ -87,6 +87,25 @@ func (s *Service) ListExtractDocuments(ctx context.Context, token string, scope 
 	return out, nil
 }
 
+// earlierUploadCandidates sums candidates_created over the uploads before the latest one, so a
+// re-upload that added nothing does not show the document as having made none.
+// shortcut: walks at most 20 earlier uploads per row, store a running total on the job if documents get re-uploaded more.
+func (s *Service) earlierUploadCandidates(ctx context.Context, scope Scope, id string) int {
+	total := 0
+	for range 20 {
+		if id == "" {
+			break
+		}
+		r, err := s.Repo.Get(ctx, "jobs", scope, id)
+		if err != nil || r.FileExtract == nil {
+			break
+		}
+		total += r.FileExtract.CandidatesCreated
+		id = r.FileExtract.Previous
+	}
+	return total
+}
+
 // addExtractDocuments appends the rows the caller may see and that match page.Q and, by update time, the range.
 func (s *Service) addExtractDocuments(ctx context.Context, d Decision, scope Scope, page DocumentPage, rows []Record, out *ExtractDocumentPage) error {
 	var err error
@@ -101,6 +120,7 @@ func (s *Service) addExtractDocuments(ctx context.Context, d Decision, scope Sco
 			if err == nil && job.FileExtract != nil {
 				j := job.FileExtract
 				item.JobID, item.Status, item.Label, item.Chunks, item.CandidatesCreated, item.RequestedBy = job.ID, job.Status, j.Label, j.Delta.ChunksTotal, j.CandidatesCreated, j.RequestedBy
+				item.CandidatesCreated += s.earlierUploadCandidates(ctx, scope, j.Previous)
 			}
 		}
 		if d.Role == roleAgent && (item.JobID == "" || !ownsJob(d, job)) || page.Q != "" && !documentMatches(item, job.FileExtract, page.Q) || !updatedIn(page, doc.UpdatedAt) {

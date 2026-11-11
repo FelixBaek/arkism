@@ -17,6 +17,13 @@ func TestSearchQueryConceptsCountAliasesOnce(t *testing.T) {
 	}
 }
 
+func TestSearchQueryConceptsCountStemWithItsWord(t *testing.T) {
+	got := searchQueryConcepts(searchQueryTerms(skillQueryVariants("맞춤법 검사해줘")))
+	if len(got) != 2 || got[0] != "('맞춤법' | '맞춤')" {
+		t.Fatalf("a word and its stems are one concept: %v", got)
+	}
+}
+
 func TestSearchQueryTermsCapCountsAliasesOnce(t *testing.T) {
 	query := "사본 백업 복원 복구"
 	for i := range 31 {

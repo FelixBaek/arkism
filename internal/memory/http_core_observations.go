@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 )
@@ -29,8 +30,7 @@ func registerObservationsCoreHTTP(mux routeRegistrar, s *Service, stats *request
 		if !decode(w, r, &in) {
 			return
 		}
-		v, e := s.ConsolidateObservations(r.Context(), bearer(r), in)
-		respond(w, v, e)
+		s.respondLater(w, r, in.Scope, func(ctx context.Context, token string) (any, error) { return s.ConsolidateObservations(ctx, token, in) })
 	})
 	mux.HandleFunc("GET /v1/observations", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -117,8 +117,9 @@ func registerMentalModelsHTTP(mux routeRegistrar, s *Service) {
 		if !decode(w, r, &in) {
 			return
 		}
-		v, e := s.RefreshMentalModel(r.Context(), bearer(r), r.PathValue("id"), in)
-		respond(w, v, e)
+		s.respondLater(w, r, in.Scope, func(ctx context.Context, token string) (any, error) {
+			return s.RefreshMentalModel(ctx, token, r.PathValue("id"), in)
+		})
 	})
 	mux.HandleFunc("POST /v1/mental-models/{id}/review", func(w http.ResponseWriter, r *http.Request) {
 		var in MentalModelReviewInput

@@ -34,6 +34,11 @@ func TestSpaceRecallBudgetLimit(t *testing.T) {
 	if in.Limit != 5 || in.MaxIterations != 2 {
 		t.Fatalf("shipped shape %+v", in)
 	}
+	in = ReflectInput{MaxTokens: 1000} // no budget is mid
+	applyReflectDefaults(&in, &reflectRun{}, SpaceConfig{}, false, false)
+	if in.Limit != 20 || in.MaxIterations != reflectDefaultIter {
+		t.Fatalf("default shape %+v", in)
+	}
 	in = ReflectInput{Budget: "high", MaxTokens: 1000}
 	applyReflectDefaults(&in, &reflectRun{}, SpaceConfig{RecallBudget: adaptive}, false, false)
 	if in.Limit != 20 { // reflect reads at most 20

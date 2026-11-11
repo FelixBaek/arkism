@@ -60,7 +60,7 @@ func (s *Service) collectConversationCandidates(ctx context.Context, token strin
 	localSelection := localExpandOn(in, collection)
 	pool := &conversationCandidatePool{records: map[string]Record{}}
 	for _, row := range rows {
-		if !all && !localSelection && len(pool.rows)+len(out.Conversation) == conversationLaneHits {
+		if !all && !localSelection && len(pool.rows)+len(out.Conversation) == conversationLaneLimit(in.Query) {
 			break
 		}
 		r, err := s.Repo.Get(ctx, "sources", in.Scope, row.Hit.ID)
@@ -96,7 +96,7 @@ func (s *Service) conversationTurnsWithCandidates(ctx context.Context, token str
 	if pool == nil {
 		return nil
 	}
-	limit := conversationLaneHits - len(out.Conversation)
+	limit := conversationLaneLimit(in.Query) - len(out.Conversation)
 	var chosen []Hit
 	if localExpandOn(in, collection) {
 		chosen = selectConversationCandidates(in.Query, pool.rows, out.Items, out.Conversation, limit)

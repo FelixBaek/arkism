@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"slices"
@@ -611,6 +612,9 @@ func (s *Service) RequestAgentTool(ctx context.Context, token string, in AgentTo
 	if d.Role != roleHuman {
 		return Record{}, ErrDenied
 	}
+	if err := s.knownMCPServer(ctx, in); err != nil {
+		return Record{}, err
+	}
 	return s.updateAgentTools(ctx, in.Scope, func(t *AgentTools, now time.Time) {
 		// A newer switch for the same thing replaces one still waiting.
 		kept := make([]AgentToolRequest, 0, len(t.Requests)+1)
@@ -632,14 +636,40 @@ func (s *Service) RequestAgentTool(ctx context.Context, token string, in AgentTo
 	})
 }
 
+// knownMCPServer refuses an MCP on/off switch for a server the host never
+// reported for that agent; before the first report nothing is known, so it passes.
+func (s *Service) knownMCPServer(ctx context.Context, in AgentToolSwitch) error {
+	if in.Kind != "mcp" {
+		return nil
+	}
+	r, err := agentToolsDoc(ctx, s.Repo, in.Scope)
+	if errors.Is(err, ErrNotFound) || err == nil && (r.AgentTools == nil || r.AgentTools.CollectedAt == nil) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, e := range r.AgentTools.Servers {
+		if _, ok := e.Agents[in.Agent]; ok && e.Name == in.Name {
+			return nil
+		}
+	}
+	return reasonError{ErrNotFound, fmt.Sprintf("name: no MCP server %q is reported for agent %q", in.Name, in.Agent)}
+}
+
 func validAgentToolSwitch(in AgentToolSwitch) error {
 	if in.Kind != "skill_install" && skillInstallExtras(in) {
-		return ErrInvalid
+		return invalidf("targets, update, zip: only a skill_install switch takes these")
 	}
 	switch in.Kind {
 	case "mcp", "plugin", "plugin_remove", "mcp_login":
-		if !slices.Contains(agentToolAgents, in.Agent) || !validRunLabel(in.Name, 128) || switchHasExtras(in) {
-			return ErrInvalid
+		switch {
+		case !slices.Contains(agentToolAgents, in.Agent):
+			return invalidf("agent: use one of %s", strings.Join(agentToolAgents, ", "))
+		case !validRunLabel(in.Name, 128):
+			return invalidf("name: needs 1 to 128 printable characters")
+		case switchHasExtras(in):
+			return invalidf("skills_dir, chats_dir, command, url: a %s switch takes none of these", in.Kind)
 		}
 	case "agent": // add (enabled) or remove an agent; Name is its display name
 		return validAgentSwitch(in)
@@ -656,7 +686,7 @@ func validAgentToolSwitch(in AgentToolSwitch) error {
 			return ErrInvalid
 		}
 	default:
-		return ErrInvalid
+		return invalidf("kind: unknown switch kind")
 	}
 	return nil
 }
@@ -696,7 +726,10 @@ func validSkillInstallSwitch(in AgentToolSwitch) error {
 	source := validSkillSource(in.Name)
 	if in.Zip != "" { // the host reads and checks the archive; here only its size and encoding
 		raw, err := base64.StdEncoding.DecodeString(in.Zip)
-		source = err == nil && len(raw) > 0 && len(raw) <= skillZipMaxBytes && validRunLabel(in.Name, 128)
+		if err == nil && len(raw) > skillZipMaxBytes {
+			return invalidf("zip: %d bytes, larger than the %d byte limit", len(raw), skillZipMaxBytes)
+		}
+		source = err == nil && len(raw) > 0 && validRunLabel(in.Name, 128)
 	}
 	if in.Agent != "shared" || !source || switchHasExtras(in) ||
 		in.Enabled != (len(in.Targets) > 0) || len(in.Targets) > len(skillInstallTargets) {

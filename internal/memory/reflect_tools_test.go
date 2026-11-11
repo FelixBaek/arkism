@@ -289,3 +289,46 @@ func TestReflectMentalModelToolFollowsCitations(t *testing.T) {
 		t.Fatal("summary of a restricted memory sent", out.ToolTrace)
 	}
 }
+
+// about seeds the first retrieval with the entity's memories (no tool round needed); a recorder
+// view keeps only what those principals wrote in the window, on the seed and on every search.
+func TestReflectAboutAndRecorderView(t *testing.T) {
+	f, repo := entityFixture(t)
+	a := f.auth.actors[f.human]
+	a.verbs["generate"] = true
+	f.auth.actors[f.human] = a
+	llm := &fakeWikiLLM{answers: []string{"ok", "ok"}}
+	f.svc.Wiki, f.svc.Embedder = llm, nil
+	day := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	for id, by := range map[string]string{"m1": "agent-a", "m2": "agent-b"} {
+		m := entityMemory(t, f, repo, id, "The team keeps data in Postgres, noted by "+by+".", day)
+		m.Sensitivity, m.CreatedBy = "internal", by
+		f.repo.store[colMemories][recKey(m.Scope, m.ID)] = m
+	}
+	if _, err := f.svc.ExtractEntities(testCtx, f.human, EntityExtractInput{Scope: scopeA}); err != nil {
+		t.Fatal(err)
+	}
+	ids := func(in ReflectInput) []string {
+		in.Scope, in.Query, in.About, in.MaxIterations = scopeA, "unrelated question", "postgres", 1
+		out, err := f.svc.Reflect(testCtx, f.human, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := []string{}
+		for _, r := range out.Retrieved {
+			got = append(got, r.ID)
+		}
+		slices.Sort(got)
+		return got
+	}
+	if got := ids(ReflectInput{}); !slices.Equal(got, []string{"m1", "m2"}) || !strings.Contains(llm.prompts[0], "The question is about: postgres") {
+		t.Fatal(got, llm.prompts[0])
+	}
+	if got := ids(ReflectInput{CreatedBy: []string{"agent-b"}}); !slices.Equal(got, []string{"m2"}) || strings.Contains(llm.prompts[1], "agent-a") {
+		t.Fatal(got, llm.prompts[1])
+	}
+	late := day.Add(48 * time.Hour)
+	if in := (ReflectInput{Scope: scopeA, Query: "q", CreatedFrom: &late, CreatedTo: &day}); validReflectInput(&in) {
+		t.Fatal("a window that ends before it starts is invalid")
+	}
+}
