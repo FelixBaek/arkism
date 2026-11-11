@@ -51,8 +51,8 @@ func (s *Service) reflectSourceAnchor(ctx context.Context, token string, in Refl
 		if at != nil && !at.Equal(*r.CollectedAt) {
 			return nil, nil
 		}
-		copy := *r.CollectedAt
-		at = &copy
+		anchor := *r.CollectedAt
+		at = &anchor
 		records = append(records, r)
 	}
 	return at, records

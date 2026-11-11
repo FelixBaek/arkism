@@ -110,21 +110,7 @@ func TestPostgresReflectMemoryDeliveryFence(t *testing.T) {
 				t.Fatal(err)
 			}
 			llm := &passageChangingLLM{fakeWikiLLM: fakeWikiLLM{answers: []string{"private event"}}, change: func() {
-				switch mode {
-				case "deleted":
-					m.Status = "deleted"
-				case "erased":
-					m.ContentErased = true
-				case "transfer":
-					f.svc.Auth = passageTransferDeny{Authorizer: f.svc.Auth, id: m.ID}
-					return
-				default:
-					return
-				}
-				m.Revision++
-				if err := p.Replace(testCtx, colMemories, m, m.Revision-1); err != nil {
-					t.Fatal(err)
-				}
+				mutatePostgresReflectMemory(t, f, p, m, mode)
 			}}
 			f.svc.Wiki = llm
 			out, err := f.svc.Reflect(testCtx, f.human, ReflectInput{Scope: scopeA, Query: "needle", MaxIterations: 1})
@@ -153,5 +139,24 @@ func TestReflectMemoryRejectsMissingAdmissionHash(t *testing.T) {
 	run.add([]Hit{h}, false)
 	if err := f.svc.verifyReflectMemories(testCtx, f.human, run); err == nil {
 		t.Fatal("unbound hit accepted")
+	}
+}
+
+func mutatePostgresReflectMemory(t *testing.T, f *fixture, p *Postgres, m Record, mode string) {
+	t.Helper()
+	switch mode {
+	case "deleted":
+		m.Status = "deleted"
+	case "erased":
+		m.ContentErased = true
+	case "transfer":
+		f.svc.Auth = passageTransferDeny{Authorizer: f.svc.Auth, id: m.ID}
+		return
+	default:
+		return
+	}
+	m.Revision++
+	if err := p.Replace(testCtx, colMemories, m, m.Revision-1); err != nil {
+		t.Fatal(err)
 	}
 }

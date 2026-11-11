@@ -15,6 +15,10 @@ Reflect now retains the first admitted mental-model record and each cited record
 - Go complexity gate passed after extracting the initial evidence preparation and common boundary helpers.
 - Race-enabled Reflect and PostgreSQL regressions passed (`go test -race ./internal/memory -run 'TestReflect|TestPostgresReflect' -count=1`, 7.204 seconds), using the owned disposable database.
 
+## Lint follow-up
+
+The CI cognitive-complexity check required smaller validation and test helpers. The refactor preserves the authorization, transaction and mutation checks, and renames a test variable that shadowed the built-in `copy`. Focused `gocognit -over 20` checks pass for both mental-model files. The race-enabled mental-model and disposable PostgreSQL regression run passed after extraction (2.328 seconds).
+
 ## Limits
 
 Controlled model and authorization doubles establish the tested race behavior; no external model requests were made. These checks do not establish answer accuracy or production RLS behavior. Full-record changes may conservatively reject an in-flight answer. Existing read fences define the validated transaction boundary; this change does not create a lock held across external model execution or network response delivery. No production deployment was performed.

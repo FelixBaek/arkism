@@ -22,36 +22,50 @@ func (s *Service) verifyReflectMemories(ctx context.Context, token string, run *
 		return err
 	}
 	for ref, hash := range run.memoryRecords {
-		current, err := s.Repo.Get(ctx, ref.Collection, in.Scope, ref.ID)
-		if err != nil {
+		if err := s.reflectMemoryReadable(ctx, token, in, actor, ref, hash); err != nil {
 			return err
-		}
-		if hash == "" || current.Scope != in.Scope || current.Revision != ref.Revision || current.ContentErased || current.PrivacyQuarantined || !live(current) || reflectMemoryRecordHash(current) != hash {
-			return ErrConflict
-		}
-		h := HitFromRecord(ref.Collection, current)
-		allowed, ok, err := s.authorizeSearchHit(ctx, token, in, h, Record{}, false, &ContextBundle{})
-		if err != nil {
-			return err
-		}
-		if !ok || allowed.PrincipalID != actor.PrincipalID || allowed.Role != actor.Role {
-			return ErrDenied
 		}
 	}
 	return s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		checked := searchReadTx{Tx: tx}
-		for ref, hash := range run.memoryRecords {
-			current, err := checked.Get(ctx, ref.Collection, in.Scope, ref.ID)
-			if err != nil {
-				return err
-			}
-			if current.Scope != in.Scope || current.Revision != ref.Revision || current.ContentErased || current.PrivacyQuarantined || !live(current) || !in.SearchCriteria.matchesRecord(current) || ref.Collection == colMemories && current.ApprovedBy == "" || reflectMemoryRecordHash(current) != hash {
-				return ErrConflict
-			}
-			if err := verifySearchItemSources(ctx, checked, in, nil, ref.Collection, current); err != nil {
-				return err
-			}
-		}
-		return nil
+		return verifyReflectMemoriesTx(ctx, searchReadTx{Tx: tx}, in, run.memoryRecords)
 	})
+}
+
+func (s *Service) reflectMemoryReadable(ctx context.Context, token string, in SearchInput, actor Decision, ref Ref, hash string) error {
+	current, err := s.Repo.Get(ctx, ref.Collection, in.Scope, ref.ID)
+	if err != nil {
+		return err
+	}
+	if hash == "" || !reflectMemoryUnchanged(current, in.Scope, ref, hash) {
+		return ErrConflict
+	}
+	h := HitFromRecord(ref.Collection, current)
+	allowed, ok, err := s.authorizeSearchHit(ctx, token, in, h, Record{}, false, &ContextBundle{})
+	if err != nil {
+		return err
+	}
+	if !ok || allowed.PrincipalID != actor.PrincipalID || allowed.Role != actor.Role {
+		return ErrDenied
+	}
+	return nil
+}
+
+func reflectMemoryUnchanged(current Record, scope Scope, ref Ref, hash string) bool {
+	return current.Scope == scope && current.Revision == ref.Revision && !current.ContentErased && !current.PrivacyQuarantined && live(current) && reflectMemoryRecordHash(current) == hash
+}
+
+func verifyReflectMemoriesTx(ctx context.Context, checked searchReadTx, in SearchInput, snapshots map[Ref]string) error {
+	for ref, hash := range snapshots {
+		current, err := checked.Get(ctx, ref.Collection, in.Scope, ref.ID)
+		if err != nil {
+			return err
+		}
+		if !reflectMemoryUnchanged(current, in.Scope, ref, hash) || !in.SearchCriteria.matchesRecord(current) || ref.Collection == colMemories && current.ApprovedBy == "" {
+			return ErrConflict
+		}
+		if err := verifySearchItemSources(ctx, checked, in, nil, ref.Collection, current); err != nil {
+			return err
+		}
+	}
+	return nil
 }
