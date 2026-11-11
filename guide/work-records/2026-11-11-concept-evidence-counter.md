@@ -59,3 +59,16 @@ roadmap completion claim. Existing compound matching and supported spelling
 rules are retained. The separate Korean recall fixture still treats four
 paraphrase questions as unsupported by the lexical-only path. No product build,
 external model call or production deployment is part of this verification.
+
+## Windows test portability follow-up
+
+A later cross-platform check and Windows CI found that the new PostgreSQL test
+used an ID-list helper defined only in a Linux test file. The assertion now
+checks the same one-result length and ID directly, without that helper or the
+unused slices import. Production logic and the PostgreSQL fixture are unchanged.
+`GOOS=windows go vet ./internal/memory` exited zero, and the concept-count unit
+regression passed with race (1.183s, one top-level test and four subtests).
+This is not local execution of Windows or a repeated PostgreSQL run; CI runs
+those paths again. The previous evaluation-job download failure was an external
+connection reset before schema checking, and the superseding commit starts a
+new CI attempt without changing dependency or validation rules.
