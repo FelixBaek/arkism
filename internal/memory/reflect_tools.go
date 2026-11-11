@@ -240,7 +240,7 @@ func (s *Service) reflectExpand(ctx context.Context, token string, run *reflectR
 			bundle, err = s.Search(ctx, token, search)
 			hits = bundle.Items
 		} else {
-			hits, err = s.reflectSources(ctx, token, run.in.Scope, id, args.Depth == "document")
+			hits, err = s.reflectSources(ctx, token, run, id, args.Depth == "document")
 		}
 		if err != nil {
 			return nil, err
@@ -252,7 +252,8 @@ func (s *Service) reflectExpand(ctx context.Context, token string, run *reflectR
 
 // reflectSources reads a memory's source passages (the spans it was taken from) or, for
 // document, each whole source. A whole source passes the transfer gate on its own.
-func (s *Service) reflectSources(ctx context.Context, token string, scope Scope, id string, document bool) ([]Hit, error) {
+func (s *Service) reflectSources(ctx context.Context, token string, run *reflectRun, id string, document bool) ([]Hit, error) {
+	scope := run.in.Scope
 	trace, err := s.traceRecordSources(ctx, token, scope, id, colMemories, 8)
 	if err != nil {
 		return nil, err
@@ -266,13 +267,33 @@ func (s *Service) reflectSources(ctx context.Context, token string, scope Scope,
 		kind = "source_document"
 	}
 	for _, src := range trace.Sources {
-		text := src.Excerpt
-		if document && src.Source != nil {
-			text = s.transferableSource(ctx, token, scope, mem, *src.Source)
+		if src.Source == nil || src.Reference == nil {
+			continue
+		}
+		r, err := s.Repo.Get(ctx, "sources", scope, src.SourceID)
+		if err != nil || r.Revision != src.Source.Revision || !s.reflectSourceReadableKinds(ctx, token, run.in, r, true, false, nil) {
+			continue
+		}
+		// Reconstruct from the exact admitted snapshot, never from a stale excerpt.
+		current := SourceTrace{}
+		fillAvailableSourceTrace(&current, *src.Reference, r)
+		if current.Source == nil {
+			continue
+		}
+		text := current.Excerpt
+		if document {
+			text = s.transferableSource(ctx, token, scope, mem, *current.Source)
+			if text != r.Text {
+				return nil, ErrConflict
+			}
 		}
 		if text == "" || containsSecret(text) {
 			continue
 		}
+		run.keepSources([]Record{r}, true)
+		snapshot := run.sourceRecords[r.ID]
+		snapshot.expanded = true
+		run.sourceRecords[r.ID] = snapshot
 		hits = append(hits, Hit{ID: "src_" + src.SourceID + ":" + id, Collection: "sources", Kind: kind, Text: redactSessionPrivate(text)})
 	}
 	return hits, nil
