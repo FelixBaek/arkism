@@ -47,50 +47,68 @@ func (s *Service) verifyReflectMentalModels(ctx context.Context, token string, r
 		return nil
 	}
 	for id, snapshot := range run.modelRecords {
-		r, err := s.mentalModelRead(ctx, token, run.in.Scope, id)
-		if err != nil {
+		if err := s.authorizeReflectMentalModel(ctx, token, run.in.Scope, id, snapshot); err != nil {
 			return err
-		}
-		if r.Scope != run.in.Scope || !reflectModelUsable(r) || reflectMemoryRecordHash(r) != snapshot.modelHash {
-			return ErrConflict
-		}
-		view := s.mentalModelView(ctx, r)
-		ok, err := s.mentalModelTransferable(ctx, token, run.in.Scope, view)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return ErrDenied
 		}
 	}
 	return s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		checked := searchReadTx{Tx: tx}
 		for id, snapshot := range run.modelRecords {
-			r, err := checked.Get(ctx, colMentalModels, run.in.Scope, id)
-			if err != nil {
+			if err := verifyReflectMentalModelTx(ctx, checked, run.in.Scope, id, snapshot); err != nil {
 				return err
-			}
-			if r.Scope != run.in.Scope || !reflectModelUsable(r) || reflectMemoryRecordHash(r) != snapshot.modelHash {
-				return ErrConflict
-			}
-			for ref, hash := range snapshot.citations {
-				cited, err := checked.Get(ctx, ref.Collection, run.in.Scope, ref.ID)
-				if err != nil {
-					return err
-				}
-				if cited.Scope != run.in.Scope || !live(cited) || cited.ContentErased || cited.PrivacyQuarantined || reflectMemoryRecordHash(cited) != hash {
-					return ErrConflict
-				}
-				if ref.Collection != colMemories && ref.Collection != colObservations || ref.Collection == colMemories && cited.ApprovedBy == "" {
-					return ErrConflict
-				}
-				if err := verifySearchItemSources(ctx, checked, SearchInput{Scope: run.in.Scope, Destination: wikiDestination}, nil, ref.Collection, cited); err != nil {
-					return err
-				}
 			}
 		}
 		return nil
 	})
+}
+
+func (s *Service) authorizeReflectMentalModel(ctx context.Context, token string, scope Scope, id string, snapshot reflectModelSnapshot) error {
+	r, err := s.mentalModelRead(ctx, token, scope, id)
+	if err != nil {
+		return err
+	}
+	if r.Scope != scope || !reflectModelUsable(r) || reflectMemoryRecordHash(r) != snapshot.modelHash {
+		return ErrConflict
+	}
+	view := s.mentalModelView(ctx, r)
+	ok, err := s.mentalModelTransferable(ctx, token, scope, view)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrDenied
+	}
+	return nil
+}
+
+func verifyReflectMentalModelTx(ctx context.Context, checked searchReadTx, scope Scope, id string, snapshot reflectModelSnapshot) error {
+	r, err := checked.Get(ctx, colMentalModels, scope, id)
+	if err != nil {
+		return err
+	}
+	if r.Scope != scope || !reflectModelUsable(r) || reflectMemoryRecordHash(r) != snapshot.modelHash {
+		return ErrConflict
+	}
+	for ref, hash := range snapshot.citations {
+		if err := verifyReflectModelCitation(ctx, checked, scope, ref, hash); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func verifyReflectModelCitation(ctx context.Context, checked searchReadTx, scope Scope, ref Ref, hash string) error {
+	cited, err := checked.Get(ctx, ref.Collection, scope, ref.ID)
+	if err != nil {
+		return err
+	}
+	if cited.Scope != scope || !live(cited) || cited.ContentErased || cited.PrivacyQuarantined || reflectMemoryRecordHash(cited) != hash {
+		return ErrConflict
+	}
+	if ref.Collection != colMemories && ref.Collection != colObservations || ref.Collection == colMemories && cited.ApprovedBy == "" {
+		return ErrConflict
+	}
+	return verifySearchItemSources(ctx, checked, SearchInput{Scope: scope, Destination: wikiDestination}, nil, ref.Collection, cited)
 }
 
 // Every prompt and response boundary validates all retained evidence classes.

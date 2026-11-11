@@ -13,8 +13,8 @@ func recordObservationAnchor(r Record) *time.Time {
 	if at == nil || at.IsZero() {
 		return nil
 	}
-	copy := *at
-	return &copy
+	anchor := *at
+	return &anchor
 }
 
 // A file locator describes evidence read later, not the original utterance time.

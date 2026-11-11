@@ -12,49 +12,7 @@ func TestReflectExpandedSourceDeliveryFence(t *testing.T) {
 		t.Run(change, func(t *testing.T) {
 			for _, depth := range []string{"chunk", "document"} {
 				t.Run(depth, func(t *testing.T) {
-					f, _ := reflectFixture(t)
-					mem := f.activeMemory("alpha evidence summary", "alpha")
-					src, err := f.repo.Get(testCtx, "sources", scopeA, mem.Sources[0].SourceID)
-					if err != nil {
-						t.Fatal(err)
-					}
-					model := &pgPassageChangingModel{fakeWikiLLM: fakeWikiLLM{answers: []string{toolCall("expand", map[string]any{"id": mem.ID, "depth": depth}), "answer using expanded source"}}}
-					model.change = func() {
-						if len(model.prompts) != 2 {
-							return
-						}
-						if change == "unchanged" {
-							return
-						}
-						if change == "revoked" {
-							f.svc.Auth = passageTransferDeny{Authorizer: f.svc.Auth, id: src.ID}
-							return
-						}
-						cur, e := f.repo.Get(testCtx, "sources", scopeA, src.ID)
-						if e != nil {
-							t.Fatal(e)
-						}
-						cur.ContentErased = true
-						cur.Text = ""
-						cur.Revision++
-						if e = f.repo.Replace(testCtx, "sources", cur, cur.Revision-1); e != nil {
-							t.Fatal(e)
-						}
-					}
-					f.svc.Wiki = model
-					out, err := f.svc.Reflect(testCtx, f.human, ReflectInput{Scope: scopeA, Query: "alpha", MaxIterations: 2})
-					if len(model.prompts) != 2 || !strings.Contains(model.prompts[1], "src_"+src.ID) {
-						t.Fatal("expanded source was not exercised", err, model.prompts)
-					}
-					if change == "unchanged" {
-						if err != nil || out.Answer == "" {
-							t.Fatal("unchanged source answer rejected", err)
-						}
-						return
-					}
-					if err == nil || out.Answer != "" {
-						t.Fatal("erased expanded source answer delivered", out.Answer, err)
-					}
+					checkExpandedSourceDelivery(t, change, depth)
 				})
 			}
 
@@ -65,35 +23,7 @@ func TestReflectExpandedSourceDeliveryFence(t *testing.T) {
 func TestReflectExpandedSourceAdmission(t *testing.T) {
 	for _, mode := range []string{"transfer_denied", "restricted", "changed_hash", "recorder_filter"} {
 		t.Run(mode, func(t *testing.T) {
-			f, _ := reflectFixture(t)
-			mem := f.activeMemory("alpha summary", "alpha")
-			src, err := f.repo.Get(testCtx, "sources", scopeA, mem.Sources[0].SourceID)
-			if err != nil {
-				t.Fatal(err)
-			}
-			run := &reflectRun{in: ReflectInput{Scope: scopeA, Query: "alpha"}, hits: []Hit{HitFromRecord(colMemories, mem)}}
-			switch mode {
-			case "transfer_denied":
-				f.svc.Auth = passageTransferDeny{Authorizer: f.svc.Auth, id: src.ID}
-			case "recorder_filter":
-				run.in.CreatedBy = []string{"different-recorder"}
-			default:
-				if mode == "restricted" {
-					src.Sensitivity = "restricted"
-				} else {
-					src.Text = "different source text"
-				}
-				src.Revision++
-				if err = f.repo.Replace(testCtx, "sources", src, src.Revision-1); err != nil {
-					t.Fatal(err)
-				}
-			}
-			for _, depth := range []string{"chunk", "document"} {
-				hits, err := f.svc.reflectExpand(testCtx, f.human, run, reflectToolArgs{ID: mem.ID, Depth: depth})
-				if err != nil || len(hits) != 0 {
-					t.Fatal("ineligible expanded source admitted", depth, len(hits), err)
-				}
-			}
+			checkExpandedSourceAdmission(t, mode)
 		})
 	}
 }
@@ -155,5 +85,90 @@ func TestReflectExpandPreservesPreviouslyAdmittedSnapshot(t *testing.T) {
 	}
 	if err = f.svc.verifyReflectSources(testCtx, f.human, run); err == nil {
 		t.Fatal("old passage accepted under new source snapshot")
+	}
+}
+
+func checkExpandedSourceDelivery(t *testing.T, change, depth string) {
+	t.Helper()
+	f, _ := reflectFixture(t)
+	mem := f.activeMemory("alpha evidence summary", "alpha")
+	src, err := f.repo.Get(testCtx, "sources", scopeA, mem.Sources[0].SourceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	model := &pgPassageChangingModel{fakeWikiLLM: fakeWikiLLM{answers: []string{toolCall("expand", map[string]any{"id": mem.ID, "depth": depth}), "answer using expanded source"}}}
+	model.change = func() {
+		changeExpandedSourceDuringAnswer(t, f, model, src, change)
+	}
+	f.svc.Wiki = model
+	out, err := f.svc.Reflect(testCtx, f.human, ReflectInput{Scope: scopeA, Query: "alpha", MaxIterations: 2})
+	if len(model.prompts) != 2 || !strings.Contains(model.prompts[1], "src_"+src.ID) {
+		t.Fatal("expanded source was not exercised", err, model.prompts)
+	}
+	if change == "unchanged" {
+		if err != nil || out.Answer == "" {
+			t.Fatal("unchanged source answer rejected", err)
+		}
+		return
+	}
+	if err == nil || out.Answer != "" {
+		t.Fatal("erased expanded source answer delivered", out.Answer, err)
+	}
+}
+
+func changeExpandedSourceDuringAnswer(t *testing.T, f *fixture, model *pgPassageChangingModel, src Record, change string) {
+	t.Helper()
+	if len(model.prompts) != 2 {
+		return
+	}
+	if change == "unchanged" {
+		return
+	}
+	if change == "revoked" {
+		f.svc.Auth = passageTransferDeny{Authorizer: f.svc.Auth, id: src.ID}
+		return
+	}
+	cur, e := f.repo.Get(testCtx, "sources", scopeA, src.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	cur.ContentErased = true
+	cur.Text = ""
+	cur.Revision++
+	if e = f.repo.Replace(testCtx, "sources", cur, cur.Revision-1); e != nil {
+		t.Fatal(e)
+	}
+}
+
+func checkExpandedSourceAdmission(t *testing.T, mode string) {
+	t.Helper()
+	f, _ := reflectFixture(t)
+	mem := f.activeMemory("alpha summary", "alpha")
+	src, err := f.repo.Get(testCtx, "sources", scopeA, mem.Sources[0].SourceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := &reflectRun{in: ReflectInput{Scope: scopeA, Query: "alpha"}, hits: []Hit{HitFromRecord(colMemories, mem)}}
+	switch mode {
+	case "transfer_denied":
+		f.svc.Auth = passageTransferDeny{Authorizer: f.svc.Auth, id: src.ID}
+	case "recorder_filter":
+		run.in.CreatedBy = []string{"different-recorder"}
+	default:
+		if mode == "restricted" {
+			src.Sensitivity = "restricted"
+		} else {
+			src.Text = "different source text"
+		}
+		src.Revision++
+		if err = f.repo.Replace(testCtx, "sources", src, src.Revision-1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, depth := range []string{"chunk", "document"} {
+		hits, err := f.svc.reflectExpand(testCtx, f.human, run, reflectToolArgs{ID: mem.ID, Depth: depth})
+		if err != nil || len(hits) != 0 {
+			t.Fatal("ineligible expanded source admitted", depth, len(hits), err)
+		}
 	}
 }
