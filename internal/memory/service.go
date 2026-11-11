@@ -1899,6 +1899,7 @@ func HitFromRecord(col string, r Record) Hit {
 		normalizeMemoryProvenance(&r)
 	}
 	hit := Hit{keywords: r.Keywords, MemoryContext: copyMemoryContext(r.MemoryContext), TrustLevel: r.TrustLevel, CreatedBy: r.CreatedBy, CreatedAt: &r.CreatedAt, Tags: r.Tags, EffectiveAt: r.EffectiveAt, Occurred: r.Occurred, Digest: ContentHash(recordContent(r)), Kind: r.Kind, Sensitivity: r.Sensitivity, ID: r.ID, Collection: col, Origin: origin, Scope: r.Scope, Status: r.Status, Revision: r.Revision, Text: r.Text, Summary: r.Summary, Sources: r.Sources, SourceEventID: r.SourceEventID, TraceID: r.TraceID, VerificationStatus: r.VerificationStatus, UpdatedAt: r.UpdatedAt, Trust: r.Trust, Relations: r.Relations, Authority: "data_only_untrusted"}
+	hit.CollectedAt = recordObservationAnchor(r)
 	if col == colMemories {
 		hit.ApprovalOrigin = memoryApprovalOrigin(r)
 		hit.Reach, hit.ReachProject = memoryReach(r), r.ReachProject

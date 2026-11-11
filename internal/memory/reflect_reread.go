@@ -96,8 +96,9 @@ func (s *Service) reflectReread(ctx context.Context, token string, run *reflectR
 	return usage, nil
 }
 
-// rereadRefs names the capture batches to reread: those the retrieved memories came from, then
-// the other batches of their sessions, then those of the conversation turns the question matches best.
+// rereadRefs names the capture batches to reread: those the retrieved memories came from,
+// then query-matched conversation batches, then unranked session siblings. Session expansion
+// must not exhaust the bounded reread budget before directly relevant source evidence.
 // shortcut: turns carry no session, so a session's other batches are found through its memories' tags (100 per session); store the session on the turns once a batch without a memory must be read.
 func (s *Service) rereadRefs(ctx context.Context, run *reflectRun) []string {
 	var refs, sessions []string
@@ -116,16 +117,16 @@ func (s *Service) rereadRefs(ctx context.Context, run *reflectRun) []string {
 			}
 		}
 	}
-	for _, session := range sessions {
-		siblings, _ := s.Repo.ListMemories(ctx, MemoryListInput{Scope: run.in.Scope, Tag: session, Limit: 100})
-		for _, m := range siblings {
-			events(m.Tags)
-		}
-	}
 	rows, _ := s.sideLane(ctx, "sources", SearchInput{Scope: run.in.Scope, Query: run.in.Query, space: run.in.space}, SearchCriteria{Kinds: []string{conversationSourceKind}})
 	for _, row := range rows[:min(len(rows), conversationLaneHits)] {
 		if r, err := s.Repo.Get(ctx, "sources", run.in.Scope, row.ID); err == nil && strings.HasPrefix(r.SourceRef, captureTurnsRef) && !slices.Contains(refs, r.SourceRef) {
 			refs = append(refs, r.SourceRef)
+		}
+	}
+	for _, session := range sessions {
+		siblings, _ := s.Repo.ListMemories(ctx, MemoryListInput{Scope: run.in.Scope, Tag: session, Limit: 100})
+		for _, m := range siblings {
+			events(m.Tags)
 		}
 	}
 	return refs
