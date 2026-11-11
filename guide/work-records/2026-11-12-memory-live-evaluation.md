@@ -15,7 +15,7 @@ The explicit evaluation profile enables ten conversation passages and disables
 source rereading. Production defaults are not changed by this evaluation.
 
 The model is gpt-6.1-terra with medium reasoning. A fixed historical grader
-(`historical_mem0_style_v1`, SHA-256
+(public alias `historical_primary_v1`, SHA-256
 `111f7b4e2a8039fea238130ee831dfd2d2b7e89f73785e75da036d9895df68c9`)
 is retained for comparability, rather than substituting a more permissive grader.
 Generation receives the question and retrieved evidence, never the gold answer.
@@ -47,6 +47,22 @@ from the available text caption, and two presumptive conclusions not established
 by the retrieved text. They remain in the primary denominator. Neither gold
 labels nor product facts are rewritten to raise the score. Raw questions,
 answers, model responses and source comparisons are retained privately.
+
+## Source-date candidate comparison
+
+The source-date candidate has the same code tree at commits 2aeb0030 and
+e3b4b10a (the latter corrects only the commit work-record message). Its immutable
+evaluation binary was built at 2aeb0030. The same 32 questions again scored
+28/32, with unchanged per-category counts. All 64 model calls succeeded,
+using 185,245 input and 4,697 output tokens (189,942 total) in 44.36 seconds.
+This is not an accuracy gain.
+
+The live prompts now contain 608 recovered observation anchors across the 32
+questions. In the failed duration question, the answer changed from missing-start
+abstention to a cited approximate interval using both endpoints; the frozen gold
+still marks that interval wrong. The observation repair therefore changes actual
+answer behavior, while its score effect remains unproven. No gold, question or
+grader was changed to accept it.
 
 ## Acquisition integrity and next measurement
 
