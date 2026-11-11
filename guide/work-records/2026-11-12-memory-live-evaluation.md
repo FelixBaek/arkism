@@ -154,7 +154,11 @@ The unchanged fixed grader scored **27/32 (84.375%)** again: single-hop 7/8,
 temporal 7/8, multi-hop 7/8 and open-domain 6/8. Twenty-four new judge calls and
 eight exact prior judgments were used, with 8,440 new grading tokens and no
 missing or invalid judgments. The earlier malformed-tool failure now answered
-correctly, but another multi-hop answer omitted supported incidents. The net
+correctly, while another multi-hop judgment changed from correct to incorrect.
+Inspection found identical retrieved user evidence in both runs, omissions in
+both answers, and inconsistent grading of list completeness. The cited source
+wording also disagrees with part of that gold label. This is not evidence of a
+new retrieval regression. The original first judgments remain preserved. The net
 score is unchanged and is not evidence of a quality gain. The output SHA-256 is
 `f81b04b2c15c95716b9da7f706c5f9fa89739d237e82747e6ee9588edd9a8025`.
 
