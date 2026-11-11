@@ -167,11 +167,12 @@ type reflectRun struct {
 	// sourceLines are conversation lines copied verbatim for this question (reflect_reread.go).
 	sourceLines []string
 	// passages are the conversation turns the question matches best, as said (reflect_reread.go).
-	passages      []string
-	sourceRecords map[string]reflectSourceSnapshot
-	sourceNotes   []ReflectToolStep
-	memoryRecords map[Ref]string
-	modelRecords  map[string]reflectModelSnapshot
+	passages         []string
+	sourceRecords    map[string]reflectSourceSnapshot
+	sourceNotes      []ReflectToolStep
+	memoryRecords    map[Ref]string
+	modelRecords     map[string]reflectModelSnapshot
+	toolFormatRepair bool
 }
 
 // add keeps new hits; walked marks a tool that follows links (related memories, entity mentions),
@@ -454,10 +455,7 @@ func (s *Service) reflectLoop(ctx context.Context, token string, run *reflectRun
 			gen.PromptVersion = reflectPromptVersion
 		}
 		system, user := reflectPrompt(run, final)
-		read := make([]string, 0, len(run.hits))
-		for _, h := range run.hits {
-			read = append(read, h.ID)
-		}
+		read := reflectPromptMemoryIDs(run.hits)
 		callCtx, _ := withLLMNote(ctx, "", read) // the trace names the memories this call was shown
 		text, usage, err := s.reflectCall(callCtx, token, run.in, s.Wiki, reflectOperation, system, user, run.in.MaxTokens)
 		total.Provider, total.Model = usage.Provider, usage.Model
@@ -470,6 +468,11 @@ func (s *Service) reflectLoop(ctx context.Context, token string, run *reflectRun
 			return ReflectOutput{}, err
 		}
 		calls, isTool := parseReflectToolCalls(text)
+		if reflectReplyNeedsRepair(text, isTool) {
+			run.toolFormatRepair = true
+			continue // The current iteration is spent; the final one exits with errModelAnswer.
+		}
+		run.toolFormatRepair = false
 		if !isTool {
 			return reflectFinish(run, text, out)
 		}
@@ -477,14 +480,8 @@ func (s *Service) reflectLoop(ctx context.Context, token string, run *reflectRun
 			// The last call offered no tools; asking for one anyway is not an answer.
 			return out, errModelAnswer
 		}
-		for _, call := range calls {
-			start := time.Now()
-			step, err := s.reflectTool(ctx, token, run, call)
-			if err != nil {
-				return out, err
-			}
-			step.MS = time.Since(start).Milliseconds()
-			run.trace = append(run.trace, step)
+		if err := s.reflectToolCalls(ctx, token, run, calls); err != nil {
+			return out, err
 		}
 		out.ToolTrace = run.trace
 	}
@@ -571,6 +568,9 @@ func reflectPrompt(run *reflectRun, final bool) (string, string) {
 	}
 	if !final {
 		sys.WriteString(reflectToolsText(run))
+	}
+	if run.toolFormatRepair {
+		sys.WriteString("\nThe previous reply mixed prose and a tool request, so no tool was executed. Return only one valid tool envelope when tools are offered, or a final answer without an embedded tool request. This is an existing remaining iteration, not an extra call.\n")
 	}
 	if run.schema != nil {
 		raw, _ := json.Marshal(run.schema.root)
