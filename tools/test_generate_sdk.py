@@ -115,6 +115,8 @@ void [search,context,noScope,badBudget,badOption,legacyPool,explicitLegacy,pool5
                 pass
 
         server = HTTPServer(("127.0.0.1", 0), Handler)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
         threading.Thread(target=server.serve_forever, daemon=True).start()
         spec = importlib.util.spec_from_file_location("arkism_client", generate_sdk.PY_OUT)
         mod = importlib.util.module_from_spec(spec)
@@ -123,7 +125,6 @@ void [search,context,noScope,badBudget,badOption,legacyPool,explicitLegacy,pool5
         self.assertEqual(client.request("POST", "/v1/skills/generate", body={}), {"ok": 1})
         with self.assertRaises(mod.ArkismError) as caught:
             client.request("POST", "/v1/skills/generate", body={})
-        server.shutdown()
         self.assertEqual((caught.exception.status, caught.exception.body), (500, {"code": "dependency_unavailable"}))
 
     def test_python_client_round_trip(self):
