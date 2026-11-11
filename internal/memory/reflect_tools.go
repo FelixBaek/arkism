@@ -361,6 +361,9 @@ func (s *Service) reflectMentalModels(ctx context.Context, token string, run *re
 			return nil, err
 		}
 		if ok {
+			if err := s.keepReflectMentalModel(ctx, token, run, m); err != nil {
+				return nil, err
+			}
 			at, text := m.Active.At, m.Active.Text
 			if !read {
 				text = runeCutString(text, reflectSnippetRunes)
