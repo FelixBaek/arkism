@@ -66,17 +66,20 @@ Six model-backed routes can outlast one request: `POST /v1/observations/consolid
 `POST /v1/wiki/build_from_memories` (`dry_run`), `POST /v1/skills/analyze` and
 `POST /v1/skills/generate`.
 
-- A call that ends within about 20 seconds answers `200` as before.
-- A slower call answers `202` with `{operation_id, kind: "deferred_call", status, location}`.
-  The work keeps running on the server (up to 15 minutes) and saves what it
-  would have saved, so a prepared skill draft is not lost.
-- Read `GET /v1/operations/{id}` (the `location`) until `status` leaves
-  `running`. `done` carries the route's own `200` body as `result`; `failed`
-  carries the error code as `error`. A call cut off by a restart reads as
-  `failed` with `interrupted`; repeating the request is safe.
-- The desktop app and both client libraries follow the `202` themselves and
-  return the same result or error as a call that answered in time.
-- A deferred call cannot be cancelled or retried through the operations routes.
+- A call that finishes within 25 seconds returns its ordinary result or error.
+- A slower call returns `503 request_timeout` and cancels its work context. It
+  also follows caller cancellation. Sensitive response bodies are not copied
+  into operation rows, and these routes no longer return deferred `202` replies.
+- Work committed before cancellation can remain. Inspect existing records
+  before repeating a request; a timeout does not prove that nothing was saved.
+- Legacy deferred operations are readable only by their creator. They return
+  terminal `failed` / `result_unavailable`, never the old response body. Reading
+  one attempts to clear its stored response payload; the body stays hidden even
+  if cleanup fails. Unread legacy rows and backups still
+  require separate cleanup; this is not a completed historical erasure sweep.
+- Desktop and SDK polling compatibility remains for older servers. Background
+  completion of these six sensitive routes is held until results can be tied
+  to current authorization and source erasure.
 
 ## Files
 

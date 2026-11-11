@@ -20,12 +20,6 @@ JSON_VALUE = {"type": ["object", "array", "string", "number", "boolean", "null"]
               "description": "Application-defined JSON value (Go json.RawMessage/any)."}
 
 
-# A model-backed route that outlives its request answers 202 and finishes as an operation.
-DEFERRED_RESPONSE = {"description": "Still running after the in-request wait: read the operation at location (GET /v1/operations/{id}) until its status leaves running; done carries this route's 200 body as result, failed carries the Error.code as error.",
-                     "headers": {"Location": {"schema": {"type": "string"}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}},
-                     "content": {JSON_MEDIA: {"schema": {"$ref": "#/components/schemas/DeferredAccepted"}}}}
-
-
 def nullable(schema):
     return {"anyOf": [schema, {"type": "null"}]}
 
@@ -170,8 +164,6 @@ def build(doc, manifest, types):
         responses = {}
         for code in [200, 400, 401, 403, 404, 409, 413, 429, 503]:
             responses[str(code)] = {"description": "Success" if code == 200 else "Request, authorization, concurrency, size, budget or dependency error; see Error.code.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {JSON_MEDIA: {"schema": result if code == 200 else {"$ref": "#/components/schemas/Error"}}}}
-        if operation.get("deferred"):
-            responses["202"] = DEFERRED_RESPONSE
         op = {"operationId": method + "_" + re.sub(r"\W+", "_", path).strip("_"), "tags": ["Management"], "summary": operation["summary"], "description": operation.get("description", ""), "parameters": params, "responses": responses, "x-go-contract": True}
         if operation["request"]:
             request = s.named(operation["request"], "Request")

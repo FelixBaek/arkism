@@ -233,15 +233,7 @@ func (s *Service) reflectPassages(ctx context.Context, token string, run *reflec
 	defer cancel()
 	in := reflectSearch(run.in, run.in.Query)
 	criteria := SearchCriteria{Kinds: []string{conversationSourceKind}, Filters: in.Filters}
-	// The question is embedded again only when the first search could embed it.
-	vector := !slices.Contains(degraded, "memory_vector_disabled") && !slices.Contains(degraded, "memory_vector_unavailable")
-	if vector && s.Embedder != nil && safeTransfer(in.Query) {
-		if batch, callErr, err := s.meteredEmbed(ctx, in.Scope, "embedding_query", []string{in.Query}, "query"); err == nil && callErr == nil {
-			in.queryVector, in.querySpace = batch.Items[0].Vector, s.Embedder.Space()
-		} else {
-			run.noteSourceFailure("conversation_passages", "embedding_unavailable")
-		}
-	}
+	s.embedPassageQuery(ctx, run, &in, degraded)
 	rows, err := s.sideLane(ctx, "sources", in, criteria)
 	if err != nil {
 		run.noteSourceFailure("conversation_passages", "lookup_unavailable")
@@ -268,6 +260,20 @@ func (s *Service) reflectPassages(ctx context.Context, token string, run *reflec
 			}
 		}
 	}
+}
+
+// Embed only when the initial memory search already allowed its vector lane.
+func (s *Service) embedPassageQuery(ctx context.Context, run *reflectRun, in *SearchInput, degraded []string) {
+	vector := !slices.Contains(degraded, "memory_vector_disabled") && !slices.Contains(degraded, "memory_vector_unavailable")
+	if !vector || s.Embedder == nil || !safeTransfer(in.Query) {
+		return
+	}
+	batch, callErr, err := s.meteredEmbed(ctx, in.Scope, "embedding_query", []string{in.Query}, "query")
+	if err != nil || callErr != nil {
+		run.noteSourceFailure("conversation_passages", "embedding_unavailable")
+		return
+	}
+	in.queryVector, in.querySpace = batch.Items[0].Vector, s.Embedder.Space()
 }
 
 // passagePart is a matched turn with its neighbours in the same batch that are not shown yet.

@@ -5,31 +5,28 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"time"
 )
 
-// A deferred call is a model-backed route that outlived its request: the caller gets 202 with an
-// operation to read, the work keeps running, and the answer lands in that operation's result.
-// shortcut: finished rows are never swept and cannot be cancelled or deleted through the
-// operations API; add a retention sweep when a space collects enough of them to matter.
+// Legacy deferred rows can contain response bodies without a complete source
+// lineage. They are never a safe result cache, even for their original creator.
 const (
-	deferredCallKind    = "deferred_call"
-	deferredInterrupted = "interrupted"
-	deferredCallMax     = 15 * time.Minute
+	deferredCallKind          = "deferred_call"
+	deferredResultUnavailable = "result_unavailable"
 )
 
-// deferredWait is how long such a route answers inside the request. It stays under the desktop
-// bridge's 30s call limit and the server's 45s request limit.
-var deferredWait = 20 * time.Second
+// Stay below the desktop bridge's 30s limit and the HTTP server's 45s limit.
+// The original request may impose an earlier deadline or cancellation.
+var deferredWait = 25 * time.Second
 
+// DeferredCall is retained only to decode and scrub legacy rows.
 type DeferredCall struct {
 	Route  string          `json:"route"`
 	Result json.RawMessage `json:"result,omitempty"`
 	Error  string          `json:"error,omitempty"`
 }
 
-// DeferredAccepted is the 202 body: where to read the outcome.
+// DeferredAccepted is the legacy wire shape; sensitive routes no longer emit it.
 type DeferredAccepted struct {
 	OperationID string `json:"operation_id"`
 	Kind        string `json:"kind"`
@@ -42,11 +39,13 @@ type deferredOutcome struct {
 	e error
 }
 
-// respondLater answers like respond when run finishes within deferredWait. Past that it stores a
-// running operation, answers 202, and lets run finish on a context the request no longer cancels.
-func (s *Service) respondLater(w http.ResponseWriter, r *http.Request, scope Scope, run func(ctx context.Context, token string) (any, error)) {
-	token := bearer(r)
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), deferredCallMax)
+// respondLater now keeps the call inside its original request. Persisting an
+// arbitrary response in jobs bypassed source erasure and the original read
+// authorization. Background completion stays disabled until it has a complete,
+// revalidatable provenance contract. No result or new operation row is stored.
+func (s *Service) respondLater(w http.ResponseWriter, r *http.Request, _ Scope, run func(context.Context, string) (any, error)) {
+	ctx, cancel := context.WithTimeout(r.Context(), deferredWait)
+	defer cancel()
 	done := make(chan deferredOutcome, 1)
 	go func() {
 		var out deferredOutcome
@@ -56,76 +55,49 @@ func (s *Service) respondLater(w http.ResponseWriter, r *http.Request, scope Sco
 			}
 			done <- out
 		}()
-		out.v, out.e = run(ctx, token)
+		out.v, out.e = run(ctx, bearer(r))
 	}()
-	timer := time.NewTimer(deferredWait)
-	defer timer.Stop()
 	select {
 	case out := <-done:
-		cancel()
-		respond(w, out.v, out.e)
-		return
-	case <-timer.C:
-	}
-	row, err := s.acceptDeferred(ctx, token, scope, r.Pattern)
-	if err != nil { // no operation to point at: wait in the request as before
-		out := <-done
-		cancel()
-		respond(w, out.v, out.e)
-		return
-	}
-	go func() {
-		defer cancel()
-		s.finishDeferred(ctx, row, <-done)
-	}()
-	q := url.Values{"workspace_id": {scope.WorkspaceID}, "project_id": {scope.ProjectID}, "user_id": {scope.UserID}, "agent_id": {scope.AgentID}}
-	location := "/v1/operations/" + row.ID + "?" + q.Encode()
-	w.Header().Set("Location", location)
-	writeJSON(w, http.StatusAccepted, DeferredAccepted{OperationID: row.ID, Kind: row.Kind, Status: row.Status, Location: location})
-}
-
-func (s *Service) acceptDeferred(ctx context.Context, token string, scope Scope, route string) (Record, error) {
-	d, err := s.opsAuthorize(ctx, token, "read:jobs", scope, "", roleHuman, roleService, roleAgent)
-	if err != nil {
-		return Record{}, err
-	}
-	if s.Repo == nil {
-		return Record{}, ErrUnavailable
-	}
-	now := time.Now().UTC()
-	row := Record{ID: "deferred-" + ID(), Scope: scope, Kind: deferredCallKind, Status: JobStatusRunning, Revision: 1, CreatedAt: now, UpdatedAt: now,
-		CreatedBy: d.PrincipalID, CreatedByType: d.Role, LeaseUntil: now.Add(deferredCallMax + time.Minute), Deferred: &DeferredCall{Route: route}}
-	return row, s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		if err := tx.Insert(ctx, colJobs, row); err != nil {
-			return err
+		if ctx.Err() == nil {
+			respond(w, out.v, out.e)
+			return
 		}
-		return audit(ctx, tx, scope, d.PrincipalID, "deferred_call:accepted", row.ID)
-	})
+	case <-ctx.Done():
+	}
+	code := "request_timeout"
+	if ctx.Err() == context.Canceled {
+		code = "request_cancelled"
+	}
+	writeJSON(w, http.StatusServiceUnavailable, map[string]string{"code": code})
 }
 
-func (s *Service) finishDeferred(ctx context.Context, row Record, out deferredOutcome) {
-	call := DeferredCall{Route: row.Deferred.Route}
-	status := JobStatusDone
-	if out.e == nil {
-		call.Result, out.e = json.Marshal(out.v)
+func deferredOperation(r Record) bool { return r.Kind == deferredCallKind || r.Deferred != nil }
+
+// A legacy row's response is withheld regardless of whether scrubbing succeeds.
+// Only the creator reaches this helper. Read-only database credentials may stop
+// cleanup; they must never cause a fallback to exposing the old response.
+func (s *Service) scrubDeferredResponse(ctx context.Context, r Record) {
+	if r.Deferred == nil || len(r.Deferred.Result) == 0 && r.Deferred.Error == deferredResultUnavailable {
+		return
 	}
-	if out.e != nil {
-		status = JobStatusFailed
-		call.Error, _ = errorResponse(out.e)
-	}
-	// The work's own deadline may be what ended it, so the outcome is written on a fresh one.
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-	defer cancel()
 	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		cur, err := tx.Get(ctx, colJobs, row.Scope, row.ID) // the stored row, so its origin fields match exactly
+		cur, err := tx.Get(ctx, colJobs, r.Scope, r.ID)
 		if err != nil {
 			return err
 		}
+		if cur.CreatedBy != r.CreatedBy || cur.CreatedBy == "" {
+			return ErrConflict
+		}
+		if cur.Deferred == nil {
+			return nil
+		}
 		prev := cur.Revision
-		cur.Status, cur.Deferred, cur.Revision, cur.UpdatedAt, cur.LeaseUntil = status, &call, prev+1, time.Now().UTC(), time.Time{}
+		cur.Deferred = &DeferredCall{Route: cur.Deferred.Route, Error: deferredResultUnavailable}
+		cur.Revision, cur.UpdatedAt = prev+1, time.Now().UTC()
 		return tx.Replace(ctx, colJobs, cur, prev)
 	})
 	if err != nil {
-		slog.Warn("deferred call outcome not stored", "operation_id", row.ID, "route", call.Route, "error", err)
+		slog.Warn("legacy deferred response cleanup failed", "operation_id", r.ID, "error", err)
 	}
 }

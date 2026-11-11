@@ -220,7 +220,11 @@ func TestDreamUndoOneChangeThenTheRun(t *testing.T) {
 	}
 	// The withdrawn approval waits for a person again, and a person can approve it.
 	var waiting []Record
-	for _, r := range scopeRecords(s.f, "memory_candidates", scopeA) {
+	candidates, err := s.f.repo.ListRecords(testCtx, scopeA, "memory_candidates", 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range candidates {
 		if r.Status == "candidate" && r.Text == s.fresh.Text && slices.Contains(r.Tags, dreamUndoneTag) {
 			waiting = append(waiting, r)
 		}

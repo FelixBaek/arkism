@@ -33,8 +33,8 @@ type OperationView struct {
 	// model_budget_exceeded, denied or model_not_configured.
 	LastRun *time.Time `json:"last_run,omitempty"`
 	Outcome string     `json:"outcome,omitempty"`
-	// Route and Result belong to a deferred call (ops_deferred.go). Result is the answer the
-	// route would have returned and is only on the single read, never in a list.
+	// Route identifies a legacy deferred call. Result is a legacy wire field;
+	// response bodies are no longer persisted or returned from operations.
 	Route  string          `json:"route,omitempty"`
 	Result json.RawMessage `json:"result,omitempty"`
 }
@@ -67,11 +67,13 @@ func viewOperation(r Record) OperationView {
 	if d := r.DeriveSchedule; d != nil {
 		v.LastRun, v.Outcome = d.LastRun, d.Outcome
 	}
-	if c := r.Deferred; c != nil {
-		v.Route, v.Error, v.Result = c.Route, c.Error, c.Result
-		if r.Status == JobStatusRunning && !r.LeaseUntil.After(time.Now()) { // the process that ran it is gone
-			v.Status, v.Error = JobStatusFailed, deferredInterrupted
+	if deferredOperation(r) {
+		// Terminal projection ends legacy polling; it says the cached response
+		// is unavailable, not that the original operation failed to commit.
+		if r.Deferred != nil {
+			v.Route = opsText(r.Deferred.Route)
 		}
+		v.Status, v.Error, v.Result = JobStatusFailed, deferredResultUnavailable, nil
 	}
 	return v
 }
@@ -93,8 +95,14 @@ func (s *Service) ListOperations(ctx context.Context, token string, in OpsListIn
 		return out, err
 	}
 	for _, r := range rows {
+		if !ownsJob(d, r) {
+			continue
+		}
+		if deferredOperation(r) {
+			s.scrubDeferredResponse(ctx, r)
+		}
 		v := viewOperation(r)
-		v.Result = nil // a list names the work; the answer is on the single read
+		v.Result = nil
 		out.Items = append(out.Items, v)
 	}
 	out.NextCursor = next
@@ -115,6 +123,9 @@ func (s *Service) GetOperation(ctx context.Context, token string, scope Scope, i
 	}
 	if !ownsJob(d, r) {
 		return OperationView{}, ErrNotFound
+	}
+	if deferredOperation(r) {
+		s.scrubDeferredResponse(ctx, r)
 	}
 	return viewOperation(r), nil
 }
@@ -168,8 +179,14 @@ func (s *Service) DeleteOperation(ctx context.Context, token, id string, in Oper
 	})
 }
 
-// ownsJob: people and services see every job, an agent only the ones it started.
-func ownsJob(d Decision, r Record) bool { return d.Role != roleAgent || r.CreatedBy == d.PrincipalID }
+// Deferred metadata is creator-only for every role. Other job metadata keeps
+// the existing operator policy; agents see only their own work.
+func ownsJob(d Decision, r Record) bool {
+	if deferredOperation(r) {
+		return r.CreatedBy != "" && r.CreatedBy == d.PrincipalID
+	}
+	return d.Role != roleAgent || r.CreatedBy == d.PrincipalID
+}
 
 // changeOperation applies one change; agentOwn lets an agent change a job it started itself.
 func (s *Service) changeOperation(ctx context.Context, token, id string, in OperationChangeInput, action, auditAction string, agentOwn bool, apply func(*Record) (bool, error)) (OperationView, error) {

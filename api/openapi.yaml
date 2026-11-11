@@ -4603,7 +4603,7 @@
                         "boolean",
                         "null"
                       ],
-                      "description": "Deferred calls, status done: the 200 body of the route that was called. A deferred call left running past its lease reads as failed with error interrupted."
+                      "description": "Legacy compatibility field; the server never returns stored deferred response bodies. Legacy operations read as failed with result_unavailable and require their creator."
                     }
                   }
                 }
@@ -8044,15 +8044,69 @@
       "post": {
         "operationId": "generateSkill",
         "summary": "Generate a candidate from verified lessons; recover completed requests without repeating the provider call",
-        "description": "Configured model adapters improve an existing baseline using 1–8 non-overlapping literal edits, each linked to a supplied verified lesson. Anchors must occur exactly once in the original baseline. The server preserves untouched bytes and stores the resulting full candidate; the provider edit format is internal, not a request field. New skills still use full content. Generation neither approves nor applies a candidate; independent comparison and review remain required. A call still running after about 20 seconds answers 202 with an operation to read (GET /v1/operations/{id}); the work continues and its result is this route's 200 body.",
+        "description": "Configured model adapters improve an existing baseline using 1–8 non-overlapping literal edits, each linked to a supplied verified lesson. Anchors must occur exactly once in the original baseline. The server preserves untouched bytes and stores the resulting full candidate; the provider edit format is internal, not a request field. New skills still use full content. Generation neither approves nor applies a candidate; independent comparison and review remain required. The request remains bounded to 25 seconds and is cancelled when its caller disconnects. A timeout returns 503 request_timeout; no response body is retained in an operation. Changes committed before a timeout may remain, so inspect existing records before retrying.",
         "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GenerateSkillInput"}}}},
         "responses": {
-          "200": {"description": "Candidate or currently valid reused version", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportSkillResult"}}}},
-          "400": {"description": "Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
-          "403": {"description": "Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
-          "404": {"description": "Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
-          "409": {"description": "Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
-          "503": {"description": "Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+          "200": {
+            "description": "Candidate or currently valid reused version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportSkillResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -8070,26 +8124,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "202": {
-            "description": "Still running after the in-request wait: read the operation at location (GET /v1/operations/{id}) until its status leaves running; done carries this route's 200 body as result, failed carries the Error.code as error.",
-            "headers": {
-              "Location": {
-                "schema": {
-                  "type": "string"
-                }
-              },
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DeferredAccepted"
                 }
               }
             }
@@ -8351,26 +8385,6 @@
                 }
               }
             }
-          },
-          "202": {
-            "description": "Still running after the in-request wait: read the operation at location (GET /v1/operations/{id}) until its status leaves running; done carries this route's 200 body as result, failed carries the Error.code as error.",
-            "headers": {
-              "Location": {
-                "schema": {
-                  "type": "string"
-                }
-              },
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DeferredAccepted"
-                }
-              }
-            }
           }
         },
         "requestBody": {
@@ -8383,7 +8397,7 @@
             }
           }
         },
-        "description": " New source-backed records write an internal fence on each active, unexpired source in the same transaction. Concurrent source deletion aborts stale insertion; source semantic revisions are unchanged. Conflict marking also requires live source IDs. This prevents late copies; erasure coverage is determined by the deletion job kind and reported by the source deletion status endpoint. A deleted deterministic analysis source ID cannot be recreated: its deletion receipt is checked before the analyzer call and again in the storage transaction; a matching receipt returns 409. Successful dependent authorization decisions must match the initial principal and role; mismatch returns 403 without result data. Already incurred provider calls/costs are retained; no analysis records are published after identity mismatch. A call still running after about 20 seconds answers 202 with an operation to read (GET /v1/operations/{id}); the work continues and its result is this route's 200 body.",
+        "description": " New source-backed records write an internal fence on each active, unexpired source in the same transaction. Concurrent source deletion aborts stale insertion; source semantic revisions are unchanged. Conflict marking also requires live source IDs. This prevents late copies; erasure coverage is determined by the deletion job kind and reported by the source deletion status endpoint. A deleted deterministic analysis source ID cannot be recreated: its deletion receipt is checked before the analyzer call and again in the storage transaction; a matching receipt returns 409. Successful dependent authorization decisions must match the initial principal and role; mismatch returns 403 without result data. Already incurred provider calls/costs are retained; no analysis records are published after identity mismatch. The request remains bounded to 25 seconds and is cancelled when its caller disconnects. A timeout returns 503 request_timeout; no response body is retained in an operation. Changes committed before a timeout may remain, so inspect existing records before retrying.",
         "operationId": "postV1SkillsAnalyze"
       }
     },
@@ -45668,7 +45682,7 @@
           "Management"
         ],
         "summary": "Wiki: build_from_memories",
-        "description": "A person asks for wiki page drafts written from approved memories recalled by exactly one of query, topic or entity_name. Every page must cite recalled memories as [mem:ID]; other citations are rejected. Locked pages are never sent or written. Without dry_run a wiki job is queued (run it with /v1/wiki/jobs/{id}/run or /v1/wiki/work) and its drafts wait for page review; dry_run runs the model now and returns the drafts unsaved. A dry_run still running after about 20 seconds answers 202 with an operation to read (GET /v1/operations/{id}); its result is this 200 body. Answers model_not_configured (503) when no wiki model is set. topic and entity_name are search text like query (no cluster or entity lookup). The job runner token recalls the memories with its own permissions: it needs search and context read on memories in the scope and external transfer to external:wiki-llm; each memory is checked on its own (restricted or unclassified memories, memories with restricted sources and secrets are left out, private spans are masked) and a run that may send none fails with not_found.",
+        "description": "A person asks for wiki page drafts written from approved memories recalled by exactly one of query, topic or entity_name. Every page must cite recalled memories as [mem:ID]; other citations are rejected. Locked pages are never sent or written. Without dry_run a wiki job is queued (run it with /v1/wiki/jobs/{id}/run or /v1/wiki/work) and its drafts wait for page review; dry_run runs the model now and returns the drafts unsaved. The request remains bounded to 25 seconds and is cancelled when its caller disconnects. A timeout returns 503 request_timeout; no response body is retained in an operation. Changes committed before a timeout may remain, so inspect existing records before retrying. Answers model_not_configured (503) when no wiki model is set. topic and entity_name are search text like query (no cluster or entity lookup). The job runner token recalls the memories with its own permissions: it needs search and context read on memories in the scope and external transfer to external:wiki-llm; each memory is checked on its own (restricted or unclassified memories, memories with restricted sources and secrets are left out, private spans are masked) and a run that may send none fails with not_found.",
         "parameters": [],
         "responses": {
           "200": {
@@ -45808,26 +45822,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "202": {
-            "description": "Still running after the in-request wait: read the operation at location (GET /v1/operations/{id}) until its status leaves running; done carries this route's 200 body as result, failed carries the Error.code as error.",
-            "headers": {
-              "Location": {
-                "schema": {
-                  "type": "string"
-                }
-              },
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DeferredAccepted"
                 }
               }
             }
@@ -46000,13 +45994,32 @@
     },
     "/v1/observations": {"delete": {"operationId": "deleteObservations", "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["scope"], "properties": {"scope": {"$ref": "#/components/schemas/Scope"}, "ids": {"type": "array", "minItems": 1, "maxItems": 50, "items": {"type": "string", "maxLength": 256}}, "all": {"type": "boolean"}, "status": {"type": "string", "enum": ["proposed", "active", "rejected", "stale"], "description": "With all: only this status."}}}}}}, "tags": ["Management"], "summary": "Delete observations in bulk (human principals only)", "description": "Body {scope, ids[1-50]} or {scope, all: true, status?}. Deletes the named observations, or every observation (of one status) up to 500 per call; more is true when some remain. A deleted observation keeps its row and history with status deleted (listed with status=deleted): it is never recalled, refreshed or counted as covering its memories, so consolidation may propose it again. Each deletion is audited; already deleted ones are skipped. Agents and services cannot call it.", "parameters": [], "responses": {"200": {"description": "{deleted[], more}"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "404": {"description": "not_found"}, "409": {"description": "revision_conflict"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}, "get": {"summary": "Observations of one status (default active), newest change first, paginated (read:observations)", "description": "Filters: status proposed|active|rejected|stale|deleted, durability momentary|lasting, source_memory_id, q (substring). limit 1-100 (50), cursor from next_cursor; at most 500 rows per status are read.", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["proposed", "active", "rejected", "stale", "deleted"]}}, {"name": "durability", "in": "query", "schema": {"type": "string", "enum": ["momentary", "lasting"]}}, {"name": "source_memory_id", "in": "query", "schema": {"type": "string"}}, {"name": "q", "in": "query", "schema": {"type": "string", "maxLength": 200}}, {"name": "cursor", "in": "query", "schema": {"type": "string"}}, {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100}}], "responses": {"200": {"description": "{items[{id, status, revision, content, source_memories, source_memory_ids, durability, durability_reason, confidence, fresh, derived, diff, stale_mark, generator, review}], next_cursor, authority}"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         "operationId": "getV1Observations"}},
-    "/v1/observations/consolidate": {"post": {"summary": "Consolidate approved memories into proposed observations (human or service principals)", "description": "Body {scope, dry_run, max_groups 1-10 (3), plan_only}. plan_only previews the strategy: it makes no model call and writes nothing, and returns plan {stale_observations, groups (member memory ids), mental_models} in run order. Marks observations whose sources are no longer approved as stale, proposes a refresh of stale ones (with a diff against the previous text), clusters approved memories and asks the server model for observations citing at least two memories of the group. Citations outside the group are refused. Due mental models are refreshed too. Everything written is a proposal or draft a person reviews. dry_run stores no observation or mental model (the model call is still recorded in the usage ledger). A call still running after about 20 seconds answers 202 with an operation to read (GET /v1/operations/{id}); the work continues and its result is this route's 200 body.", "parameters": [], "responses": {"200": {"description": "{dry_run, stale_marked, groups, proposed, refreshed, rejected[{group, code, target}], mental_models, plan, calls, tokens, authority}"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "429": {"description": "Model budget exhausted"}, "502": {"description": "invalid_model_output"}, "503": {"description": "model_not_configured"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
-          "202": {
-            "description": "Still running after the in-request wait: read the operation at location (GET /v1/operations/{id}) until its status leaves running; done carries this route's 200 body as result, failed carries the Error.code as error.",
+    "/v1/observations/consolidate": {"post": {"summary": "Consolidate approved memories into proposed observations (human or service principals)", "description": "Body {scope, dry_run, max_groups 1-10 (3), plan_only}. plan_only previews the strategy: it makes no model call and writes nothing, and returns plan {stale_observations, groups (member memory ids), mental_models} in run order. Marks observations whose sources are no longer approved as stale, proposes a refresh of stale ones (with a diff against the previous text), clusters approved memories and asks the server model for observations citing at least two memories of the group. Citations outside the group are refused. Due mental models are refreshed too. Everything written is a proposal or draft a person reviews. dry_run stores no observation or mental model (the model call is still recorded in the usage ledger). The request remains bounded to 25 seconds and is cancelled when its caller disconnects. A timeout returns 503 request_timeout; no response body is retained in an operation. Changes committed before a timeout may remain, so inspect existing records before retrying.", "parameters": [], "responses": {
+          "200": {
+            "description": "{dry_run, stale_marked, groups, proposed, refreshed, rejected[{group, code, target}], mental_models, plan, calls, tokens, authority}"
+          },
+          "400": {
+            "description": "invalid_request"
+          },
+          "403": {
+            "description": "Not a human principal"
+          },
+          "429": {
+            "description": "Model budget exhausted"
+          },
+          "502": {
+            "description": "invalid_model_output"
+          },
+          "503": {
+            "description": "model_not_configured"
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
             "headers": {
-              "Location": {
+              "WWW-Authenticate": {
                 "schema": {
-                  "type": "string"
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
                 }
               },
               "X-Request-ID": {
@@ -46016,11 +46029,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DeferredAccepted"
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
-          }},
+          }
+        },
         "operationId": "postV1ObservationsConsolidate"}},
     "/v1/observations/review_batch": {"post": {"summary": "Review several observations (human principals only)", "description": "Body {scope, items[1-50]{id, expected_revision, action approve|reject|edit, content?, reason?}}. Each item stands alone and carries its own status and code.", "parameters": [], "responses": {"200": {"description": "{items[{id, status, code, observation}], reviewed, failed}"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         "operationId": "postV1ObservationsReviewBatch"}},
@@ -46052,13 +46066,38 @@
         "operationId": "deleteV1MentalModelsById"}},
     "/v1/mental-models/{id}/history": {"get": {"summary": "All summary revisions of one mental model with line diffs", "description": "Each revision carries the diff against the revision before it.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}], "responses": {"200": {"description": "{id, revisions[{version, status, action, text, citations, by, at, diff}], authority}"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "404": {"description": "not_found"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         "operationId": "getV1MentalModelsByIdHistory"}},
-    "/v1/mental-models/{id}/refresh": {"post": {"summary": "Write a new draft summary (human or service principals)", "description": "Body {scope, dry_run}. Recalls the query over approved memories and approved observations and asks the server model for a summary citing recalled ids only. dry_run returns the draft and stores nothing on the mental model; otherwise the draft waits for a person's review. A call still running after about 20 seconds answers 202 with an operation to read (GET /v1/operations/{id}); the work continues and its result is this route's 200 body.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Mental model view (dry_run true for a dry run)"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "429": {"description": "Model budget exhausted"}, "502": {"description": "invalid_model_output"}, "503": {"description": "model_not_configured"}, "404": {"description": "not_found"}, "409": {"description": "revision_conflict"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
-          "202": {
-            "description": "Still running after the in-request wait: read the operation at location (GET /v1/operations/{id}) until its status leaves running; done carries this route's 200 body as result, failed carries the Error.code as error.",
+    "/v1/mental-models/{id}/refresh": {"post": {"summary": "Write a new draft summary (human or service principals)", "description": "Body {scope, dry_run}. Recalls the query over approved memories and approved observations and asks the server model for a summary citing recalled ids only. dry_run returns the draft and stores nothing on the mental model; otherwise the draft waits for a person's review. The request remains bounded to 25 seconds and is cancelled when its caller disconnects. A timeout returns 503 request_timeout; no response body is retained in an operation. Changes committed before a timeout may remain, so inspect existing records before retrying.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {
+          "200": {
+            "description": "Mental model view (dry_run true for a dry run)"
+          },
+          "400": {
+            "description": "invalid_request"
+          },
+          "403": {
+            "description": "Not a human principal"
+          },
+          "429": {
+            "description": "Model budget exhausted"
+          },
+          "502": {
+            "description": "invalid_model_output"
+          },
+          "503": {
+            "description": "model_not_configured"
+          },
+          "404": {
+            "description": "not_found"
+          },
+          "409": {
+            "description": "revision_conflict"
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
             "headers": {
-              "Location": {
+              "WWW-Authenticate": {
                 "schema": {
-                  "type": "string"
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
                 }
               },
               "X-Request-ID": {
@@ -46068,11 +46107,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DeferredAccepted"
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
-          }},
+          }
+        },
         "operationId": "postV1MentalModelsByIdRefresh"}},
     "/v1/mental-models/{id}/review": {"post": {"summary": "Approve or reject the draft summary (human principals only)", "description": "Body {scope, expected_revision, action approve|reject, reason?}. approve rechecks every citation and makes the draft the active revision; the previous active revision is kept in history as superseded.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Mental model view"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "404": {"description": "not_found"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         "operationId": "postV1MentalModelsByIdReview"}},
@@ -46254,7 +46294,7 @@
     "/v1/causal-links/propose": {
       "post": {
         "summary": "Ask the server model for causal links between approved memories (human or service, write:memory_relations)",
-        "description": "Body {scope, dry_run?, max_groups? 1-10 (3)}. Approved memories that pass the per-memory external transfer check are sent newest first in groups of 20, one budgeted model call per group. Every link is checked against its group and stored as a candidate that a person must approve; nothing becomes active here. Pairs that already have a row (any status, rejected included) are refused as conflict. 503 model_not_configured when no server model is set. A call still running after about 20 seconds answers 202 with an operation to read (GET /v1/operations/{id}); the work continues and its result is this route's 200 body.",
+        "description": "Body {scope, dry_run?, max_groups? 1-10 (3)}. Approved memories that pass the per-memory external transfer check are sent newest first in groups of 20, one budgeted model call per group. Every link is checked against its group and stored as a candidate that a person must approve; nothing becomes active here. Pairs that already have a row (any status, rejected included) are refused as conflict. 503 model_not_configured when no server model is set. The request remains bounded to 25 seconds and is cancelled when its caller disconnects. A timeout returns 503 request_timeout; no response body is retained in an operation. Changes committed before a timeout may remain, so inspect existing records before retrying.",
         "requestBody": {
           "required": true,
           "content": {
@@ -46305,26 +46345,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "202": {
-            "description": "Still running after the in-request wait: read the operation at location (GET /v1/operations/{id}) until its status leaves running; done carries this route's 200 body as result, failed carries the Error.code as error.",
-            "headers": {
-              "Location": {
-                "schema": {
-                  "type": "string"
-                }
-              },
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DeferredAccepted"
                 }
               }
             }
@@ -54842,6 +54862,7 @@
               "revision_conflict",
               "dependency_unavailable",
               "request_timeout",
+              "request_cancelled",
               "secret_detected",
               "candidate_daily_limit",
               "dynamics_queue_full",
@@ -80959,7 +80980,8 @@
           "route"
         ],
         "x-go-type": "memory.DeferredCall",
-        "x-go-source": "internal/memory/ops_deferred.go"
+        "x-go-source": "internal/memory/ops_deferred.go",
+        "description": "DeferredCall is retained only to decode and scrub legacy rows."
       }
     },
     "headers": {
