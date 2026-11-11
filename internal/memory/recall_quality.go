@@ -357,20 +357,24 @@ func lexicallyRelevant(terms []string, h Hit) bool {
 // conceptsFound counts the query's topic concepts the hit's text, summary and keywords hold,
 // out of how many the query has.
 func conceptsFound(terms []string, h Hit) (found, concepts int) {
-	concepts = len(searchQueryConcepts(terms))
+	_, heads := searchConceptGroups(terms)
+	concepts = len(heads)
 	if concepts == 0 {
 		return 0, 0
 	}
 	// The same text the keyword lane indexes (search_tokens), conditions included.
 	have := SearchTokens(searchTokensRecordText(Record{Text: h.Text, Summary: h.Summary, Keywords: h.keywords, MemoryContext: h.MemoryContext}))
-	seen := map[string]bool{}
-	for _, t := range terms {
-		// Any spelling of the concept counts, as in the keyword lane's tsquery.
-		if termInTokens(t, func(w string) bool { return slices.Contains(have, w) }) {
-			seen[searchQueryConcepts([]string{t})[0]] = true
+	seen := make([]bool, concepts)
+	for _, term := range terms {
+		// Use the first matching group, as the query builder does. A word and
+		// its stem can both occur in the document but supply only one concept.
+		group := slices.IndexFunc(heads, func(head string) bool { return sameSearchConcept(head, term) })
+		if group >= 0 && !seen[group] && termInTokens(term, func(w string) bool { return slices.Contains(have, w) }) {
+			seen[group] = true
+			found++
 		}
 	}
-	return len(seen), concepts
+	return found, concepts
 }
 
 // weighKeywordCoverage gives each keyword lane hit the share of the query's topic concepts it
