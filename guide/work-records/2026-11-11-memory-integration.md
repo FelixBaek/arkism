@@ -77,3 +77,13 @@ retain their escaped interpolation. No lint suppression or quality threshold
 was added. Generated SDK comparison passed; related existing Go and SDK tests
 passed: three host reflect tests and two lesson-grouping tests with race, plus
 nine Python SDK tests (2.021s). No new tests mirror these mechanical edits.
+
+The generated plain-string paths exposed one additional Sonar duplicate-literal
+finding. The generator now shares paths used by at least three operations as
+private module constants, while rejecting constant-name collisions. The existing
+SDK client tests passed nine cases (2.522s). The generator suite passed eight
+cases and skipped its unavailable TypeScript compiler check; this is not a claim
+that local TypeScript compilation ran. Its newly added legacy-polling fixture
+also now shuts down and closes its local HTTP server through test cleanup, so
+assertion failures do not leave the fixture socket open. The final generator
+rerun completed without the earlier ResourceWarning (1.042s).

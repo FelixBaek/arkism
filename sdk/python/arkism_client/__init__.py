@@ -177,6 +177,8 @@ def _decode(raw):
         return raw.decode(errors="replace")
 
 
+_ROUTE_V1_WIKI_FOLDERS = "/v1/wiki/folders"
+
 class ArkismClient(BaseClient):
     """Thin client: one method per route, plain dicts in and out."""
 
@@ -1742,15 +1744,15 @@ class ArkismClient(BaseClient):
 
     def post_v1_wiki_folders(self, body=None):
         """POST /v1/wiki/folders — Wiki: folders"""
-        return self.request("POST", "/v1/wiki/folders", None, body)
+        return self.request("POST", _ROUTE_V1_WIKI_FOLDERS, None, body)
 
     def patch_v1_wiki_folders(self, body=None):
         """PATCH /v1/wiki/folders — Wiki: rename or move a folder"""
-        return self.request("PATCH", "/v1/wiki/folders", None, body)
+        return self.request("PATCH", _ROUTE_V1_WIKI_FOLDERS, None, body)
 
     def delete_v1_wiki_folders(self, query=None):
         """DELETE /v1/wiki/folders — Wiki: delete a folder"""
-        return self.request("DELETE", "/v1/wiki/folders", query, None)
+        return self.request("DELETE", _ROUTE_V1_WIKI_FOLDERS, query, None)
 
     def post_v1_wiki_build_from_memories(self, body=None):
         """POST /v1/wiki/build_from_memories — Wiki: build_from_memories"""

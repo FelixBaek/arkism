@@ -12,6 +12,7 @@ import json
 import keyword
 import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -515,7 +516,7 @@ def py_name(name):
     return out + "_" if keyword.iskeyword(out) else out
 
 
-def py_method(name, method, path, op):
+def py_method(name, method, path, op, path_constants=None):
     params = op.get("parameters", [])
     path_params = [p["name"] for p in params if p.get("in") == "path"]
     has_query = any(p.get("in") == "query" for p in params)
@@ -539,6 +540,7 @@ def py_method(name, method, path, op):
     doc = "; ".join(d for d in doc if d)
     url = re.sub(r"\{([^}]+)\}", lambda m: "{urllib.parse.quote(" + py_name(camel(m.group(1))) + ", safe='')}", path)
     url_literal = 'f"' + url + '"' if path_params else json.dumps(path)
+    url_literal = (path_constants or {}).get(path, url_literal)
     doc = doc.replace('"""', "'''").replace("\\", "\\\\")
     return (f"    def {py_name(name)}({', '.join(args)}):\n"
             f'        """{method.upper()} {path}{(" — " + doc) if doc else ""}"""\n'
@@ -553,8 +555,15 @@ def render(spec):
     ts.append("\n" + TS_RUNTIME)
     ts.extend(ts_method(*op) for op in ops)
     ts.append("}\n")
-    py = [f'"""Arkism API client. {HEADER}"""\n\n', PY_RUNTIME, "\n", "class ArkismClient(BaseClient):\n    \"\"\"Thin client: one method per route, plain dicts in and out.\"\"\"\n\n"]
-    py.extend(py_method(*op) for op in ops)
+    counts = Counter(path for _, _, path, _ in ops if "{" not in path)
+    path_constants = {path: "_ROUTE_" + re.sub(r"\W+", "_", path).strip("_").upper()
+                      for path, count in counts.items() if count >= 3}
+    if len(set(path_constants.values())) != len(path_constants):
+        raise ValueError("Python route constant name collision")
+    literals = "".join(f"{name} = {json.dumps(path)}\n" for path, name in path_constants.items())
+    py = [f'"""Arkism API client. {HEADER}"""\n\n', PY_RUNTIME, "\n", literals,
+          "\nclass ArkismClient(BaseClient):\n    \"\"\"Thin client: one method per route, plain dicts in and out.\"\"\"\n\n"]
+    py.extend(py_method(*op, path_constants=path_constants) for op in ops)
     return "".join(ts), "".join(py).rstrip() + "\n"
 
 
