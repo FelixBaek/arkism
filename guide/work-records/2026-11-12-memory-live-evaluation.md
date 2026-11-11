@@ -100,6 +100,32 @@ None was removed from the primary score. Historical scores used a different
 execution path and are not a controlled baseline for claiming a gain/regression.
 Further native-service validation is separate from this completed protocol.
 
+## Native service-path diagnostic
+
+The same frozen 32 questions were separately sent through the actual `/v1/reflect`
+route on evaluation binary 713e2154. The profile retained ten conversation passages,
+source rereading disabled, and a maximum of three iterations per question.
+All 32 requests returned HTTP 200. There were 33 successful generation calls,
+zero retries, and one actual recall tool execution. Thirty-one questions used one
+iteration and one used two. A durable bridge enforced 96 total and three calls
+per question; the provider's requested token ceiling was not enforced by this
+transport, so this is not proof of complete token-budget handling.
+
+Native answers scored **27/32 (84.375%)**: single-hop 7/8, temporal 7/8,
+multi-hop 7/8 and open-domain 6/8. Grading used the same fixed historical grader,
+29 new judge calls and three exact prior results. Generation reported 195,080
+tokens and new grading reported 9,735 tokens. Dollar cost is unavailable.
+The native result-file SHA-256 is
+`139bfbb0798dccbd36321459a84a89a8b73ea0da4b1960f34c77e0cf1b03668c`.
+
+The additional multi-hop failure returned prose followed by a tool-request JSON
+object as its final answer. This exposed an actual service-loop format-handling
+bug. The subsequent repair is recorded separately and does not overwrite this
+failed result or imply an improved score. An initial scope-missing retrieval
+smoke test produced no memories; the request scope was corrected before any of
+these 32 generation requests, and the diagnostic was preserved. No production
+service was changed.
+
 ## Acquisition integrity and next measurement
 
 An initial bulk retrieval attempt encountered transaction retries and was stopped;
