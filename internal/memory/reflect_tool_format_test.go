@@ -1,3 +1,5 @@
+//go:build linux
+
 package memory
 
 import (
@@ -33,18 +35,5 @@ func TestReflectFinalMixedToolEnvelopeIsNotAnAnswer(t *testing.T) {
 	out, err := f.svc.Reflect(testCtx, f.human, ReflectInput{Scope: scopeA, Query: "alpha", MaxIterations: 1})
 	if !errors.Is(err, errModelAnswer) || out.Answer != "" || len(out.ToolTrace) != 0 || len(llm.prompts) != 1 {
 		t.Fatalf("final mixed envelope escaped or spent extra calls: %v %+v", err, out)
-	}
-}
-
-func TestReflectMixedEnvelopeDetectionPreservesPlainAndStrictReplies(t *testing.T) {
-	strict := toolCall("recall", map[string]any{"query": "bravo"})
-	for _, text := range []string{"A plain supported answer.", `The field "tool_call" names a tool.`, `{"answer":"ordinary JSON answer"}`, strict, "```json\n" + strict + "\n```"} {
-		_, isTool := parseReflectToolCalls(text)
-		if reflectReplyNeedsRepair(text, isTool) {
-			t.Fatalf("valid plain or strict reply rejected: %q", text)
-		}
-	}
-	if !reflectReplyNeedsRepair("Checking now. "+strict, false) {
-		t.Fatal("mixed envelope not detected")
 	}
 }

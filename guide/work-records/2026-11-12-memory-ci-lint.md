@@ -70,3 +70,21 @@ binary build or deployment was performed for this verification follow-up.
 `!race` 대용량 검사 21개 제외는 통과로 계산하지 않았다. 나중에 추가된 혼합 도구
 응답 검사 3개는 별도 성공 기록을 따른다. 세 운영체제 vet와 고정 버전 전체 lint가
 통과했으며, 전용 PostgreSQL 검사 환경은 로그를 남기고 정리했다.
+
+## Final cross-platform test-package correction
+
+Repeating vet on candidate 75a2e407 caught a newer test-package portability
+failure: two mixed-envelope service-loop tests referenced the Linux-only fixture
+from an untagged file. Linux vet succeeded, but Windows and Darwin vet rejected
+the undefined helper; the corresponding Windows CI failure was also observed.
+The fixture-dependent tests now use the same Linux constraint as the existing
+service fixtures. The pure parser test was moved to a separate portable file and
+uses a literal tool envelope, so it remains checked on all platforms. Production
+code and the evaluation binary behavior are unchanged.
+
+Go 1.27.4 vet passed again on Linux, Windows and Darwin after this correction.
+The platform fix does not turn earlier failed runs into passes; their logs remain
+preserved separately. No test assertions were removed.
+
+The three mixed-envelope tests also passed under Linux race instrumentation
+(1.258 seconds) after the split.
