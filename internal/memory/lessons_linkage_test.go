@@ -14,7 +14,7 @@ func TestLessonGroupingIsCompleteLinkage(t *testing.T) {
 		t.Fatal("a lesson joins a group only when it matches every member")
 	}
 	groups := map[string]*ReflectionView{"k": {Status: "candidate"}}
-	if key := reflectionGroup(groups, map[string][]string{"k": {a, b}}, []string{"k"}, "candidate", c); key == "k" {
+	if reflectionGroup(groups, map[string][]string{"k": {a, b}}, []string{"k"}, "candidate", c) == "k" {
 		t.Fatal("the reflection list must use the same rule")
 	}
 }

@@ -182,15 +182,15 @@ class ArkismClient(BaseClient):
 
     def post_v1_reflect(self, body=None):
         """POST /v1/reflect — Answer a question from approved memory under person-written directives (search:memories; the model call also needs generate:reflect and external transfer)"""
-        return self.request("POST", f"/v1/reflect", None, body)
+        return self.request("POST", "/v1/reflect", None, body)
 
     def get_v1_directives(self, query=None):
         """GET /v1/directives — List a project's directives by priority (read:directives)"""
-        return self.request("GET", f"/v1/directives", query, None)
+        return self.request("GET", "/v1/directives", query, None)
 
     def post_v1_directives(self, body=None):
         """POST /v1/directives — Create a directive (write:directives; a person's is stored as asked, an agent's is always stored inactive with proposed=true until a person saves it, at most 20 open proposals per scope)"""
-        return self.request("POST", f"/v1/directives", None, body)
+        return self.request("POST", "/v1/directives", None, body)
 
     def get_v1_directives_by_id(self, id, query=None):
         """GET /v1/directives/{id} — Read a directive (read:directives)"""
@@ -206,111 +206,111 @@ class ArkismClient(BaseClient):
 
     def post_v1_context_validate(self, body=None):
         """POST /v1/context/validate — Revalidate exact cached memory and source snapshots before another disclosure"""
-        return self.request("POST", f"/v1/context/validate", None, body)
+        return self.request("POST", "/v1/context/validate", None, body)
 
     def authorize_handoff_transfer(self, body=None):
         """POST /v1/work-checkpoints/authorize-handoff — Authorize one exact handoff model input"""
-        return self.request("POST", f"/v1/work-checkpoints/authorize-handoff", None, body)
+        return self.request("POST", "/v1/work-checkpoints/authorize-handoff", None, body)
 
     def search_memory_for_role(self, body=None):
         """POST /v1/memory/role-search — searchMemoryForRole"""
-        return self.request("POST", f"/v1/memory/role-search", None, body)
+        return self.request("POST", "/v1/memory/role-search", None, body)
 
     def put_knowledge_relation(self, body=None):
         """POST /v1/knowledge-graph/relations — putKnowledgeRelation"""
-        return self.request("POST", f"/v1/knowledge-graph/relations", None, body)
+        return self.request("POST", "/v1/knowledge-graph/relations", None, body)
 
     def expand_knowledge_graph(self, body=None):
         """POST /v1/knowledge-graph/expand — expandKnowledgeGraph"""
-        return self.request("POST", f"/v1/knowledge-graph/expand", None, body)
+        return self.request("POST", "/v1/knowledge-graph/expand", None, body)
 
     def recent_work_checkpoints(self, body=None):
         """POST /v1/work-checkpoints/recent — recentWorkCheckpoints"""
-        return self.request("POST", f"/v1/work-checkpoints/recent", None, body)
+        return self.request("POST", "/v1/work-checkpoints/recent", None, body)
 
     def get_v1_reflections(self, query=None):
         """GET /v1/reflections — Group reflection lessons for one task subject"""
-        return self.request("GET", f"/v1/reflections", query, None)
+        return self.request("GET", "/v1/reflections", query, None)
 
     def get_v1_tacit_edges(self, query=None):
         """GET /v1/tacit/edges — List observed skill sequences in the exact scope"""
-        return self.request("GET", f"/v1/tacit/edges", query, None)
+        return self.request("GET", "/v1/tacit/edges", query, None)
 
     def post_v1_improvements(self, body=None):
         """POST /v1/improvements — Check or explicitly confirm an improvement as a human"""
-        return self.request("POST", f"/v1/improvements", None, body)
+        return self.request("POST", "/v1/improvements", None, body)
 
     def memories_at(self, body=None):
         """POST /v1/memories/at — observed historical memories under current authorization"""
-        return self.request("POST", f"/v1/memories/at", None, body)
+        return self.request("POST", "/v1/memories/at", None, body)
 
     def capture_claims(self, body=None):
         """POST /v1/capture — capture claims with optional exact archive provenance"""
-        return self.request("POST", f"/v1/capture", None, body)
+        return self.request("POST", "/v1/capture", None, body)
 
     def work_checkpoint_save(self, body=None):
         """POST /v1/work-checkpoints/save — save"""
-        return self.request("POST", f"/v1/work-checkpoints/save", None, body)
+        return self.request("POST", "/v1/work-checkpoints/save", None, body)
 
     def work_checkpoint_get(self, body=None):
         """POST /v1/work-checkpoints/get — get"""
-        return self.request("POST", f"/v1/work-checkpoints/get", None, body)
+        return self.request("POST", "/v1/work-checkpoints/get", None, body)
 
     def work_checkpoint_list(self, body=None):
         """POST /v1/work-checkpoints/list — list"""
-        return self.request("POST", f"/v1/work-checkpoints/list", None, body)
+        return self.request("POST", "/v1/work-checkpoints/list", None, body)
 
     def session_archive_chunks(self, body=None):
         """POST /v1/session-archives/chunks — chunks"""
-        return self.request("POST", f"/v1/session-archives/chunks", None, body)
+        return self.request("POST", "/v1/session-archives/chunks", None, body)
 
     def session_archive_commit(self, body=None):
         """POST /v1/session-archives/commit — commit"""
-        return self.request("POST", f"/v1/session-archives/commit", None, body)
+        return self.request("POST", "/v1/session-archives/commit", None, body)
 
     def session_archive_search(self, body=None):
         """POST /v1/session-archives/search — search"""
-        return self.request("POST", f"/v1/session-archives/search", None, body)
+        return self.request("POST", "/v1/session-archives/search", None, body)
 
     def session_archive_message(self, body=None):
         """POST /v1/session-archives/message — message"""
-        return self.request("POST", f"/v1/session-archives/message", None, body)
+        return self.request("POST", "/v1/session-archives/message", None, body)
 
     def session_archive_list(self, body=None):
         """POST /v1/session-archives/list — list"""
-        return self.request("POST", f"/v1/session-archives/list", None, body)
+        return self.request("POST", "/v1/session-archives/list", None, body)
 
     def session_archive_get(self, body=None):
         """POST /v1/session-archives/get — get"""
-        return self.request("POST", f"/v1/session-archives/get", None, body)
+        return self.request("POST", "/v1/session-archives/get", None, body)
 
     def session_archive_read(self, body=None):
         """POST /v1/session-archives/read — read"""
-        return self.request("POST", f"/v1/session-archives/read", None, body)
+        return self.request("POST", "/v1/session-archives/read", None, body)
 
     def session_archive_used(self, body=None):
         """POST /v1/session-archives/used — used"""
-        return self.request("POST", f"/v1/session-archives/used", None, body)
+        return self.request("POST", "/v1/session-archives/used", None, body)
 
     def session_archive_expire(self, body=None):
         """POST /v1/session-archives/expire — expire"""
-        return self.request("POST", f"/v1/session-archives/expire", None, body)
+        return self.request("POST", "/v1/session-archives/expire", None, body)
 
     def get_recovery_identity(self):
         """GET /recovery-identity — Recovery-only live restored database identity"""
-        return self.request("GET", f"/recovery-identity", None, None)
+        return self.request("GET", "/recovery-identity", None, None)
 
     def get_livez(self):
         """GET /livez — Process liveness only"""
-        return self.request("GET", f"/livez", None, None)
+        return self.request("GET", "/livez", None, None)
 
     def get_v1_audit_events(self, query=None):
         """GET /v1/audit-events — List a scope's audit events (human read:audit_events)"""
-        return self.request("GET", f"/v1/audit-events", query, None)
+        return self.request("GET", "/v1/audit-events", query, None)
 
     def get_v1_audit_events_stats(self, query=None):
         """GET /v1/audit-events/stats — Count a scope's audit events by action and UTC day (human read:audit_events)"""
-        return self.request("GET", f"/v1/audit-events/stats", query, None)
+        return self.request("GET", "/v1/audit-events/stats", query, None)
 
     def get_v1_audit_events_id(self, id, query=None):
         """GET /v1/audit-events/{id} — Read one audit event (human read:audit_events)"""
@@ -318,7 +318,7 @@ class ArkismClient(BaseClient):
 
     def get_v1_operations(self, query=None):
         """GET /v1/operations — List background jobs (read:jobs; an agent sees only the jobs it created)"""
-        return self.request("GET", f"/v1/operations", query, None)
+        return self.request("GET", "/v1/operations", query, None)
 
     def get_v1_operations_by_id(self, id, query=None):
         """GET /v1/operations/{id} — Read one job's metadata (read:jobs; another principal's job is 404 for an agent)"""
@@ -338,15 +338,15 @@ class ArkismClient(BaseClient):
 
     def get_v1_stats(self, query=None):
         """GET /v1/stats — Scope counts (human/service ops:metrics)"""
-        return self.request("GET", f"/v1/stats", query, None)
+        return self.request("GET", "/v1/stats", query, None)
 
     def get_v1_stats_timeseries(self, query=None):
         """GET /v1/stats/timeseries — Ingestion counts per day or week (human/service ops:metrics)"""
-        return self.request("GET", f"/v1/stats/timeseries", query, None)
+        return self.request("GET", "/v1/stats/timeseries", query, None)
 
     def get_v1_tags(self, query=None):
         """GET /v1/tags — Tag counts over a scope's active memories (read:memories)"""
-        return self.request("GET", f"/v1/tags", query, None)
+        return self.request("GET", "/v1/tags", query, None)
 
     def post_v1_memories_by_id_tags(self, id, body=None):
         """POST /v1/memories/{id}/tags — Add or remove tags on one active memory (human transition:memories)"""
@@ -354,23 +354,23 @@ class ArkismClient(BaseClient):
 
     def post_v1_tags_rename(self, body=None):
         """POST /v1/tags/rename — Rename a tag across a scope's active memories (human transition:memories)"""
-        return self.request("POST", f"/v1/tags/rename", None, body)
+        return self.request("POST", "/v1/tags/rename", None, body)
 
     def get_healthz(self):
         """GET /healthz — Process liveness only; not Atlas index readiness"""
-        return self.request("GET", f"/healthz", None, None)
+        return self.request("GET", "/healthz", None, None)
 
     def get_v1_capabilities(self, query=None):
         """GET /v1/capabilities — Advisory UI capability probe (screen visibility)"""
-        return self.request("GET", f"/v1/capabilities", query, None)
+        return self.request("GET", "/v1/capabilities", query, None)
 
     def post_v1_context_build(self, body=None):
         """POST /v1/context/build — Build an approved-memory context with mandatory token encoding and bounded item/token budgets"""
-        return self.request("POST", f"/v1/context/build", None, body)
+        return self.request("POST", "/v1/context/build", None, body)
 
     def post_v1_search(self, body=None, headers=None):
         """POST /v1/search — Scoped exact + native text + vector search, separated by purpose; headers: X-Arkism-Client, X-Arkism-Session"""
-        return self.request("POST", f"/v1/search", None, body, headers=headers)
+        return self.request("POST", "/v1/search", None, body, headers=headers)
 
     def post_v1_by_collection(self, collection, body=None):
         """POST /v1/{collection} — Create source, candidate, run, call, evaluation, reflection, relation, skill version or shared evaluation record (eval_tasks, eval_runs, eval_trials, judge_calibrations; an eval_trials record relates to one eval_tasks and one eval_runs record). No direct memory/active writes."""
@@ -406,31 +406,31 @@ class ArkismClient(BaseClient):
 
     def get_v1_skills(self, query=None):
         """GET /v1/skills — List active skill baselines for the scoped registry"""
-        return self.request("GET", f"/v1/skills", query, None)
+        return self.request("GET", "/v1/skills", query, None)
 
     def post_v1_skills_comparisons_record(self, body=None):
         """POST /v1/skills/comparisons/record — Atomically record an independently measured skill comparison"""
-        return self.request("POST", f"/v1/skills/comparisons/record", None, body)
+        return self.request("POST", "/v1/skills/comparisons/record", None, body)
 
     def generate_skill(self, body=None):
         """POST /v1/skills/generate — Generate a candidate from verified lessons; recover completed requests without repeating the provider call"""
-        return self.request("POST", f"/v1/skills/generate", None, body)
+        return self.request("POST", "/v1/skills/generate", None, body)
 
     def post_v1_skills_propose(self, body=None):
         """POST /v1/skills/propose — Propose a candidate skill from repeated independently evaluated lessons"""
-        return self.request("POST", f"/v1/skills/propose", None, body)
+        return self.request("POST", "/v1/skills/propose", None, body)
 
     def post_v1_skills_import(self, body=None):
         """POST /v1/skills/import — Import one operator-reviewed current skill baseline without an external model call"""
-        return self.request("POST", f"/v1/skills/import", None, body)
+        return self.request("POST", "/v1/skills/import", None, body)
 
     def post_v1_skills_analyze(self, body=None):
         """POST /v1/skills/analyze — General LLM analysis once per scoped skill content hash; candidate only"""
-        return self.request("POST", f"/v1/skills/analyze", None, body)
+        return self.request("POST", "/v1/skills/analyze", None, body)
 
     def post_v1_skill_trials_list(self, body=None):
         """POST /v1/skill-trials/list — List trial history for one skill version, with current online resolution metadata"""
-        return self.request("POST", f"/v1/skill-trials/list", None, body)
+        return self.request("POST", "/v1/skill-trials/list", None, body)
 
     def post_v1_skill_trials_by_id_inspect(self, id, body=None):
         """POST /v1/skill-trials/{id}/inspect — Inspect the trial's effective status and currently returned version without executing it"""
@@ -438,7 +438,7 @@ class ArkismClient(BaseClient):
 
     def post_v1_skill_trials(self, body=None):
         """POST /v1/skill-trials — Start an explicit runtime-bounded approved skill trial (human apply:skills)"""
-        return self.request("POST", f"/v1/skill-trials", None, body)
+        return self.request("POST", "/v1/skill-trials", None, body)
 
     def post_v1_skill_trials_by_id_stop(self, id, body=None):
         """POST /v1/skill-trials/{id}/stop — Stop future trial loads; already running work is not interrupted"""
@@ -446,35 +446,35 @@ class ArkismClient(BaseClient):
 
     def post_v1_skills_resolve(self, body=None):
         """POST /v1/skills/resolve — Resolve skill_refs (exact pin or latest-approved) to immutable canonical versions"""
-        return self.request("POST", f"/v1/skills/resolve", None, body)
+        return self.request("POST", "/v1/skills/resolve", None, body)
 
     def get_v1_skills_trash(self, query=None):
         """GET /v1/skills/trash — Retired (deprecated) skills of the scope with their last version's name and description, in id order, a page at a time (limit, cursor; read:skills)"""
-        return self.request("GET", f"/v1/skills/trash", query, None)
+        return self.request("GET", "/v1/skills/trash", query, None)
 
     def post_v1_skills_route(self, body=None):
         """POST /v1/skills/route — Jev selection of retrieved skills, rules on failure; never executes"""
-        return self.request("POST", f"/v1/skills/route", None, body)
+        return self.request("POST", "/v1/skills/route", None, body)
 
     def get_v1_auth_google(self):
         """GET /v1/auth/google — Google sign-in configuration for the desktop app (public client ID only)"""
-        return self.request("GET", f"/v1/auth/google", None, None)
+        return self.request("GET", "/v1/auth/google", None, None)
 
     def post_v1_auth_google(self, body=None):
         """POST /v1/auth/google — Redeem a Google authorization code (PKCE, loopback redirect) for the desktop principal's token"""
-        return self.request("POST", f"/v1/auth/google", None, body)
+        return self.request("POST", "/v1/auth/google", None, body)
 
     def get_v1_agent_tools(self, query=None):
         """GET /v1/agent_tools — The scope's agent MCP servers and plugins as last reported by the host sync tool, plus pending switches"""
-        return self.request("GET", f"/v1/agent_tools", query, None)
+        return self.request("GET", "/v1/agent_tools", query, None)
 
     def post_v1_agent_tools(self):
         """POST /v1/agent_tools — Host sync tool reports the inventory it saw and the outcome of switches it applied"""
-        return self.request("POST", f"/v1/agent_tools", None, None)
+        return self.request("POST", "/v1/agent_tools", None, None)
 
     def post_v1_agent_tools_requests(self):
         """POST /v1/agent_tools/requests — Owner asks to switch an MCP server or plugin on or off for one agent (human principals only)"""
-        return self.request("POST", f"/v1/agent_tools/requests", None, None)
+        return self.request("POST", "/v1/agent_tools/requests", None, None)
 
     def post_v1_agent_tools_requests_by_id_login(self, id):
         """POST /v1/agent_tools/requests/{id}/login — One step of an MCP sign-in (mcp_login)"""
@@ -482,11 +482,11 @@ class ArkismClient(BaseClient):
 
     def get_v1_prompts(self):
         """GET /v1/prompts — Active image/slide prompts of the scope (newest first, one page of 500)"""
-        return self.request("GET", f"/v1/prompts", None, None)
+        return self.request("GET", "/v1/prompts", None, None)
 
     def post_v1_prompts(self):
         """POST /v1/prompts — Add a prompt (human principals only)"""
-        return self.request("POST", f"/v1/prompts", None, None)
+        return self.request("POST", "/v1/prompts", None, None)
 
     def post_v1_prompts_by_id(self, id):
         """POST /v1/prompts/{id} — Replace a prompt's fields, or archive it (expected_revision required)"""
@@ -494,11 +494,11 @@ class ArkismClient(BaseClient):
 
     def get_v1_maintenance_proposals(self, query=None):
         """GET /v1/maintenance_proposals — Memory cleanup proposals of one status (default open), newest first, up to 500 (read:maintenance_proposals)"""
-        return self.request("GET", f"/v1/maintenance_proposals", query, None)
+        return self.request("GET", "/v1/maintenance_proposals", query, None)
 
     def post_v1_maintenance_proposals(self):
         """POST /v1/maintenance_proposals — Propose keeping one of two active memories (write:maintenance_proposals)"""
-        return self.request("POST", f"/v1/maintenance_proposals", None, None)
+        return self.request("POST", "/v1/maintenance_proposals", None, None)
 
     def post_v1_maintenance_proposals_by_id_decide(self, id):
         """POST /v1/maintenance_proposals/{id}/decide — A person's answer to a proposal (human principals only)"""
@@ -506,7 +506,7 @@ class ArkismClient(BaseClient):
 
     def get_v1_dream_runs(self, query=None):
         """GET /v1/dream_runs — What dreaming did: the newest automatic consolidation runs of a scope (read:maintenance_proposals, human principals only)"""
-        return self.request("GET", f"/v1/dream_runs", query, None)
+        return self.request("GET", "/v1/dream_runs", query, None)
 
     def post_v1_dream_runs_by_id_undo(self, id):
         """POST /v1/dream_runs/{id}/undo — Undo one change of a dream run, or the whole run (human principals only)"""
@@ -514,15 +514,15 @@ class ArkismClient(BaseClient):
 
     def get_v1_context_pins(self, query=None):
         """GET /v1/context/pins — Resolved pins of a work agent or team (read:crew, context:read)"""
-        return self.request("GET", f"/v1/context/pins", query, None)
+        return self.request("GET", "/v1/context/pins", query, None)
 
     def post_v1_context_pins(self):
         """POST /v1/context/pins — Resolve pins a host is injecting and record them (context:read)"""
-        return self.request("POST", f"/v1/context/pins", None, None)
+        return self.request("POST", "/v1/context/pins", None, None)
 
     def get_v1_spaces(self, query=None):
         """GET /v1/spaces — Spaces of one workspace visible to the caller, with project-level record counts (read:memories)"""
-        return self.request("GET", f"/v1/spaces", query, None)
+        return self.request("GET", "/v1/spaces", query, None)
 
     def get_v1_spaces_exports_by_job(self, job, query=None):
         """GET /v1/spaces/exports/{job} — An export or clone job's state (read:memories)"""
@@ -550,7 +550,7 @@ class ArkismClient(BaseClient):
 
     def post_v1_spaces_delete(self, query=None):
         """POST /v1/spaces/delete — Delete several spaces of one workspace (human principals only, delete:spaces)"""
-        return self.request("POST", f"/v1/spaces/delete", query, None)
+        return self.request("POST", "/v1/spaces/delete", query, None)
 
     def delete_v1_spaces_by_workspace_by_project(self, workspace, project, query=None):
         """DELETE /v1/spaces/{workspace}/{project} — Delete a space and everything in it (human principals only, delete:spaces)"""
@@ -590,15 +590,15 @@ class ArkismClient(BaseClient):
 
     def get_v1_merge_proposals(self, query=None):
         """GET /v1/merge_proposals — Memory merge proposals of one status (default open), newest first, up to 500 (read:merge_proposals)"""
-        return self.request("GET", f"/v1/merge_proposals", query, None)
+        return self.request("GET", "/v1/merge_proposals", query, None)
 
     def post_v1_merge_proposals(self):
         """POST /v1/merge_proposals — Submit a judge's verdicts for a pool (write:merge_proposals)"""
-        return self.request("POST", f"/v1/merge_proposals", None, None)
+        return self.request("POST", "/v1/merge_proposals", None, None)
 
     def post_v1_merge_proposals_pool(self):
         """POST /v1/merge_proposals/pool — Build a pool of undecided memory candidates and their most similar approved memories (human principals only)"""
-        return self.request("POST", f"/v1/merge_proposals/pool", None, None)
+        return self.request("POST", "/v1/merge_proposals/pool", None, None)
 
     def get_v1_merge_proposals_by_id(self, id, query=None):
         """GET /v1/merge_proposals/{id} — One merge proposal with its candidate and targets read now"""
@@ -610,11 +610,11 @@ class ArkismClient(BaseClient):
 
     def get_v1_crew_templates_research(self, query=None):
         """GET /v1/crew/templates/research — Preview an upgrade of the existing research workflow (read:crew)"""
-        return self.request("GET", f"/v1/crew/templates/research", query, None)
+        return self.request("GET", "/v1/crew/templates/research", query, None)
 
     def get_v1_crew_templates_deep_research(self, query=None):
         """GET /v1/crew/templates/deep-research — Read the standalone deep research template (read:crew)"""
-        return self.request("GET", f"/v1/crew/templates/deep-research", query, None)
+        return self.request("GET", "/v1/crew/templates/deep-research", query, None)
 
     def post_v1_crew_runs_by_id_lease(self, id, body=None):
         """POST /v1/crew/runs/{id}/lease — Acquire, renew or release FLOW execution (write:crew_runs)"""
@@ -626,7 +626,7 @@ class ArkismClient(BaseClient):
 
     def get_v1_crew_deliveries(self, query=None):
         """GET /v1/crew/deliveries — List durable Discord result deliveries (read:crew)"""
-        return self.request("GET", f"/v1/crew/deliveries", query, None)
+        return self.request("GET", "/v1/crew/deliveries", query, None)
 
     def post_v1_crew_deliveries_by_id_change(self, id, body=None):
         """POST /v1/crew/deliveries/{id}/change — Claim or acknowledge a Discord result part (write:crew_runs)"""
@@ -634,15 +634,15 @@ class ArkismClient(BaseClient):
 
     def get_v1_crew(self, query=None):
         """GET /v1/crew — Live workflows, templates and personas of the scope (one page of 1000)"""
-        return self.request("GET", f"/v1/crew", query, None)
+        return self.request("GET", "/v1/crew", query, None)
 
     def post_v1_crew(self):
         """POST /v1/crew — Add a workflow, template or persona (human principals only)"""
-        return self.request("POST", f"/v1/crew", None, None)
+        return self.request("POST", "/v1/crew", None, None)
 
     def get_v1_crew_resolve(self, query=None):
         """GET /v1/crew/resolve — Resolve a $handle to the live workflow"""
-        return self.request("GET", f"/v1/crew/resolve", query, None)
+        return self.request("GET", "/v1/crew/resolve", query, None)
 
     def post_v1_crew_by_id(self, id):
         """POST /v1/crew/{id} — Replace an item's definition, or archive it (expected_revision required; the type never changes; human principals only)"""
@@ -650,11 +650,11 @@ class ArkismClient(BaseClient):
 
     def get_v1_crew_assists(self, query=None):
         """GET /v1/crew/assists — Waiting AI-help requests for the host runner, oldest first (read:crew)"""
-        return self.request("GET", f"/v1/crew/assists", query, None)
+        return self.request("GET", "/v1/crew/assists", query, None)
 
     def post_v1_crew_assists(self):
         """POST /v1/crew/assists — Ask for AI help while editing (human principals only)"""
-        return self.request("POST", f"/v1/crew/assists", None, None)
+        return self.request("POST", "/v1/crew/assists", None, None)
 
     def get_v1_crew_assists_by_request_by_request_id(self, request_id):
         """GET /v1/crew/assists/by-request/{request_id} — Recover own AI-help receipt by client request ID"""
@@ -670,7 +670,7 @@ class ArkismClient(BaseClient):
 
     def get_v1_unsplash_search(self, query=None):
         """GET /v1/unsplash/search — Search Unsplash photos for a team or automation card background (read:crew; the server holds the key)"""
-        return self.request("GET", f"/v1/unsplash/search", query, None)
+        return self.request("GET", "/v1/unsplash/search", query, None)
 
     def post_v1_unsplash_photos_by_id_use(self, id):
         """POST /v1/unsplash/photos/{id}/use — Tell Unsplash a photo was picked (download tracking; read:crew)"""
@@ -678,11 +678,11 @@ class ArkismClient(BaseClient):
 
     def get_v1_crew_runs(self, query=None):
         """GET /v1/crew/runs — Graph runs of the scope, newest first (read:crew)"""
-        return self.request("GET", f"/v1/crew/runs", query, None)
+        return self.request("GET", "/v1/crew/runs", query, None)
 
     def post_v1_crew_runs(self):
         """POST /v1/crew/runs — Start a run of a live workflow (write:crew_runs; human, service or agent principals)"""
-        return self.request("POST", f"/v1/crew/runs", None, None)
+        return self.request("POST", "/v1/crew/runs", None, None)
 
     def get_v1_crew_runs_by_id(self, id, query=None):
         """GET /v1/crew/runs/{id} — One graph run (read:crew)"""
@@ -698,11 +698,11 @@ class ArkismClient(BaseClient):
 
     def get_v1_crew_meetings(self):
         """GET /v1/crew/meetings — Team meetings, newest first, with counts (read:crew)"""
-        return self.request("GET", f"/v1/crew/meetings", None, None)
+        return self.request("GET", "/v1/crew/meetings", None, None)
 
     def post_v1_crew_meetings(self):
         """POST /v1/crew/meetings — Ask for a team meeting (write:crew_meetings; human, service or agent)"""
-        return self.request("POST", f"/v1/crew/meetings", None, None)
+        return self.request("POST", "/v1/crew/meetings", None, None)
 
     def get_v1_crew_meetings_by_id(self, id):
         """GET /v1/crew/meetings/{id} — One meeting with its turns (read:crew)"""
@@ -730,11 +730,11 @@ class ArkismClient(BaseClient):
 
     def get_v1_crew_usage(self):
         """GET /v1/crew/usage — Usage of workflows, agents and teams (read:crew; costs are list-price estimates)"""
-        return self.request("GET", f"/v1/crew/usage", None, None)
+        return self.request("GET", "/v1/crew/usage", None, None)
 
     def get_v1_crew_agents_status(self):
         """GET /v1/crew/agents/status — Work agents: working|idle|off (read:crew)"""
-        return self.request("GET", f"/v1/crew/agents/status", None, None)
+        return self.request("GET", "/v1/crew/agents/status", None, None)
 
     def get_v1_crew_teams_by_id_stats(self, id):
         """GET /v1/crew/teams/{id}/stats — A team's finished meetings, tokens and cost over days (default 30)"""
@@ -742,15 +742,15 @@ class ArkismClient(BaseClient):
 
     def post_v1_crew_teams_estimate(self):
         """POST /v1/crew/teams/estimate — Estimate one meeting of a team: tokens, cost_usd, minutes_min, minutes_max"""
-        return self.request("POST", f"/v1/crew/teams/estimate", None, None)
+        return self.request("POST", "/v1/crew/teams/estimate", None, None)
 
     def get_v1_discord(self):
         """GET /v1/discord — Discord bots, settings and stats{bots, open_threads, calls_week, today_usd, by_target}"""
-        return self.request("GET", f"/v1/discord", None, None)
+        return self.request("GET", "/v1/discord", None, None)
 
     def post_v1_discord_bots(self):
         """POST /v1/discord/bots — Add a bot (human)"""
-        return self.request("POST", f"/v1/discord/bots", None, None)
+        return self.request("POST", "/v1/discord/bots", None, None)
 
     def post_v1_discord_bots_by_id_update(self, id):
         """POST /v1/discord/bots/{id}/update — Change or archive a bot (human)"""
@@ -766,55 +766,55 @@ class ArkismClient(BaseClient):
 
     def post_v1_discord_settings(self):
         """POST /v1/discord/settings — Discord settings (human)"""
-        return self.request("POST", f"/v1/discord/settings", None, None)
+        return self.request("POST", "/v1/discord/settings", None, None)
 
     def get_v1_discord_handoff(self):
         """GET /v1/discord/handoff — Host only (handoff:discord): every live bot, each token once, and settings"""
-        return self.request("GET", f"/v1/discord/handoff", None, None)
+        return self.request("GET", "/v1/discord/handoff", None, None)
 
     def post_v1_discord_report(self):
         """POST /v1/discord/report — Host only (handoff:discord): a bot's state, guilds, channels, missing permissions and posted meeting seqs"""
-        return self.request("POST", f"/v1/discord/report", None, None)
+        return self.request("POST", "/v1/discord/report", None, None)
 
     def get_v1_providers(self, query=None):
         """GET /v1/providers — Model settings of the scope: providers, CLI accounts, quota, stored keys (last four only), models, switched-off models, requests, assist_model, roles (설정 › 역할별 모델 picks), role_defaults and role_options (what each role runs with nothing picked and the engines this server can run)"""
-        return self.request("GET", f"/v1/providers", query, None)
+        return self.request("GET", "/v1/providers", query, None)
 
     def post_v1_providers(self):
         """POST /v1/providers — Host runner report (handoff:providers)"""
-        return self.request("POST", f"/v1/providers", None, None)
+        return self.request("POST", "/v1/providers", None, None)
 
     def get_v1_providers_handoff(self, query=None):
         """GET /v1/providers/handoff — Pending requests for the host runner (handoff:providers); each typed key is handed out once and never stored"""
-        return self.request("GET", f"/v1/providers/handoff", query, None)
+        return self.request("GET", "/v1/providers/handoff", query, None)
 
     def post_v1_providers_cli_update(self, body=None):
         """POST /v1/providers/cli_update — Queue a CLI update (human write:providers only)"""
-        return self.request("POST", f"/v1/providers/cli_update", None, body)
+        return self.request("POST", "/v1/providers/cli_update", None, body)
 
     def post_v1_providers_models(self):
         """POST /v1/providers/models — Turn one model on or off for experts (human principals only)"""
-        return self.request("POST", f"/v1/providers/models", None, None)
+        return self.request("POST", "/v1/providers/models", None, None)
 
     def post_v1_providers_keys(self):
         """POST /v1/providers/keys — Add a provider key, or test it with test_only (human principals only)"""
-        return self.request("POST", f"/v1/providers/keys", None, None)
+        return self.request("POST", "/v1/providers/keys", None, None)
 
     def post_v1_providers_assist_model(self):
         """POST /v1/providers/assist_model — Pick the model that answers AI help requests (human principals only)"""
-        return self.request("POST", f"/v1/providers/assist_model", None, None)
+        return self.request("POST", "/v1/providers/assist_model", None, None)
 
     def post_v1_providers_keys_remove(self):
         """POST /v1/providers/keys/remove — Ask the host runner to delete a stored key (human principals only)"""
-        return self.request("POST", f"/v1/providers/keys/remove", None, None)
+        return self.request("POST", "/v1/providers/keys/remove", None, None)
 
     def get_v1_routing_overview(self):
         """GET /v1/routing/overview — Routing screen totals (read:routing)"""
-        return self.request("GET", f"/v1/routing/overview", None, None)
+        return self.request("GET", "/v1/routing/overview", None, None)
 
     def get_v1_routing_skills(self):
         """GET /v1/routing/skills — Recent route_skills decisions (read:routing)"""
-        return self.request("GET", f"/v1/routing/skills", None, None)
+        return self.request("GET", "/v1/routing/skills", None, None)
 
     def post_v1_routing_skills_by_id_use(self, id):
         """POST /v1/routing/skills/{id}/use — Report the load and outcome of a route_skills decision (search:skill_versions, the principal that routed)"""
@@ -822,75 +822,75 @@ class ArkismClient(BaseClient):
 
     def post_v1_routing_policy(self):
         """POST /v1/routing/policy — Change auto routing, auto failover, the fixed model or failover conditions (human principals only)"""
-        return self.request("POST", f"/v1/routing/policy", None, None)
+        return self.request("POST", "/v1/routing/policy", None, None)
 
     def get_v1_routing_models(self):
         """GET /v1/routing/models — Models turned on in model settings, with their routing settings (read:routing)"""
-        return self.request("GET", f"/v1/routing/models", None, None)
+        return self.request("GET", "/v1/routing/models", None, None)
 
     def post_v1_routing_models(self):
         """POST /v1/routing/models — Routing settings of one provider/model (human principals only)"""
-        return self.request("POST", f"/v1/routing/models", None, None)
+        return self.request("POST", "/v1/routing/models", None, None)
 
     def get_v1_routing_attributions(self):
         """GET /v1/routing/attributions — Routing attribution records, read-only export (read:routing)"""
-        return self.request("GET", f"/v1/routing/attributions", None, None)
+        return self.request("GET", "/v1/routing/attributions", None, None)
 
     def post_v1_routing_attributions(self):
         """POST /v1/routing/attributions — The host runner records one routed step for later attribution (write:routing_calls)"""
-        return self.request("POST", f"/v1/routing/attributions", None, None)
+        return self.request("POST", "/v1/routing/attributions", None, None)
 
     def get_v1_routing_groups(self):
         """GET /v1/routing/groups — Arkism routing groups (read:routing)"""
-        return self.request("GET", f"/v1/routing/groups", None, None)
+        return self.request("GET", "/v1/routing/groups", None, None)
 
     def post_v1_routing_groups(self):
         """POST /v1/routing/groups — Replace routing groups (human write:routing)"""
-        return self.request("POST", f"/v1/routing/groups", None, None)
+        return self.request("POST", "/v1/routing/groups", None, None)
 
     def post_v1_routing_decide(self):
         """POST /v1/routing/decide — Pick a model for a task (route:models)"""
-        return self.request("POST", f"/v1/routing/decide", None, None)
+        return self.request("POST", "/v1/routing/decide", None, None)
 
     def get_v1_routing_systemone(self):
         """GET /v1/routing/systemone — Configured decision models (route:models)"""
-        return self.request("GET", f"/v1/routing/systemone", None, None)
+        return self.request("GET", "/v1/routing/systemone", None, None)
 
     def post_v1_routing_systemone(self):
         """POST /v1/routing/systemone — Evaluate System One questions through the existing decision engine (route:models and write:routing_calls)"""
-        return self.request("POST", f"/v1/routing/systemone", None, None)
+        return self.request("POST", "/v1/routing/systemone", None, None)
 
     def post_v1_routing_calls(self):
         """POST /v1/routing/calls — The host runner reports one routed run (write:routing_calls)"""
-        return self.request("POST", f"/v1/routing/calls", None, None)
+        return self.request("POST", "/v1/routing/calls", None, None)
 
     def get_v1_usage_sessions(self, query=None):
         """GET /v1/usage/sessions — Query sessions across the authorized scope"""
-        return self.request("GET", f"/v1/usage/sessions", query, None)
+        return self.request("GET", "/v1/usage/sessions", query, None)
 
     def post_v1_usage_sessions(self):
         """POST /v1/usage/sessions — The host collector reports count-only usage rows per agent session (write:routing_calls)"""
-        return self.request("POST", f"/v1/usage/sessions", None, None)
+        return self.request("POST", "/v1/usage/sessions", None, None)
 
     def get_v1_decisions_summary(self, query=None):
         """GET /v1/decisions/summary — Counts of people's and the AI's decisions by kind, reason code and period (read:routing, human principals only)"""
-        return self.request("GET", f"/v1/decisions/summary", query, None)
+        return self.request("GET", "/v1/decisions/summary", query, None)
 
     def post_v1_decisions(self):
         """POST /v1/decisions — Record a decision only the desktop sees (write:crew, human principals only)"""
-        return self.request("POST", f"/v1/decisions", None, None)
+        return self.request("POST", "/v1/decisions", None, None)
 
     def get_v1_usage_summary(self):
         """GET /v1/usage/summary — 사용량 화면 집계 (read:routing)"""
-        return self.request("GET", f"/v1/usage/summary", None, None)
+        return self.request("GET", "/v1/usage/summary", None, None)
 
     def get_v1_design_systems(self):
         """GET /v1/design_systems — Active design systems of the scope (newest first, one page of 500)"""
-        return self.request("GET", f"/v1/design_systems", None, None)
+        return self.request("GET", "/v1/design_systems", None, None)
 
     def post_v1_design_systems(self):
         """POST /v1/design_systems — Add a design system to the library (human principals only)"""
-        return self.request("POST", f"/v1/design_systems", None, None)
+        return self.request("POST", "/v1/design_systems", None, None)
 
     def post_v1_design_systems_by_id(self, id):
         """POST /v1/design_systems/{id} — Replace a design system's fields, or archive it (expected_revision required)"""
@@ -898,19 +898,19 @@ class ArkismClient(BaseClient):
 
     def get_readyz(self):
         """GET /readyz — Live Atlas connection and exact three-vector/native-text readiness (10-second bound), internal network only"""
-        return self.request("GET", f"/readyz", None, None)
+        return self.request("GET", "/readyz", None, None)
 
     def get_metrics(self, query=None):
         """GET /metrics — Operator metrics; requires human/service ops:metrics permission (includes process-wide traffic aggregates)"""
-        return self.request("GET", f"/metrics", query, None)
+        return self.request("GET", "/metrics", query, None)
 
     def get_metrics_prometheus(self):
         """GET /metrics/prometheus — Prometheus text exposition (opt-in)"""
-        return self.request("GET", f"/metrics/prometheus", None, None)
+        return self.request("GET", "/metrics/prometheus", None, None)
 
     def get_v1_memory_candidates(self, query=None):
         """GET /v1/memory_candidates — Human candidate review queue"""
-        return self.request("GET", f"/v1/memory_candidates", query, None)
+        return self.request("GET", "/v1/memory_candidates", query, None)
 
     def post_v1_memory_candidates_by_id_review(self, id, body=None):
         """POST /v1/memory_candidates/{id}/review — Human approve, edit-and-approve or reject"""
@@ -926,15 +926,15 @@ class ArkismClient(BaseClient):
 
     def get_v1_memory_candidates_classification_report(self, query=None):
         """GET /v1/memory_candidates/classification_report — How often people decided against the AI risk call"""
-        return self.request("GET", f"/v1/memory_candidates/classification_report", query, None)
+        return self.request("GET", "/v1/memory_candidates/classification_report", query, None)
 
     def post_v1_memory_candidates_review_batch(self, body=None):
         """POST /v1/memory_candidates/review_batch — Review 1–20 memory candidates independently"""
-        return self.request("POST", f"/v1/memory_candidates/review_batch", None, body)
+        return self.request("POST", "/v1/memory_candidates/review_batch", None, body)
 
     def get_v1_memory_reach_suggestions(self, query=None):
         """GET /v1/memory-reach-suggestions — List AI reach suggestions for active memories"""
-        return self.request("GET", f"/v1/memory-reach-suggestions", query, None)
+        return self.request("GET", "/v1/memory-reach-suggestions", query, None)
 
     def post_v1_memories_by_id_reach_suggestion_dismiss(self, id, body=None):
         """POST /v1/memories/{id}/reach-suggestion/dismiss — Dismiss one reach suggestion"""
@@ -950,7 +950,7 @@ class ArkismClient(BaseClient):
 
     def post_v1_memories_conflicts(self, body=None):
         """POST /v1/memories/conflicts — Mark or resolve memory/candidate conflicts"""
-        return self.request("POST", f"/v1/memories/conflicts", None, body)
+        return self.request("POST", "/v1/memories/conflicts", None, body)
 
     def get_v1_memories_by_id_sources(self, id, query=None):
         """GET /v1/memories/{id}/sources — Memory source trace with per-source authorization"""
@@ -962,11 +962,11 @@ class ArkismClient(BaseClient):
 
     def get_v1_recalls(self, query=None):
         """GET /v1/recalls — Newest context receipts (20) with the memories returned, their fused score and lanes"""
-        return self.request("GET", f"/v1/recalls", query, None)
+        return self.request("GET", "/v1/recalls", query, None)
 
     def get_v1_memory_usage(self, query=None):
         """GET /v1/memory_usage — Uses of every memory in the last 7 and 30 days"""
-        return self.request("GET", f"/v1/memory_usage", query, None)
+        return self.request("GET", "/v1/memory_usage", query, None)
 
     def get_v1_memories_by_id_usage(self, id, query=None):
         """GET /v1/memories/{id}/usage — Recent ten context-generation usages of a memory"""
@@ -974,7 +974,7 @@ class ArkismClient(BaseClient):
 
     def post_v1_memory_candidates_expire(self, body=None):
         """POST /v1/memory_candidates/expire — Expire a bounded batch of old, unconflicted candidates"""
-        return self.request("POST", f"/v1/memory_candidates/expire", None, body)
+        return self.request("POST", "/v1/memory_candidates/expire", None, body)
 
     def post_v1_agent_runs_by_id_finish(self, id, body=None):
         """POST /v1/agent_runs/{id}/finish — Finish an agent run atomically"""
@@ -982,11 +982,11 @@ class ArkismClient(BaseClient):
 
     def post_v1_learning(self, body=None):
         """POST /v1/learning — Create an evidence-linked reflection and lesson candidate"""
-        return self.request("POST", f"/v1/learning", None, body)
+        return self.request("POST", "/v1/learning", None, body)
 
     def post_v1_evaluations_summary(self, body=None):
         """POST /v1/evaluations/summary — Aggregate typed evaluations"""
-        return self.request("POST", f"/v1/evaluations/summary", None, body)
+        return self.request("POST", "/v1/evaluations/summary", None, body)
 
     def get_v1_sources_by_id_deletion(self, id, query=None):
         """GET /v1/sources/{id}/deletion — Source memory erasure progress"""
@@ -1014,11 +1014,11 @@ class ArkismClient(BaseClient):
 
     def post_v1_deletions_export(self, body=None):
         """POST /v1/deletions/export — Export retained deletion targets"""
-        return self.request("POST", f"/v1/deletions/export", None, body)
+        return self.request("POST", "/v1/deletions/export", None, body)
 
     def post_v1_sources_ingest(self, body=None):
         """POST /v1/sources/ingest — ingest a bounded text file and source atomically in Mongo; body: {metadata JSON, file bytes or text} sent as multipart in this order"""
-        return self.request("POST", f"/v1/sources/ingest", None, None, form=None if body is None else [(k, body.get(k), j) for k, j in [('metadata', True), ('file', False)]])
+        return self.request("POST", "/v1/sources/ingest", None, None, form=None if body is None else [(k, body.get(k), j) for k, j in [('metadata', True), ('file', False)]])
 
     def get_v1_sources_by_id_artifacts_by_artifact_id(self, id, artifact_id, query=None):
         """GET /v1/sources/{id}/artifacts/{artifact_id} — Read a scoped original artifact after source, policy and digest verification"""
@@ -1026,7 +1026,7 @@ class ArkismClient(BaseClient):
 
     def get_v1_sources(self, query=None):
         """GET /v1/sources — List active, unexpired source summaries in exact scope (partial)"""
-        return self.request("GET", f"/v1/sources", query, None)
+        return self.request("GET", "/v1/sources", query, None)
 
     def get_v1_sources_by_id_artifacts(self, id, query=None):
         """GET /v1/sources/{id}/artifacts — List registered files for a source"""
@@ -1042,15 +1042,15 @@ class ArkismClient(BaseClient):
 
     def get_v1_memories(self, query=None):
         """GET /v1/memories — List memories with opt-in historical states"""
-        return self.request("GET", f"/v1/memories", query, None)
+        return self.request("GET", "/v1/memories", query, None)
 
     def ingest_completed_execution_trace(self, body=None):
         """POST /v1/execution_traces/completed — Store canonical completed trace and source events atomically"""
-        return self.request("POST", f"/v1/execution_traces/completed", None, body)
+        return self.request("POST", "/v1/execution_traces/completed", None, body)
 
     def request_privacy_deletion(self, body=None):
         """POST /v1/privacy/deletions — Create a scoped durable privacy deletion and quarantine access"""
-        return self.request("POST", f"/v1/privacy/deletions", None, body)
+        return self.request("POST", "/v1/privacy/deletions", None, body)
 
     def get_privacy_deletion(self, id, query=None):
         """GET /v1/privacy/deletions/{id} — Read body-free scoped saga status"""
@@ -1058,7 +1058,7 @@ class ArkismClient(BaseClient):
 
     def claim_privacy_runtime_purge(self, body=None):
         """POST /v1/privacy/deletions/runtime/claim — Lease an exact-scope runtime purge action"""
-        return self.request("POST", f"/v1/privacy/deletions/runtime/claim", None, body)
+        return self.request("POST", "/v1/privacy/deletions/runtime/claim", None, body)
 
     def record_privacy_runtime_receipt(self, id, body=None):
         """POST /v1/privacy/deletions/{id}/runtime-receipt — Record a verified lease-bound runtime receipt"""
@@ -1078,7 +1078,7 @@ class ArkismClient(BaseClient):
 
     def check_privacy_fence(self, body=None):
         """POST /v1/privacy/deletions/fence — Fail closed on quarantined runtime dependencies"""
-        return self.request("POST", f"/v1/privacy/deletions/fence", None, body)
+        return self.request("POST", "/v1/privacy/deletions/fence", None, body)
 
     def post_v1_knowledge_sources_by_id_review(self, id, body=None):
         """POST /v1/knowledge/sources/{id}/review — human review source"""
@@ -1086,7 +1086,7 @@ class ArkismClient(BaseClient):
 
     def post_v1_knowledge_bindings(self, body=None):
         """POST /v1/knowledge/bindings — create candidate binding"""
-        return self.request("POST", f"/v1/knowledge/bindings", None, body)
+        return self.request("POST", "/v1/knowledge/bindings", None, body)
 
     def post_v1_knowledge_bindings_by_id_state(self, id, body=None):
         """POST /v1/knowledge/bindings/{id}/state — human binding state"""
@@ -1098,19 +1098,19 @@ class ArkismClient(BaseClient):
 
     def post_v1_knowledge_ingest(self, body=None):
         """POST /v1/knowledge/ingest — register a synthetic canonical knowledge fixture"""
-        return self.request("POST", f"/v1/knowledge/ingest", None, body)
+        return self.request("POST", "/v1/knowledge/ingest", None, body)
 
     def post_v1_knowledge_index(self, body=None):
         """POST /v1/knowledge/index — embed the current chunks of one synthetic knowledge source"""
-        return self.request("POST", f"/v1/knowledge/index", None, body)
+        return self.request("POST", "/v1/knowledge/index", None, body)
 
     def post_v1_knowledge_retrieve(self, body=None):
         """POST /v1/knowledge/retrieve — deterministic knowledge retrieval"""
-        return self.request("POST", f"/v1/knowledge/retrieve", None, body)
+        return self.request("POST", "/v1/knowledge/retrieve", None, body)
 
     def post_v1_knowledge_revalidate(self, body=None):
         """POST /v1/knowledge/revalidate — revalidate a deterministic retrieval receipt"""
-        return self.request("POST", f"/v1/knowledge/revalidate", None, body)
+        return self.request("POST", "/v1/knowledge/revalidate", None, body)
 
     def get_v1_knowledge_retrieval_logs_by_id(self, id, query=None):
         """GET /v1/knowledge/retrieval-logs/{id} — read a scoped retrieval log"""
@@ -1118,7 +1118,7 @@ class ArkismClient(BaseClient):
 
     def post_v1_consultations(self, body=None):
         """POST /v1/consultations — Create isolated synthetic consultation"""
-        return self.request("POST", f"/v1/consultations", None, body)
+        return self.request("POST", "/v1/consultations", None, body)
 
     def get_v1_consultations_by_id(self, id, query=None):
         """GET /v1/consultations/{id} — Read source-fenced synthetic consultation"""
@@ -1158,11 +1158,11 @@ class ArkismClient(BaseClient):
 
     def get_v1_memory_graph(self, query=None):
         """GET /v1/memory-graph — Relation graph around one memory, or the whole map"""
-        return self.request("GET", f"/v1/memory-graph", query, None)
+        return self.request("GET", "/v1/memory-graph", query, None)
 
     def post_v1_memory_outcomes_summary(self, body=None):
         """POST /v1/memory-outcomes/summary — Verification summaries for up to 100 memories"""
-        return self.request("POST", f"/v1/memory-outcomes/summary", None, body)
+        return self.request("POST", "/v1/memory-outcomes/summary", None, body)
 
     def get_v1_memories_by_id_signal(self, id, query=None):
         """GET /v1/memories/{id}/signal — Trust signal of one memory"""
@@ -1170,23 +1170,23 @@ class ArkismClient(BaseClient):
 
     def post_v1_memory_signals(self, body=None):
         """POST /v1/memory-signals — Trust signals for up to 100 memories"""
-        return self.request("POST", f"/v1/memory-signals", None, body)
+        return self.request("POST", "/v1/memory-signals", None, body)
 
     def post_v1_memory_signals_recompute(self, body=None):
         """POST /v1/memory-signals/recompute — Recompute trust signals for one page of active memories"""
-        return self.request("POST", f"/v1/memory-signals/recompute", None, body)
+        return self.request("POST", "/v1/memory-signals/recompute", None, body)
 
     def post_v1_memory_outcomes(self, body=None):
         """POST /v1/memory-outcomes — Record independent actual memory-use outcome"""
-        return self.request("POST", f"/v1/memory-outcomes", None, body)
+        return self.request("POST", "/v1/memory-outcomes", None, body)
 
     def post_v1_model_input_authorize(self, body=None):
         """POST /v1/model-input/authorize — Authorize exact consolidation input"""
-        return self.request("POST", f"/v1/model-input/authorize", None, body)
+        return self.request("POST", "/v1/model-input/authorize", None, body)
 
     def post_v1_skill_trial_outcomes(self, body=None):
         """POST /v1/skill-trial-outcomes — Record independent actual trial check"""
-        return self.request("POST", f"/v1/skill-trial-outcomes", None, body)
+        return self.request("POST", "/v1/skill-trial-outcomes", None, body)
 
     def post_v1_skill_trials_by_id_observe(self, id, body=None):
         """POST /v1/skill-trials/{id}/observe — Observe actual bounded trial outcomes"""
@@ -1194,23 +1194,23 @@ class ArkismClient(BaseClient):
 
     def post_v1_session_archives_authorize_transfer(self, body=None):
         """POST /v1/session-archives/authorize-transfer — Authorize exact archived session model input for immediate external transfer"""
-        return self.request("POST", f"/v1/session-archives/authorize-transfer", None, body)
+        return self.request("POST", "/v1/session-archives/authorize-transfer", None, body)
 
     def post_v1_model_budget_status(self, body=None):
         """POST /v1/model-budget/status — Read configured shared account allowance"""
-        return self.request("POST", f"/v1/model-budget/status", None, body)
+        return self.request("POST", "/v1/model-budget/status", None, body)
 
     def post_v1_model_budget_subscription_usage(self, body=None):
         """POST /v1/model-budget/subscription-usage — Record one subscription CLI call's usage (record only)"""
-        return self.request("POST", f"/v1/model-budget/subscription-usage", None, body)
+        return self.request("POST", "/v1/model-budget/subscription-usage", None, body)
 
     def post_v1_model_budget_settle(self, body=None):
         """POST /v1/model-budget/settle — Settle usage or retain an uncertain reservation"""
-        return self.request("POST", f"/v1/model-budget/settle", None, body)
+        return self.request("POST", "/v1/model-budget/settle", None, body)
 
     def post_v1_model_budget_reserve(self, body=None):
         """POST /v1/model-budget/reserve — Reserve paid harness model allowance before dispatch"""
-        return self.request("POST", f"/v1/model-budget/reserve", None, body)
+        return self.request("POST", "/v1/model-budget/reserve", None, body)
 
     def get_v1_memory_candidates_by_id_sources(self, id, query=None):
         """GET /v1/memory_candidates/{id}/sources — Pending candidate source trace"""
@@ -1226,7 +1226,7 @@ class ArkismClient(BaseClient):
 
     def get_v1_session_archives_storage_audit(self, query=None):
         """GET /v1/session-archives/storage-audit — Bounded read-only archive orphan audit"""
-        return self.request("GET", f"/v1/session-archives/storage-audit", query, None)
+        return self.request("GET", "/v1/session-archives/storage-audit", query, None)
 
     def post_v1_memories_by_id_review_due(self, id, body=None):
         """POST /v1/memories/{id}/review-due — Schedule or clear a human review reminder"""
@@ -1234,11 +1234,11 @@ class ArkismClient(BaseClient):
 
     def get(self):
         """GET / — Management API landing text"""
-        return self.request("GET", f"/", None, None)
+        return self.request("GET", "/", None, None)
 
     def get_app(self):
         """GET /app/ — Web UI static assets"""
-        return self.request("GET", f"/app/", None, None)
+        return self.request("GET", "/app/", None, None)
 
     def post_v1_memories_by_id_restore(self, id, body=None):
         """POST /v1/memories/{id}/restore — Restore a memory a person deleted"""
@@ -1254,59 +1254,59 @@ class ArkismClient(BaseClient):
 
     def get_v1_code_graph_repos(self, query=None):
         """GET /v1/code_graph/repos — Code graph: repos"""
-        return self.request("GET", f"/v1/code_graph/repos", query, None)
+        return self.request("GET", "/v1/code_graph/repos", query, None)
 
     def get_v1_code_graph_files(self, query=None):
         """GET /v1/code_graph/files — Code graph: files"""
-        return self.request("GET", f"/v1/code_graph/files", query, None)
+        return self.request("GET", "/v1/code_graph/files", query, None)
 
     def post_v1_code_graph_batch(self, body=None):
         """POST /v1/code_graph/batch — Code graph: batch"""
-        return self.request("POST", f"/v1/code_graph/batch", None, body)
+        return self.request("POST", "/v1/code_graph/batch", None, body)
 
     def post_v1_code_graph_finish(self, body=None):
         """POST /v1/code_graph/finish — Code graph: finish"""
-        return self.request("POST", f"/v1/code_graph/finish", None, body)
+        return self.request("POST", "/v1/code_graph/finish", None, body)
 
     def post_v1_code_graph_repos_delete(self, body=None):
         """POST /v1/code_graph/repos/delete — Code graph: repos/delete"""
-        return self.request("POST", f"/v1/code_graph/repos/delete", None, body)
+        return self.request("POST", "/v1/code_graph/repos/delete", None, body)
 
     def post_v1_code_graph_changed(self, body=None):
         """POST /v1/code_graph/changed — Code graph: changed"""
-        return self.request("POST", f"/v1/code_graph/changed", None, body)
+        return self.request("POST", "/v1/code_graph/changed", None, body)
 
     def post_v1_code_graph_search(self, body=None):
         """POST /v1/code_graph/search — Code graph: search"""
-        return self.request("POST", f"/v1/code_graph/search", None, body)
+        return self.request("POST", "/v1/code_graph/search", None, body)
 
     def post_v1_code_graph_callers(self, body=None):
         """POST /v1/code_graph/callers — Code graph: callers"""
-        return self.request("POST", f"/v1/code_graph/callers", None, body)
+        return self.request("POST", "/v1/code_graph/callers", None, body)
 
     def post_v1_code_graph_callees(self, body=None):
         """POST /v1/code_graph/callees — Code graph: callees"""
-        return self.request("POST", f"/v1/code_graph/callees", None, body)
+        return self.request("POST", "/v1/code_graph/callees", None, body)
 
     def post_v1_code_graph_impact(self, body=None):
         """POST /v1/code_graph/impact — Code graph: impact"""
-        return self.request("POST", f"/v1/code_graph/impact", None, body)
+        return self.request("POST", "/v1/code_graph/impact", None, body)
 
     def get_v1_code_reviews(self, query=None):
         """GET /v1/code_reviews — Code reviews: get"""
-        return self.request("GET", f"/v1/code_reviews", query, None)
+        return self.request("GET", "/v1/code_reviews", query, None)
 
     def post_v1_code_reviews(self, body=None):
         """POST /v1/code_reviews — Code reviews: post"""
-        return self.request("POST", f"/v1/code_reviews", None, body)
+        return self.request("POST", "/v1/code_reviews", None, body)
 
     def post_v1_code_reviews_settings(self, body=None):
         """POST /v1/code_reviews/settings — Code reviews: /settings"""
-        return self.request("POST", f"/v1/code_reviews/settings", None, body)
+        return self.request("POST", "/v1/code_reviews/settings", None, body)
 
     def post_v1_code_reviews_rerun(self, body=None):
         """POST /v1/code_reviews/rerun — Code reviews: /rerun"""
-        return self.request("POST", f"/v1/code_reviews/rerun", None, body)
+        return self.request("POST", "/v1/code_reviews/rerun", None, body)
 
     def get_v1_crew_agents_id_calls(self, id, query=None):
         """GET /v1/crew/agents/{id}/calls — List direct calls for an agent"""
@@ -1318,7 +1318,7 @@ class ArkismClient(BaseClient):
 
     def get_v1_design_systems_archived(self, query=None):
         """GET /v1/design_systems/archived — List archived design_systems"""
-        return self.request("GET", f"/v1/design_systems/archived", query, None)
+        return self.request("GET", "/v1/design_systems/archived", query, None)
 
     def post_v1_design_systems_id_restore(self, id, body=None):
         """POST /v1/design_systems/{id}/restore — Restore archived design_systems"""
@@ -1326,7 +1326,7 @@ class ArkismClient(BaseClient):
 
     def get_v1_prompts_archived(self, query=None):
         """GET /v1/prompts/archived — List archived prompts"""
-        return self.request("GET", f"/v1/prompts/archived", query, None)
+        return self.request("GET", "/v1/prompts/archived", query, None)
 
     def post_v1_prompts_id_restore(self, id, body=None):
         """POST /v1/prompts/{id}/restore — Restore archived prompts"""
@@ -1334,11 +1334,11 @@ class ArkismClient(BaseClient):
 
     def get_v1_digests(self, query=None):
         """GET /v1/digests — Digests: list"""
-        return self.request("GET", f"/v1/digests", query, None)
+        return self.request("GET", "/v1/digests", query, None)
 
     def get_v1_digests_user_context(self, query=None):
         """GET /v1/digests/user/context — Digests: /user/context"""
-        return self.request("GET", f"/v1/digests/user/context", query, None)
+        return self.request("GET", "/v1/digests/user/context", query, None)
 
     def get_v1_digests_id(self, id, query=None):
         """GET /v1/digests/{id} — Digests: /{id}"""
@@ -1350,67 +1350,67 @@ class ArkismClient(BaseClient):
 
     def post_v1_digests_regenerate(self, body=None):
         """POST /v1/digests/regenerate — Digests: /regenerate"""
-        return self.request("POST", f"/v1/digests/regenerate", None, body)
+        return self.request("POST", "/v1/digests/regenerate", None, body)
 
     def post_v1_digests_plan(self, body=None):
         """POST /v1/digests/plan — Digests: /plan"""
-        return self.request("POST", f"/v1/digests/plan", None, body)
+        return self.request("POST", "/v1/digests/plan", None, body)
 
     def post_v1_digests_proposals(self, body=None):
         """POST /v1/digests/proposals — Digests: /proposals"""
-        return self.request("POST", f"/v1/digests/proposals", None, body)
+        return self.request("POST", "/v1/digests/proposals", None, body)
 
     def post_v1_digests_user_judge(self, body=None):
         """POST /v1/digests/user/judge — Digests: /user/judge"""
-        return self.request("POST", f"/v1/digests/user/judge", None, body)
+        return self.request("POST", "/v1/digests/user/judge", None, body)
 
     def post_v1_digests_recall(self, body=None):
         """POST /v1/digests/recall — Digests: /recall"""
-        return self.request("POST", f"/v1/digests/recall", None, body)
+        return self.request("POST", "/v1/digests/recall", None, body)
 
     def get_v1_knowledge_sources(self, query=None):
         """GET /v1/knowledge/sources — List knowledge source metadata"""
-        return self.request("GET", f"/v1/knowledge/sources", query, None)
+        return self.request("GET", "/v1/knowledge/sources", query, None)
 
     def get_v1_knowledge_documents(self, query=None):
         """GET /v1/knowledge/documents — List stored document versions"""
-        return self.request("GET", f"/v1/knowledge/documents", query, None)
+        return self.request("GET", "/v1/knowledge/documents", query, None)
 
     def post_v1_knowledge_search(self, body=None):
         """POST /v1/knowledge/search — Search active knowledge bindings"""
-        return self.request("POST", f"/v1/knowledge/search", None, body)
+        return self.request("POST", "/v1/knowledge/search", None, body)
 
     def get_v1_messengers(self, query=None):
         """GET /v1/messengers — List masked notification destinations"""
-        return self.request("GET", f"/v1/messengers", query, None)
+        return self.request("GET", "/v1/messengers", query, None)
 
     def post_v1_messengers(self, body=None):
         """POST /v1/messengers — Notifications: save"""
-        return self.request("POST", f"/v1/messengers", None, body)
+        return self.request("POST", "/v1/messengers", None, body)
 
     def post_v1_messengers_remove(self, body=None):
         """POST /v1/messengers/remove — Notifications: /remove"""
-        return self.request("POST", f"/v1/messengers/remove", None, body)
+        return self.request("POST", "/v1/messengers/remove", None, body)
 
     def post_v1_messengers_test(self, body=None):
         """POST /v1/messengers/test — Notifications: /test"""
-        return self.request("POST", f"/v1/messengers/test", None, body)
+        return self.request("POST", "/v1/messengers/test", None, body)
 
     def get_v1_skills_usage(self, query=None):
         """GET /v1/skills/usage — List recent skill usage"""
-        return self.request("GET", f"/v1/skills/usage", query, None)
+        return self.request("GET", "/v1/skills/usage", query, None)
 
     def get_v1_twin_claims(self, query=None):
         """GET /v1/twin/claims — List projected user claims"""
-        return self.request("GET", f"/v1/twin/claims", query, None)
+        return self.request("GET", "/v1/twin/claims", query, None)
 
     def post_v1_context_tokens(self, body=None):
         """POST /v1/context/tokens — Count injection preview tokens"""
-        return self.request("POST", f"/v1/context/tokens", None, body)
+        return self.request("POST", "/v1/context/tokens", None, body)
 
     def post_v1_import_sessions(self, body=None):
         """POST /v1/import/sessions — Import or preview session memory candidates"""
-        return self.request("POST", f"/v1/import/sessions", None, body)
+        return self.request("POST", "/v1/import/sessions", None, body)
 
     def post_v1_memories_id_expiry(self, id, body=None):
         """POST /v1/memories/{id}/expiry — Set or clear a memory expiration"""
@@ -1418,31 +1418,31 @@ class ArkismClient(BaseClient):
 
     def post_v1_providers_labels(self, body=None):
         """POST /v1/providers/labels — Providers: labels"""
-        return self.request("POST", f"/v1/providers/labels", None, body)
+        return self.request("POST", "/v1/providers/labels", None, body)
 
     def post_v1_providers_test(self, body=None):
         """POST /v1/providers/test — Providers: test"""
-        return self.request("POST", f"/v1/providers/test", None, body)
+        return self.request("POST", "/v1/providers/test", None, body)
 
     def post_v1_usage_sessions_delete(self, body=None):
         """POST /v1/usage/sessions/delete — Sessions: delete"""
-        return self.request("POST", f"/v1/usage/sessions/delete", None, body)
+        return self.request("POST", "/v1/usage/sessions/delete", None, body)
 
     def post_v1_usage_sessions_export(self, body=None):
         """POST /v1/usage/sessions/export — Sessions: export"""
-        return self.request("POST", f"/v1/usage/sessions/export", None, body)
+        return self.request("POST", "/v1/usage/sessions/export", None, body)
 
     def post_v1_usage_sessions_transcript(self, body=None):
         """POST /v1/usage/sessions/transcript — Sessions: transcript"""
-        return self.request("POST", f"/v1/usage/sessions/transcript", None, body)
+        return self.request("POST", "/v1/usage/sessions/transcript", None, body)
 
     def get_v1_wiki_jobs(self, query=None):
         """GET /v1/wiki/jobs — Wiki: jobs"""
-        return self.request("GET", f"/v1/wiki/jobs", query, None)
+        return self.request("GET", "/v1/wiki/jobs", query, None)
 
     def post_v1_wiki_jobs(self, body=None):
         """POST /v1/wiki/jobs — Wiki: jobs"""
-        return self.request("POST", f"/v1/wiki/jobs", None, body)
+        return self.request("POST", "/v1/wiki/jobs", None, body)
 
     def post_v1_wiki_jobs_id_run(self, id, body=None):
         """POST /v1/wiki/jobs/{id}/run — Wiki: jobs/{id}/run"""
@@ -1450,7 +1450,7 @@ class ArkismClient(BaseClient):
 
     def post_v1_wiki_work(self, body=None):
         """POST /v1/wiki/work — Wiki: work"""
-        return self.request("POST", f"/v1/wiki/work", None, body)
+        return self.request("POST", "/v1/wiki/work", None, body)
 
     def post_v1_wiki_pages_id_review(self, id, body=None):
         """POST /v1/wiki/pages/{id}/review — Wiki: pages/{id}/review"""
@@ -1466,11 +1466,11 @@ class ArkismClient(BaseClient):
 
     def post_v1_wiki_search(self, body=None):
         """POST /v1/wiki/search — Wiki: search"""
-        return self.request("POST", f"/v1/wiki/search", None, body)
+        return self.request("POST", "/v1/wiki/search", None, body)
 
     def post_v1_wiki_read(self, body=None):
         """POST /v1/wiki/read — Wiki: read"""
-        return self.request("POST", f"/v1/wiki/read", None, body)
+        return self.request("POST", "/v1/wiki/read", None, body)
 
     def post_v1_wiki_sources_id_remove(self, id, query=None, body=None):
         """POST /v1/wiki/sources/{id}/remove — Wiki: sources/{id}/remove"""
@@ -1482,7 +1482,7 @@ class ArkismClient(BaseClient):
 
     def get_v1_wiki_pages(self, query=None):
         """GET /v1/wiki/pages — Wiki: pages"""
-        return self.request("GET", f"/v1/wiki/pages", query, None)
+        return self.request("GET", "/v1/wiki/pages", query, None)
 
     def get_v1_wiki_pages_id(self, id, query=None):
         """GET /v1/wiki/pages/{id} — Wiki: pages/{id}"""
@@ -1498,27 +1498,27 @@ class ArkismClient(BaseClient):
 
     def get_v1_wiki_graph(self, query=None):
         """GET /v1/wiki/graph — Wiki: graph"""
-        return self.request("GET", f"/v1/wiki/graph", query, None)
+        return self.request("GET", "/v1/wiki/graph", query, None)
 
     def post_v1_memories_query(self, body=None):
         """POST /v1/memories/query — Query all authorized memories"""
-        return self.request("POST", f"/v1/memories/query", None, body)
+        return self.request("POST", "/v1/memories/query", None, body)
 
     def post_v1_memory_candidates_query(self, body=None):
         """POST /v1/memory_candidates/query — Query all authorized memory_candidates"""
-        return self.request("POST", f"/v1/memory_candidates/query", None, body)
+        return self.request("POST", "/v1/memory_candidates/query", None, body)
 
     def post_v1_skills_query(self, body=None):
         """POST /v1/skills/query — Query all authorized skills"""
-        return self.request("POST", f"/v1/skills/query", None, body)
+        return self.request("POST", "/v1/skills/query", None, body)
 
     def post_v1_knowledge_sources_query(self, body=None):
         """POST /v1/knowledge/sources/query — Query all authorized knowledge/sources"""
-        return self.request("POST", f"/v1/knowledge/sources/query", None, body)
+        return self.request("POST", "/v1/knowledge/sources/query", None, body)
 
     def post_v1_providers_models_refresh(self, body=None):
         """POST /v1/providers/models_refresh — Providers: models refresh"""
-        return self.request("POST", f"/v1/providers/models_refresh", None, body)
+        return self.request("POST", "/v1/providers/models_refresh", None, body)
 
     def get_v1_flow_capabilities_id(self, id, query=None):
         """GET /v1/flow/capabilities/{id} — FLOW: definition execution capabilities"""
@@ -1546,11 +1546,11 @@ class ArkismClient(BaseClient):
 
     def get_v1_flow_improvements(self, query=None):
         """GET /v1/flow/improvements — FLOW: list improvement references and states"""
-        return self.request("GET", f"/v1/flow/improvements", query, None)
+        return self.request("GET", "/v1/flow/improvements", query, None)
 
     def post_v1_flow_improvements(self, body=None):
         """POST /v1/flow/improvements — FLOW: start a durable skill improvement"""
-        return self.request("POST", f"/v1/flow/improvements", None, body)
+        return self.request("POST", "/v1/flow/improvements", None, body)
 
     def get_v1_flow_improvements_id(self, id, query=None):
         """GET /v1/flow/improvements/{id} — FLOW: read improvement state"""
@@ -1578,27 +1578,27 @@ class ArkismClient(BaseClient):
 
     def post_v1_usage_sessions_handoff(self, body=None):
         """POST /v1/usage/sessions/handoff — Sessions: what another agent can resume from"""
-        return self.request("POST", f"/v1/usage/sessions/handoff", None, body)
+        return self.request("POST", "/v1/usage/sessions/handoff", None, body)
 
     def post_v1_usage_sessions_search(self, body=None):
         """POST /v1/usage/sessions/search — Sessions: search dialogue"""
-        return self.request("POST", f"/v1/usage/sessions/search", None, body)
+        return self.request("POST", "/v1/usage/sessions/search", None, body)
 
     def post_v1_providers_role_model(self, body=None):
         """POST /v1/providers/role_model — Providers: role model"""
-        return self.request("POST", f"/v1/providers/role_model", None, body)
+        return self.request("POST", "/v1/providers/role_model", None, body)
 
     def post_v1_usage_sessions_archives(self, body=None):
         """POST /v1/usage/sessions/archives — Sessions: archive status"""
-        return self.request("POST", f"/v1/usage/sessions/archives", None, body)
+        return self.request("POST", "/v1/usage/sessions/archives", None, body)
 
     def session_message_send(self, body=None):
         """POST /v1/session-messages/send — send"""
-        return self.request("POST", f"/v1/session-messages/send", None, body)
+        return self.request("POST", "/v1/session-messages/send", None, body)
 
     def session_message_take(self, body=None):
         """POST /v1/session-messages/take — take"""
-        return self.request("POST", f"/v1/session-messages/take", None, body)
+        return self.request("POST", "/v1/session-messages/take", None, body)
 
     def post_v1_skills_by_id_watch(self, id, body=None):
         """POST /v1/skills/{id}/watch — Watch the just-applied active version (owner only)"""
@@ -1614,27 +1614,27 @@ class ArkismClient(BaseClient):
 
     def get_v1_session_archives_settings(self, query=None):
         """GET /v1/session-archives/settings — Session archives: retention"""
-        return self.request("GET", f"/v1/session-archives/settings", query, None)
+        return self.request("GET", "/v1/session-archives/settings", query, None)
 
     def post_v1_session_archives_settings(self, body=None):
         """POST /v1/session-archives/settings — Session archives: set retention"""
-        return self.request("POST", f"/v1/session-archives/settings", None, body)
+        return self.request("POST", "/v1/session-archives/settings", None, body)
 
     def extract_preview(self, body=None):
         """POST /v1/extract/preview — Preview claims from text (dry run)"""
-        return self.request("POST", f"/v1/extract/preview", None, body)
+        return self.request("POST", "/v1/extract/preview", None, body)
 
     def ingest_memories(self, body=None):
         """POST /v1/memories/ingest — Extract memory candidates from text items"""
-        return self.request("POST", f"/v1/memories/ingest", None, body)
+        return self.request("POST", "/v1/memories/ingest", None, body)
 
     def extract_file_memories_batch(self, body=None):
         """POST /v1/files/memories/batch — Turn several files into memory candidates in one multipart request; body: {metadata JSON, file JSON} sent as multipart in this order"""
-        return self.request("POST", f"/v1/files/memories/batch", None, None, form=None if body is None else [(k, body.get(k), j) for k, j in [('metadata', True), ('file', True)]])
+        return self.request("POST", "/v1/files/memories/batch", None, None, form=None if body is None else [(k, body.get(k), j) for k, j in [('metadata', True), ('file', True)]])
 
     def list_file_extract_documents(self, query=None):
         """GET /v1/files/memories/documents — List memory-extraction documents"""
-        return self.request("GET", f"/v1/files/memories/documents", query, None)
+        return self.request("GET", "/v1/files/memories/documents", query, None)
 
     def edit_file_extract_document_tags(self, id, body=None):
         """PATCH /v1/files/memories/documents/{id} — Edit a document's tags and pass them to what it produced"""
@@ -1650,7 +1650,7 @@ class ArkismClient(BaseClient):
 
     def extract_file_memories(self, body=None):
         """POST /v1/files/memories — Turn a file into memory candidates (an agent only when the space config mcp_tools lists add_document)"""
-        return self.request("POST", f"/v1/files/memories", None, body)
+        return self.request("POST", "/v1/files/memories", None, body)
 
     def get_file_memories_job(self, id, query=None):
         """GET /v1/files/memories/jobs/{id} — File extraction job progress"""
@@ -1666,15 +1666,15 @@ class ArkismClient(BaseClient):
 
     def list_entities(self, query=None):
         """GET /v1/entities — Entities: list"""
-        return self.request("GET", f"/v1/entities", query, None)
+        return self.request("GET", "/v1/entities", query, None)
 
     def extract_entities(self, body=None):
         """POST /v1/entities/extract — Entities: extract"""
-        return self.request("POST", f"/v1/entities/extract", None, body)
+        return self.request("POST", "/v1/entities/extract", None, body)
 
     def get_entity_graph(self, query=None):
         """GET /v1/entities/graph — Entities: co-occurrence graph"""
-        return self.request("GET", f"/v1/entities/graph", query, None)
+        return self.request("GET", "/v1/entities/graph", query, None)
 
     def get_entity(self, id, query=None):
         """GET /v1/entities/{id} — Entities: page"""
@@ -1698,11 +1698,11 @@ class ArkismClient(BaseClient):
 
     def get_v1_webhooks(self, query=None):
         """GET /v1/webhooks — Webhooks: list"""
-        return self.request("GET", f"/v1/webhooks", query, None)
+        return self.request("GET", "/v1/webhooks", query, None)
 
     def post_v1_webhooks(self, body=None):
         """POST /v1/webhooks — Webhooks: create"""
-        return self.request("POST", f"/v1/webhooks", None, body)
+        return self.request("POST", "/v1/webhooks", None, body)
 
     def get_v1_webhooks_id(self, id, query=None):
         """GET /v1/webhooks/{id} — Webhooks: read"""
@@ -1726,11 +1726,11 @@ class ArkismClient(BaseClient):
 
     def get_v1_llm_requests(self, query=None):
         """GET /v1/llm-requests — Model call traces: list"""
-        return self.request("GET", f"/v1/llm-requests", query, None)
+        return self.request("GET", "/v1/llm-requests", query, None)
 
     def get_v1_llm_requests_stats(self, query=None):
         """GET /v1/llm-requests/stats — Model call traces: daily stats"""
-        return self.request("GET", f"/v1/llm-requests/stats", query, None)
+        return self.request("GET", "/v1/llm-requests/stats", query, None)
 
     def get_v1_llm_request(self, id, query=None):
         """GET /v1/llm-requests/{id} — Model call traces: read one"""
@@ -1738,43 +1738,43 @@ class ArkismClient(BaseClient):
 
     def get_v1_wiki_tree(self, query=None):
         """GET /v1/wiki/tree — Wiki: tree"""
-        return self.request("GET", f"/v1/wiki/tree", query, None)
+        return self.request("GET", "/v1/wiki/tree", query, None)
 
     def post_v1_wiki_folders(self, body=None):
         """POST /v1/wiki/folders — Wiki: folders"""
-        return self.request("POST", f"/v1/wiki/folders", None, body)
+        return self.request("POST", "/v1/wiki/folders", None, body)
 
     def patch_v1_wiki_folders(self, body=None):
         """PATCH /v1/wiki/folders — Wiki: rename or move a folder"""
-        return self.request("PATCH", f"/v1/wiki/folders", None, body)
+        return self.request("PATCH", "/v1/wiki/folders", None, body)
 
     def delete_v1_wiki_folders(self, query=None):
         """DELETE /v1/wiki/folders — Wiki: delete a folder"""
-        return self.request("DELETE", f"/v1/wiki/folders", query, None)
+        return self.request("DELETE", "/v1/wiki/folders", query, None)
 
     def post_v1_wiki_build_from_memories(self, body=None):
         """POST /v1/wiki/build_from_memories — Wiki: build_from_memories"""
-        return self.request("POST", f"/v1/wiki/build_from_memories", None, body)
+        return self.request("POST", "/v1/wiki/build_from_memories", None, body)
 
     def get_v1_wiki_export(self, query=None):
         """GET /v1/wiki/export — Wiki: export reviewed pages as markdown files"""
-        return self.request("GET", f"/v1/wiki/export", query, None)
+        return self.request("GET", "/v1/wiki/export", query, None)
 
     def get_v1_observations(self, query=None):
         """GET /v1/observations — Observations of one status (default active), newest change first, paginated (read:observations)"""
-        return self.request("GET", f"/v1/observations", query, None)
+        return self.request("GET", "/v1/observations", query, None)
 
     def delete_observations(self, body=None):
         """DELETE /v1/observations — Delete observations in bulk (human principals only)"""
-        return self.request("DELETE", f"/v1/observations", None, body)
+        return self.request("DELETE", "/v1/observations", None, body)
 
     def post_v1_observations_consolidate(self):
         """POST /v1/observations/consolidate — Consolidate approved memories into proposed observations (human or service principals)"""
-        return self.request("POST", f"/v1/observations/consolidate", None, None)
+        return self.request("POST", "/v1/observations/consolidate", None, None)
 
     def post_v1_observations_review_batch(self):
         """POST /v1/observations/review_batch — Review several observations (human principals only)"""
-        return self.request("POST", f"/v1/observations/review_batch", None, None)
+        return self.request("POST", "/v1/observations/review_batch", None, None)
 
     def get_v1_observations_by_id(self, id, query=None):
         """GET /v1/observations/{id} — One observation"""
@@ -1790,11 +1790,11 @@ class ArkismClient(BaseClient):
 
     def get_v1_mental_models(self, query=None):
         """GET /v1/mental-models — Mental models of the scope, paginated (read:mental_models)"""
-        return self.request("GET", f"/v1/mental-models", query, None)
+        return self.request("GET", "/v1/mental-models", query, None)
 
     def post_v1_mental_models(self):
         """POST /v1/mental-models — Create a mental model (a person's is active; an agent's is stored with status proposed, never refreshed or read into answers until a person saves it, at most 20 open proposals per scope)"""
-        return self.request("POST", f"/v1/mental-models", None, None)
+        return self.request("POST", "/v1/mental-models", None, None)
 
     def get_v1_mental_models_by_id(self, id, query=None):
         """GET /v1/mental-models/{id} — One mental model"""
@@ -1826,31 +1826,31 @@ class ArkismClient(BaseClient):
 
     def preview_mental_model_cron(self, body=None):
         """POST /v1/mental-models/cron-preview — Preview the next firing times of a cron expression (read:mental_models)"""
-        return self.request("POST", f"/v1/mental-models/cron-preview", None, body)
+        return self.request("POST", "/v1/mental-models/cron-preview", None, body)
 
     def list_observation_scopes(self, query=None):
         """GET /v1/observations/scopes — Tag scopes of proposed and active observations with counts (read:observations)"""
-        return self.request("GET", f"/v1/observations/scopes", query, None)
+        return self.request("GET", "/v1/observations/scopes", query, None)
 
     def preview_consolidation_strategies(self, body=None):
         """POST /v1/observations/strategies/preview — Preview which observation scopes each consolidation strategy takes (read:observations)"""
-        return self.request("POST", f"/v1/observations/strategies/preview", None, body)
+        return self.request("POST", "/v1/observations/strategies/preview", None, body)
 
     def preview_prompt(self, body=None):
         """POST /v1/prompts/preview — Render the retain, consolidation or reflect prompt the space would send (search:memories)"""
-        return self.request("POST", f"/v1/prompts/preview", None, body)
+        return self.request("POST", "/v1/prompts/preview", None, body)
 
     def get_v1_causal_links(self, query=None):
         """GET /v1/causal-links — Causal links of one status (default candidate, the review queue), newest first (read:memory_relations)"""
-        return self.request("GET", f"/v1/causal-links", query, None)
+        return self.request("GET", "/v1/causal-links", query, None)
 
     def post_v1_causal_links(self, body=None):
         """POST /v1/causal-links — Link two memories as cause and effect (human principals only, write:memory_relations)"""
-        return self.request("POST", f"/v1/causal-links", None, body)
+        return self.request("POST", "/v1/causal-links", None, body)
 
     def post_v1_causal_links_propose(self, body=None):
         """POST /v1/causal-links/propose — Ask the server model for causal links between approved memories (human or service, write:memory_relations)"""
-        return self.request("POST", f"/v1/causal-links/propose", None, body)
+        return self.request("POST", "/v1/causal-links/propose", None, body)
 
     def post_v1_causal_links_by_id_review(self, id, body=None):
         """POST /v1/causal-links/{id}/review — A person's decision on a causal link (human principals only, write:memory_relations)"""
@@ -1866,11 +1866,11 @@ class ArkismClient(BaseClient):
 
     def export_file_extract_documents(self, body=None):
         """POST /v1/files/memories/documents/export — Export picked documents as a zip"""
-        return self.request("POST", f"/v1/files/memories/documents/export", None, body)
+        return self.request("POST", "/v1/files/memories/documents/export", None, body)
 
     def import_file_extract_documents(self, body=None):
         """POST /v1/files/memories/documents/import — Import a documents zip"""
-        return self.request("POST", f"/v1/files/memories/documents/import", None, body)
+        return self.request("POST", "/v1/files/memories/documents/import", None, body)
 
     def get_v1_files_memories_documents_id_chunks(self, id, query=None):
         """GET /v1/files/memories/documents/{id}/chunks — Chunks of an uploaded document"""
@@ -1890,7 +1890,7 @@ class ArkismClient(BaseClient):
 
     def get_space_template_schema(self, query=None):
         """GET /v1/spaces/template-schema — JSON schema of one line of a space template bundle (read:space_configs)"""
-        return self.request("GET", f"/v1/spaces/template-schema", query, None)
+        return self.request("GET", "/v1/spaces/template-schema", query, None)
 
     def get_v1_extensions_by_extension_routes_by_path(self, extension, path, query=None):
         """GET /v1/extensions/{extension}/routes/{path...} — Call an extension route"""
@@ -1902,11 +1902,11 @@ class ArkismClient(BaseClient):
 
     def get_v1_extension_tools(self, query=None):
         """GET /v1/extension-tools — List extension MCP tools"""
-        return self.request("GET", f"/v1/extension-tools", query, None)
+        return self.request("GET", "/v1/extension-tools", query, None)
 
     def post_v1_extension_tools_call(self, body=None):
         """POST /v1/extension-tools/call — Run an extension MCP tool"""
-        return self.request("POST", f"/v1/extension-tools/call", None, body)
+        return self.request("POST", "/v1/extension-tools/call", None, body)
 
     def get_v1_extensions_extension_data(self, extension, query=None):
         """GET /v1/extensions/{extension}/data — List an extension's stored data"""
@@ -1922,7 +1922,7 @@ class ArkismClient(BaseClient):
 
     def get_component_health(self, query=None):
         """GET /metrics/health — Inspect component status as an authorized operator"""
-        return self.request("GET", f"/metrics/health", query, None)
+        return self.request("GET", "/metrics/health", query, None)
 
     def get_v1_memories_id_signal_policy(self, id, query=None):
         """GET /v1/memories/{id}/signal-policy — Explain current memory signal policy and eligible evidence"""

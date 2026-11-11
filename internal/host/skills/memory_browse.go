@@ -210,10 +210,10 @@ func reflectOptionArgs(args map[string]any, payload map[string]any) error {
 		}
 		payload["about"] = about
 	}
-	for key, max := range map[string]int{"fact_types": 2, "exclude_mental_model_ids": 20, "created_by": 16} {
+	for key, limit := range map[string]int{"fact_types": 2, "exclude_mental_model_ids": 20, "created_by": 16} {
 		if v, has := args[key]; has && v != nil {
 			list, ok := v.([]any)
-			if !ok || len(list) > max || slices.ContainsFunc(list, func(x any) bool { s, isStr := x.(string); return !isStr || s == "" || host.Len(s) > 256 }) {
+			if !ok || len(list) > limit || slices.ContainsFunc(list, func(x any) bool { s, isStr := x.(string); return !isStr || s == "" || host.Len(s) > 256 }) {
 				return errors.New(key + " must be a short list of strings")
 			}
 			payload[key] = list

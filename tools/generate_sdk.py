@@ -538,10 +538,11 @@ def py_method(name, method, path, op):
         doc.append("body: {" + ", ".join(k + (" JSON" if j else " bytes or text") for k, j in form_parts(body)) + "} sent as multipart in this order")
     doc = "; ".join(d for d in doc if d)
     url = re.sub(r"\{([^}]+)\}", lambda m: "{urllib.parse.quote(" + py_name(camel(m.group(1))) + ", safe='')}", path)
+    url_literal = 'f"' + url + '"' if path_params else json.dumps(path)
     doc = doc.replace('"""', "'''").replace("\\", "\\\\")
     return (f"    def {py_name(name)}({', '.join(args)}):\n"
             f'        """{method.upper()} {path}{(" — " + doc) if doc else ""}"""\n'
-            f"        return self.request({json.dumps(method.upper())}, f\"{url}\", {', '.join(call)})\n\n")
+            f"        return self.request({json.dumps(method.upper())}, {url_literal}, {', '.join(call)})\n\n")
 
 
 def render(spec):
