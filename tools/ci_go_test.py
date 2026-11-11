@@ -194,8 +194,11 @@ def passes_alone(rel, out, cmd, env):
     names = re.findall(r"^--- FAIL: (\w+)", out, re.M)
     if not names or not set(names) <= RERUNNABLE or "DATA RACE" in out or "race detected" in out:
         return False
-    if any(run(cmd[:2] + ["^" + n + "$"] + cmd[3:], rel, env)[0] for n in names):
-        return False
+    for name in names:
+        code, rerun_out = run(cmd[:2] + ["^" + name + "$"] + cmd[3:], rel, env)
+        if code:
+            print(f"--- FAIL isolated rerun of {name} in {rel}\n{rerun_out}")
+            return False
     print(f"::warning::{rel}: {', '.join(names)} missed a time budget under parallel load and passed alone\n{out}")
     return True
 

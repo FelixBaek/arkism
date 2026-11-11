@@ -106,3 +106,18 @@ missed their budgets under parallel load and then passed their existing isolated
 retries. The remaining Go/coverage failure was Korean recall; Windows stopped on
 the missing error detail. Neither retry policy nor timing threshold was changed.
 Fresh CI must evaluate the repaired head.
+
+The subsequent Windows and contract checks passed, but Linux reported a
+publication-completion assumption in the crash fixture and a code-graph timing
+miss in separate groups. The [publication completion follow-up](2026-11-11-dynamics-publication-completion.md)
+records the reproduction and correction. The original full-repository code-graph
+test passed locally with race and actual PostgreSQL: 24,125 symbols and 67,836
+edges, first impact 39.095ms against the unchanged five-second limit. Its scenario
+and row-level authorization tests also passed. This does not establish the cause
+of the ten-second CI observation or a general performance guarantee. No graph
+query, timing limit or isolated-rerun policy was changed. The same full-repository
+test also passed with PostgreSQL 16, as used in CI, at 50.544ms for first impact.
+The runner now preserves the output of a failed isolated retry, which previously
+discarded that evidence. All eight runner tests passed, including the regression
+that asserts one failed retry still fails with its output intact. Fresh CI
+remains the merge gate.

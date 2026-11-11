@@ -87,6 +87,22 @@ class SerialMeasurementTests(unittest.TestCase):
             rerun.assert_not_called()
 
 
+class IsolatedFailureReportingTests(unittest.TestCase):
+    def test_isolated_failure_keeps_evidence_and_fails_without_another_attempt(self):
+        import contextlib
+        import io
+        from unittest.mock import patch
+        import ci_go_test as ci
+        name = "TestPostgresCodeGraphArkism"
+        command = ["test-binary", "-test.run", "^(TestOther|" + name + ")$", "-test.count=1", "-test.timeout=10m"]
+        output = io.StringIO()
+        with patch.object(ci, "run", return_value=(1, "impact took 7s")) as run, contextlib.redirect_stdout(output):
+            self.assertFalse(ci.passes_alone("./internal/memory", "--- FAIL: " + name + " (8s)", command, None))
+        run.assert_called_once_with(command[:2] + ["^" + name + "$"] + command[3:], "./internal/memory", None)
+        self.assertIn("FAIL isolated rerun", output.getvalue())
+        self.assertIn("impact took 7s", output.getvalue())
+
+
 class SerialDaemonPackageTests(unittest.TestCase):
     def test_all_discovered_daemon_tests_stay_in_one_deferred_batch(self):
         import tempfile
