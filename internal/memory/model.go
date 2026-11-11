@@ -449,6 +449,9 @@ type MeteredEmbedder interface {
 	EmbedMeasured(context.Context, []string, string) (EmbeddingBatch, error)
 }
 type Hit struct {
+	// reflectRecordHash preserves admission identity across prompt truncation.
+	reflectRecordHash string
+
 	Occurred *RecallTimeWindow `json:"occurred,omitempty" bson:"occurred,omitempty"`
 
 	ProofCount      int        `json:"proof_count,omitempty" bson:"-"`
