@@ -26,7 +26,7 @@ measured with a fixed model and evaluation protocol before a90% claim.
 
 ## Verification
 
-The focused reflect race suite passed42 top-level tests with zero failures or skips (3.191s). After independent review qualified passage precedence so older transcripts cannot override later explicit corrections, the passage race selection passed again (1.328s). Earlier runs captured in-progress regression fixtures and failed; those failures are retained and are not counted as successes. No product server build or model evaluation has run.
+The focused reflect race suite passed42 top-level tests with zero failures or skips (3.191s). After independent review qualified passage precedence so older transcripts cannot override later explicit corrections, the passage race selection passed again (1.328s). Earlier runs captured in-progress regression fixtures and failed; those failures are retained and are not counted as successes. At that verification stage, no server build or model evaluation had run. Subsequent isolated evaluation builds and actual results are recorded in [the live evaluation record](2026-11-12-memory-live-evaluation.md); the per-category target remains unmet.
 
 Related work records cover temporal metadata (7 top-level tests and2 subtests), query-source prioritization (10 tests), and the category scorecard (7 new tests and26 existing projection tests). These selections overlap and are not summed into a unique-test total.
 

@@ -100,6 +100,19 @@ None was removed from the primary score. Historical scores used a different
 execution path and are not a controlled baseline for claiming a gain/regression.
 Further native-service validation is separate from this completed protocol.
 
+A further private audit compared nine previously unreviewed failures (six temporal
+and three multi-hop) with frozen prompts and original adjacent source context;
+these do not overlap the initial 21 cases or the separate three-case source audit.
+It identified a missing-evidence retrieval candidate, ambiguity between count
+units, and relative-date policy differences. Some source statements conflicted
+with grading labels, while an image reference lacked the needed textual detail.
+Adjacent context also supported a date initially suspected of unsupported
+precision. These findings motivate source coverage, explicit count units and
+preserved date interpretations; they do not establish nine recoverable answers
+or prove that the current engine caused imported extraction errors. Source text,
+case identifiers and answer contents remain private. No model calls were made,
+and no labels, grading rules, scores or acceptance thresholds were changed.
+
 ## Native service-path diagnostic
 
 The same frozen 32 questions were separately sent through the actual `/v1/reflect`

@@ -1,6 +1,9 @@
 package memory
 
-import "context"
+import (
+	"context"
+	"errors"
+)
 
 // A tool summary retains its first admitted model and each cited record. The
 // model's revision alone cannot detect a later change to its citations.
@@ -15,7 +18,7 @@ func reflectModelUsable(r Record) bool {
 
 func (s *Service) keepReflectMentalModel(ctx context.Context, token string, run *reflectRun, view MentalModelView) error {
 	if _, exists := run.modelRecords[view.ID]; exists {
-		return s.verifyReflectMentalModels(ctx, token, run)
+		return s.verifyReflectModelSnapshot(ctx, token, run.in.Scope, view.ID, run.modelRecords[view.ID])
 	}
 	r, err := s.mentalModelRead(ctx, token, run.in.Scope, view.ID)
 	if err != nil {
@@ -35,11 +38,35 @@ func (s *Service) keepReflectMentalModel(ctx context.Context, token string, run 
 		}
 		snapshot.citations[ref] = reflectMemoryRecordHash(cited)
 	}
+	if err := s.verifyReflectModelSnapshot(ctx, token, run.in.Scope, view.ID, snapshot); err != nil {
+		return err
+	}
 	if run.modelRecords == nil {
 		run.modelRecords = map[string]reflectModelSnapshot{}
 	}
 	run.modelRecords[view.ID] = snapshot
-	return s.verifyReflectMentalModels(ctx, token, run)
+	return nil
+}
+
+// A newly encountered stale summary must not hide other eligible summaries.
+// Previously admitted evidence remains fail-closed and cannot be forgotten.
+func (s *Service) admitReflectMentalModel(ctx context.Context, token string, run *reflectRun, view MentalModelView) (bool, error) {
+	_, admitted := run.modelRecords[view.ID]
+	err := s.keepReflectMentalModel(ctx, token, run, view)
+	if !admitted && (errors.Is(err, ErrConflict) || errors.Is(err, ErrNotFound)) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+// Admission checks only this snapshot; every delivery boundary still checks all.
+func (s *Service) verifyReflectModelSnapshot(ctx context.Context, token string, scope Scope, id string, snapshot reflectModelSnapshot) error {
+	if err := s.authorizeReflectMentalModel(ctx, token, scope, id, snapshot); err != nil {
+		return err
+	}
+	return s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		return verifyReflectMentalModelTx(ctx, searchReadTx{Tx: tx}, scope, id, snapshot)
+	})
 }
 
 func (s *Service) verifyReflectMentalModels(ctx context.Context, token string, run *reflectRun) error {

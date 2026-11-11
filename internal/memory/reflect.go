@@ -167,12 +167,13 @@ type reflectRun struct {
 	// sourceLines are conversation lines copied verbatim for this question (reflect_reread.go).
 	sourceLines []string
 	// passages are the conversation turns the question matches best, as said (reflect_reread.go).
-	passages         []string
-	sourceRecords    map[string]reflectSourceSnapshot
-	sourceNotes      []ReflectToolStep
-	memoryRecords    map[Ref]string
-	modelRecords     map[string]reflectModelSnapshot
-	toolFormatRepair bool
+	passages           []string
+	sourceRecords      map[string]reflectSourceSnapshot
+	sourceNotes        []ReflectToolStep
+	memoryRecords      map[Ref]string
+	modelRecords       map[string]reflectModelSnapshot
+	toolFormatRepair   bool
+	conversationRecall bool
 }
 
 // add keeps new hits; walked marks a tool that follows links (related memories, entity mentions),
@@ -430,10 +431,7 @@ func (s *Service) reflectPromptOnly(ctx context.Context, token string, run *refl
 // and asks again, anything else is the answer. The last call offers no tools.
 func (s *Service) reflectLoop(ctx context.Context, token string, run *reflectRun, out ReflectOutput) (ReflectOutput, error) {
 	gen := s.Wiki.Generator()
-	gen.PromptVersion = reflectPromptVersion
-	if len(run.passages) > 0 {
-		gen.PromptVersion = "reflect-v6"
-	}
+	gen.PromptVersion = reflectEvidencePromptVersion(run)
 	total := ProviderUsage{}
 	out.Usage, out.Generator = &total, &gen
 	add := func(u ProviderUsage) {
@@ -451,9 +449,7 @@ func (s *Service) reflectLoop(ctx context.Context, token string, run *reflectRun
 		if err := s.verifyReflectEvidence(ctx, token, run); err != nil {
 			return ReflectOutput{}, err
 		}
-		if len(run.passages) == 0 {
-			gen.PromptVersion = reflectPromptVersion
-		}
+		gen.PromptVersion = reflectEvidencePromptVersion(run)
 		system, user := reflectPrompt(run, final)
 		read := reflectPromptMemoryIDs(run.hits)
 		callCtx, _ := withLLMNote(ctx, "", read) // the trace names the memories this call was shown

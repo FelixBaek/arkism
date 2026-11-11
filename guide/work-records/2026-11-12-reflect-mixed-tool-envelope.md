@@ -19,4 +19,13 @@ Reflect now recognizes a well-formed reserved tool envelope appended to prose as
 
 ## Limits
 
-The detector targets a complete reserved envelope appended to prose; it does not execute arbitrary JSON extracted from text or relax strict tool decoding. It does not infer what a malformed or incomplete JSON fragment intended. Tests use controlled model doubles and do not establish a new benchmark score. The old native 27/32 result remains preserved. No external model requests or production deployment were performed for this change.
+The detector targets a complete reserved envelope appended to prose; it does not execute arbitrary JSON extracted from text or relax strict tool decoding. It does not infer what a malformed or incomplete JSON fragment intended. Tests use controlled model doubles and do not establish a new benchmark score. The old native 27/32 result remains preserved. No production deployment was performed.
+
+
+## Targeted native service regression
+
+Candidate `bb244298c810bd29c513dbe3e88843278e760c19` was built only for the isolated evaluation server and tested against the single previously failed native-pilot question. The original data scope, model and service profile were retained. A separate persisted bridge enforced a hard three-generation-call total and per-question cap, with no retries; offline tests verified cap preservation across restart and that failed calls consume their reservation.
+
+The request returned HTTP 200 and a nonempty final answer in one iteration and one successful generation call. It identified both the broken windshield and the later vehicle breakdown. No native tool was called. Usage was 5,440 input tokens and 139 output tokens (5,579 total); the bridge does not enforce the requested output-token limit. The original 32-question outputs and 27/32 result were not overwritten, and their file hash remained unchanged.
+
+The live model did not produce a mixed prose/tool envelope on this attempt, so the conditional repair branch was **not exercised in the live run**. This selected failure-case check establishes only that the new candidate can return a valid service answer for that input; it does not prove live repair activation or establish a revised benchmark score. The bounded repair branch is covered by the deterministic service-loop tests above. No additional model calls were made to force the failure to recur.
