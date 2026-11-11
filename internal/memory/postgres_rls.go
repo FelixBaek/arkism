@@ -46,63 +46,90 @@ func (p *Postgres) WithToken(token string) (*Postgres, error) {
 
 type postgresQuery struct{ store *Postgres }
 
-func (q postgresQuery) begin(ctx context.Context) (pgx.Tx, error) {
-	tx, err := q.store.pool.Begin(ctx)
-	if err != nil {
-		return nil, err
+// prelude queues the maintenance check and the token binding every statement runs behind.
+func (q postgresQuery) prelude(ctx context.Context) *pgx.Batch {
+	b := &pgx.Batch{}
+	b.Queue(`SELECT arkism.check_maintenance_access()`)
+	if hash, bound := q.store.effectiveTokenHash(ctx); bound {
+		b.Queue(`SELECT set_config('arkism.token_hash',$1,true)`, hash)
 	}
-	if _, err = tx.Exec(ctx, `SELECT arkism.check_maintenance_access()`); err != nil {
-		_ = tx.Rollback(ctx)
-		return nil, err
-	}
-	hash, bound := q.store.effectiveTokenHash(ctx)
-	if bound {
-		if _, err = tx.Exec(ctx, `SELECT set_config('arkism.token_hash',$1,true)`, hash); err != nil {
-			_ = tx.Rollback(ctx)
+	return b
+}
+
+// send runs sql behind the prelude as one pipelined batch: one implicit
+// transaction and one round trip, where a separate BEGIN, check, binding,
+// statement and COMMIT cost five.
+func (q postgresQuery) send(ctx context.Context, sql string, args []any) (pgx.BatchResults, error) {
+	b := q.prelude(ctx)
+	b.Queue(sql, args...)
+	br := q.store.pool.SendBatch(ctx, b)
+	for range b.Len() - 1 {
+		if _, err := br.Exec(); err != nil {
+			_ = br.Close()
 			return nil, err
 		}
 	}
-	return tx, nil
+	return br, nil
 }
 
 func (q postgresQuery) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
-	tx, err := q.begin(ctx)
+	if len(args) == 0 {
+		return q.execScript(ctx, sql)
+	}
+	br, err := q.send(ctx, sql, args)
 	if err != nil {
 		return pgconn.CommandTag{}, err
 	}
-	tag, err := tx.Exec(ctx, sql, args...)
+	tag, err := br.Exec()
 	if err != nil {
-		_ = tx.Rollback(ctx)
+		_ = br.Close()
+		return tag, err
+	}
+	return tag, br.Close()
+}
+
+// execScript keeps the explicit transaction for argument-free SQL: it may hold
+// several statements, which a batch cannot prepare.
+func (q postgresQuery) execScript(ctx context.Context, sql string) (pgconn.CommandTag, error) {
+	tx, err := q.store.pool.Begin(ctx)
+	if err != nil {
+		return pgconn.CommandTag{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err = tx.SendBatch(ctx, q.prelude(ctx)).Close(); err != nil {
+		return pgconn.CommandTag{}, err
+	}
+	tag, err := tx.Exec(ctx, sql)
+	if err != nil {
 		return tag, err
 	}
 	return tag, tx.Commit(ctx)
 }
 
 func (q postgresQuery) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
-	tx, err := q.begin(ctx)
+	br, err := q.send(ctx, sql, args)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.Query(ctx, sql, args...)
+	rows, err := br.Query()
 	if err != nil {
-		_ = tx.Rollback(ctx)
+		_ = br.Close()
 		return nil, err
 	}
-	return &postgresRows{Rows: rows, tx: tx, ctx: ctx}, nil
+	return &postgresRows{Rows: rows, br: br}, nil
 }
 
 func (q postgresQuery) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
-	tx, err := q.begin(ctx)
+	br, err := q.send(ctx, sql, args)
 	if err != nil {
 		return postgresRow{err: err}
 	}
-	return postgresRow{row: tx.QueryRow(ctx, sql, args...), tx: tx, ctx: ctx}
+	return postgresRow{row: br.QueryRow(), br: br}
 }
 
 type postgresRow struct {
 	row pgx.Row
-	tx  pgx.Tx
-	ctx context.Context
+	br  pgx.BatchResults
 	err error
 }
 
@@ -112,16 +139,15 @@ func (r postgresRow) Scan(dest ...any) error {
 	}
 	err := r.row.Scan(dest...)
 	if err != nil {
-		_ = r.tx.Rollback(r.ctx)
+		_ = r.br.Close()
 		return err
 	}
-	return r.tx.Commit(r.ctx)
+	return r.br.Close()
 }
 
 type postgresRows struct {
 	pgx.Rows
-	tx     pgx.Tx
-	ctx    context.Context
+	br     pgx.BatchResults
 	closed bool
 	err    error
 }
@@ -134,10 +160,10 @@ func (r *postgresRows) Close() {
 	r.Rows.Close()
 	if err := r.Rows.Err(); err != nil {
 		r.err = err
-		_ = r.tx.Rollback(r.ctx)
+		_ = r.br.Close()
 		return
 	}
-	r.err = r.tx.Commit(r.ctx)
+	r.err = r.br.Close()
 }
 
 func (r *postgresRows) Next() bool {

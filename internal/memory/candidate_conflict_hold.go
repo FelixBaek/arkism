@@ -20,6 +20,19 @@ type CandidateConflictHoldOutput struct {
 	Conflict  Ref `json:"conflict"`
 }
 
+// conflictHoldAllowed: a person may hold on their own authority; a service needs the time-limited review grant.
+func (s *Service) conflictHoldAllowed(actor Decision, scope Scope, kind string) bool {
+	return actor.Role == roleHuman || actor.Role == roleService && s.memoryReviewerAllowed(actor, scope, kind)
+}
+
+// conflictHoldChecks is how many of the hold's permission checks apply: the automatic review one is for a service only.
+func conflictHoldChecks(actor Decision) int {
+	if actor.Role == roleService {
+		return 2
+	}
+	return 1
+}
+
 // HoldCandidateConflict grants no approval. The exact candidate waits for a person
 // while the memory it corrects stays active, so agents keep reading it until then.
 func (s *Service) HoldCandidateConflict(ctx context.Context, token, id string, in CandidateConflictHoldInput) (CandidateConflictHoldOutput, error) {
@@ -34,11 +47,12 @@ func (s *Service) HoldCandidateConflict(ctx context.Context, token, id string, i
 	if e != nil {
 		return out, e
 	}
-	if actor.Role != roleService || !actor.ContentSafe || !s.memoryReviewerAllowed(actor, in.Scope, "") {
+	if !actor.ContentSafe || !s.conflictHoldAllowed(actor, in.Scope, "") {
 		return out, ErrDenied
 	}
 	ctx = bindRequestActor(ctx, actor)
-	for _, request := range []struct{ action, id string }{{"transition:memories", in.Memory.ID}, {"auto_review:memory_candidates", id}} {
+	checks := []struct{ action, id string }{{"transition:memories", in.Memory.ID}, {"auto_review:memory_candidates", id}}
+	for _, request := range checks[:conflictHoldChecks(actor)] {
 		d, err := s.authorize(ctx, token, request.action, in.Scope, request.id, "")
 		if err != nil {
 			return out, err
@@ -64,7 +78,7 @@ func (s *Service) HoldCandidateConflict(ctx context.Context, token, id string, i
 			return err
 		}
 		for _, r := range []Record{candidate, memory} {
-			if r.ContentErased || r.PrivacyQuarantined || !s.memoryReviewerAllowed(actor, in.Scope, r.Kind) {
+			if r.ContentErased || r.PrivacyQuarantined || !s.conflictHoldAllowed(actor, in.Scope, r.Kind) {
 				return ErrDenied
 			}
 			if err = checkSources(ctx, tx, r); err != nil {

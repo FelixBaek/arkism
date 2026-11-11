@@ -128,14 +128,17 @@ func TestExtractEntityCandidatesTable(t *testing.T) {
 		want map[string]string
 		not  []string
 	}{
-		{"We moved Arkism to Postgres after @felix reviewed internal/memory/search.go.",
-			map[string]string{"Arkism": "concept", "Postgres": "concept", "@felix": "person", "internal/memory/search.go": "file"}, []string{"We"}},
+		{"We moved Arkism to Postgres after @Rowan reviewed internal/memory/search.go.",
+			map[string]string{"Arkism": "concept", "Postgres": "concept", "@Rowan": "person", "internal/memory/search.go": "file"}, []string{"We"}},
 		{"The repo FelixBaek/inkism uses `ListRecords` and memory_records; see README.md and/or https://example.com/x.",
 			map[string]string{"FelixBaek/inkism": "repo", "ListRecords": "concept", "memory_records": "concept", "README.md": "file"}, []string{"The", "and/or", "example.com"}},
 		{"김민수님이 서울대학교에서 \"아크이즘 서버\"를 발표했다. 그리고 Arkism을 썼다.",
 			map[string]string{"김민수": "person", "서울대학교": "organization", "아크이즘 서버": "concept", "Arkism": "concept"}, []string{"서울대학교에서", "Arkism을"}},
 		{"사용자님이 e.g. don't care; commit deadbeefcafe.", map[string]string{}, []string{"사용자", "e.g", "don't", "deadbeefcafe"}},
 		{"Claude Code helps. Release Notes go to Google Drive.", map[string]string{"Claude Code": "concept", "Release Notes": "concept", "Google Drive": "concept"}, nil},
+		{"한지우는 팀의 QA 담당이며 회귀 시험을 맡는다. 한지우의 보고가 원인이었다. Get sign-off from 한지우, then deploy on Tuesday.",
+			map[string]string{"한지우": "person"}, []string{"Tuesday"}},
+		{"이메일은 마스킹 검사를 맡는다. She added an index on invoices(customer_id, created_at).", map[string]string{}, []string{"이메일", "created_at", "invoices(customer_id"}},
 	}
 	for _, c := range cases {
 		got := candidateNames(extractEntityCandidates(c.text))

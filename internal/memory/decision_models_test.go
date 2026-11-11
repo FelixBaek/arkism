@@ -167,7 +167,7 @@ func TestMentalModelRefreshDecisionDropsUnrelated(t *testing.T) {
 	}
 	// Nothing related: no model call at all.
 	f.svc.Judges = map[string]SkillJudge{"jev": itemDecisionServer(t, func(string) string { return "unrelated" }, "", requests)}
-	if _, err := f.svc.RefreshMentalModel(testCtx, f.human, mm.ID, MentalModelRefreshInput{Scope: scopeA, DryRun: true}); !errors.Is(err, ErrNotFound) || len(llm.prompts) != 2 {
+	if v, err := f.svc.RefreshMentalModel(testCtx, f.human, mm.ID, MentalModelRefreshInput{Scope: scopeA, DryRun: true}); err != nil || v.LastOutcome == nil || v.LastOutcome.Code != mmOutcomeNoFacts || len(llm.prompts) != 2 {
 		t.Fatalf("all unrelated: %v prompts=%d", err, len(llm.prompts))
 	}
 	// An engine that fails leaves the model in charge with everything recalled.
@@ -203,7 +203,7 @@ func TestMentalModelDeltaDecisionGatesNewMemories(t *testing.T) {
 	setDecisionModels(t, f, map[string]string{decisionTaskDelta: "jev"})
 	prompts := len(llm.prompts)
 	// The engine says the new memory cannot change the text: no model call, nothing to review.
-	if _, err := f.svc.RefreshMentalModel(testCtx, f.human, mm.ID, MentalModelRefreshInput{Scope: scopeA}); !errors.Is(err, ErrNotFound) || len(llm.prompts) != prompts || requests.Load() != 1 {
+	if _, err := f.svc.RefreshMentalModel(testCtx, f.human, mm.ID, MentalModelRefreshInput{Scope: scopeA}); err != nil || len(llm.prompts) != prompts || requests.Load() != 1 {
 		t.Fatalf("no change: %v prompts=%d requests=%d", err, len(llm.prompts), requests.Load())
 	}
 	got, _ := f.svc.GetMentalModel(testCtx, f.human, scopeA, mm.ID)

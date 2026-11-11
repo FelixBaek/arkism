@@ -310,3 +310,13 @@ func TestSessionArchiveZcodeHiddenAndMalformed(t *testing.T) {
 		t.Fatal("malformed UTF-8 accepted")
 	}
 }
+
+// A session search finds words in any order, whatever their case, and a Korean word typed with a particle.
+func TestArchiveQueryAt(t *testing.T) {
+	text := "Remind me which Grafana dashboard shows the p99 latency. 페로브스카이트 양자점은 효율이 높다."
+	for query, found := range map[string]bool{"Grafana dashboard": true, "grafana p99": true, "페로브스카이트는": true, "양자점 효율": true, "grafana zzqq": false, "kibana": false} {
+		if at := archiveQueryAt(text, query); (at >= 0) != found || at >= len(text) {
+			t.Fatalf("%q: at %d, want found=%v", query, at, found)
+		}
+	}
+}

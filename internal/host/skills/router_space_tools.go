@@ -135,6 +135,13 @@ func spaceToolAllowed(name string) bool {
 	return (spaceTools.space == nil || spaceTools.space[name]) && (spaceTools.srv == nil || spaceTools.srv[name])
 }
 
+// spaceToolsUnreachable says the lists were never read, so a refusal is about the server and not the settings.
+func spaceToolsUnreachable() bool {
+	spaceTools.mu.Lock()
+	defer spaceTools.mu.Unlock()
+	return spaceTools.unreachable
+}
+
 // extensionTools is the cached extension tool list (the server filtered it by both allowlists).
 func extensionTools() []json.RawMessage {
 	spaceTools.mu.Lock()

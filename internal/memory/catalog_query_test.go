@@ -368,3 +368,15 @@ func TestCatalogCandidateUnclassifiedFacet(t *testing.T) {
 		t.Fatal("memories counted", facets.Unclassified)
 	}
 }
+
+func TestCandidateCatalogListsADecidedStateByName(t *testing.T) {
+	f := newFixture(t)
+	c := f.create(f.agent, "memory_candidates", candidateInput(CreateInput{Scope: scopeA, Text: "decided candidate", Generator: &Generator{Model: "test-model", PromptVersion: "p1", PipelineVersion: "v1"}, Sources: refs(f.source())}))
+	f.transition(f.human, "memory_candidates", c.ID, ChangeInput{Scope: scopeA, ExpectedRevision: c.Revision, Status: "rejected"})
+	for state, want := range map[string]int{"all": 0, "rejected": 1} {
+		page, err := f.svc.QueryMemoryCatalog(testCtx, f.human, CatalogQueryInput{Scope: scopeA, State: state, Limit: 10}, true)
+		if err != nil || len(page.Items) != want {
+			t.Fatalf("state %s: %d items %v, want %d", state, len(page.Items), err, want)
+		}
+	}
+}

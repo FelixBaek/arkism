@@ -158,8 +158,8 @@ func (s *Service) emitSpaceSection(ctx context.Context, token string, d Decision
 			return nil
 		}
 		return emit(spaceBundleLine{Section: name, Record: &SpaceBundleRecord{ID: r.ID, Kind: r.Kind, Status: r.Status,
-			Approved: name == colMemories, Text: r.Text, Summary: r.Summary, Keywords: r.Keywords, Tags: r.Tags,
-			MemoryContext: copyMemoryContext(r.MemoryContext), Directive: r.Directive, MentalModel: mentalModelDefinition(r), CreatedAt: r.CreatedAt}})
+			Approved: name == colMemories, Text: r.Text, Summary: r.Summary, Keywords: r.Keywords, Tags: r.Tags, Entities: r.Entities,
+			MemoryContext: copyMemoryContext(r.MemoryContext), Directive: r.Directive, MentalModel: mentalModelDefinition(r), CreatedAt: r.CreatedAt, EffectiveAt: r.EffectiveAt, ExpiresAt: r.ExpiresAt}})
 	})
 }
 

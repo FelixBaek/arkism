@@ -13,14 +13,17 @@
       ],
       "properties": {
         "id": {
-          "type": "string"
+          "type": "string",
+          "description": "Work ID, stable across agents"
         },
         "event_id": {
-          "type": "string"
+          "type": "string",
+          "description": "Stable ID of this save; reuse on retry"
         },
         "expected_revision": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "0 for a new ID, else the last read revision"
         },
         "package": {
           "type": "object",
@@ -164,7 +167,8 @@
                 }
               }
             }
-          }
+          },
+          "description": "The checkpoint: title, goal, repository, origin and optional detail"
         },
         "archive_messages": {
           "type": "array",
@@ -208,7 +212,8 @@
                 "minimum": 0
               }
             }
-          }
+          },
+          "description": "Verified conversation locations to attach"
         }
       }
     }
@@ -224,7 +229,8 @@
       ],
       "properties": {
         "id": {
-          "type": "string"
+          "type": "string",
+          "description": "Work ID to read"
         },
         "cwd": {
           "type": "string",
@@ -241,12 +247,14 @@
       "additionalProperties": false,
       "properties": {
         "after": {
-          "type": "string"
+          "type": "string",
+          "description": "Cursor from the previous page"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Max checkpoints to return"
         }
       }
     }
@@ -259,14 +267,17 @@
       "properties": {
         "archive_id": {
           "type": "string",
-          "pattern": "^[0-9a-f]{64}$"
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Read only this archive"
         },
         "query": {
           "type": "string",
-          "maxLength": 256
+          "maxLength": 256,
+          "description": "Words to find; empty lists headers or messages"
         },
         "after": {
-          "type": "string"
+          "type": "string",
+          "description": "next_cursor from the previous page"
         }
       }
     }
@@ -280,25 +291,31 @@
       "properties": {
         "as_of": {
           "type": "string",
-          "format": "date-time"
+          "format": "date-time",
+          "description": "Record time to read the memories at"
         },
         "valid_at": {
           "type": "string",
-          "format": "date-time"
+          "format": "date-time",
+          "description": "Keep only facts that held at this time"
         },
         "query": {
-          "type": "string"
+          "type": "string",
+          "description": "Words to find; empty lists all"
         },
         "kind": {
-          "type": "string"
+          "type": "string",
+          "description": "Memory kind to keep"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 100
+          "maximum": 100,
+          "description": "Max memories to return"
         },
         "cursor": {
-          "type": "string"
+          "type": "string",
+          "description": "next_cursor from the previous page"
         }
       },
       "required": [
@@ -316,7 +333,8 @@
         "memory_id": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 256
+          "maxLength": 256,
+          "description": "Memory to trace"
         }
       },
       "required": [
@@ -367,11 +385,13 @@
             "sha256",
             "chunk_index",
             "chunk_offset"
-          ]
+          ],
+          "description": "Message ref exactly as search_session_archives returned it"
         },
         "text_offset": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Character offset to continue from (next_text_offset)"
         }
       },
       "required": [
@@ -387,12 +407,14 @@
       "additionalProperties": false,
       "properties": {
         "memory_id": {
-          "type": "string"
+          "type": "string",
+          "description": "Memory that was actually used"
         },
         "event_id": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 128
+          "maxLength": 128,
+          "description": "Stable ID of this use; reuse on retry"
         }
       },
       "required": [
@@ -429,7 +451,8 @@
           "enum": [
             "mcp",
             "plugin"
-          ]
+          ],
+          "description": "What `name` is: an MCP server or a plugin"
         },
         "name": {
           "type": "string",
@@ -500,10 +523,12 @@
             "failure",
             "cancelled",
             "validation_failed"
-          ]
+          ],
+          "description": "How the work ended"
         },
         "task_type": {
-          "type": "string"
+          "type": "string",
+          "description": "Kind of work; defaults to skill_run"
         },
         "error_code": {
           "type": "string",
@@ -571,7 +596,8 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 200,
-          "default": 50
+          "default": 50,
+          "description": "Max runs to return"
         },
         "status": {
           "type": "string",
@@ -581,7 +607,8 @@
             "succeeded",
             "failed",
             "stopped"
-          ]
+          ],
+          "description": "Keep only runs in this state"
         }
       }
     }
@@ -734,7 +761,8 @@
       "properties": {
         "request_id": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Stable ID of this request; reuse only with identical evidence"
         },
         "source_run": {
           "type": "object",
@@ -760,7 +788,8 @@
             "collection",
             "id",
             "revision"
-          ]
+          ],
+          "description": "The completed run: collection, id and revision"
         },
         "generation": {
           "type": "object",
@@ -854,7 +883,8 @@
             "path",
             "lessons",
             "comparison_plan"
-          ]
+          ],
+          "description": "What to generate: skill, path and the lesson refs"
         },
         "runtime": {
           "type": "string",
@@ -864,11 +894,13 @@
             "zcode",
             "gemini",
             "grok"
-          ]
+          ],
+          "description": "Agent program the trial runs in"
         },
         "trial_ends_at": {
           "type": "string",
-          "format": "date-time"
+          "format": "date-time",
+          "description": "When the trial stops"
         }
       },
       "required": [
@@ -890,7 +922,8 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 128
+          "maxLength": 128,
+          "description": "Improvement ID"
         }
       },
       "required": [
@@ -907,13 +940,15 @@
       "properties": {
         "after": {
           "type": "string",
-          "maxLength": 128
+          "maxLength": 128,
+          "description": "Cursor from the previous page"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "default": 50
+          "default": 50,
+          "description": "Max improvements to return"
         }
       },
       "required": []
@@ -929,15 +964,18 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 128
+          "maxLength": 128,
+          "description": "Improvement ID"
         },
         "expected_revision": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "description": "Latest revision read"
         },
         "action_id": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Stable ID of this action; reuse on recover"
         },
         "action": {
           "type": "string",
@@ -950,11 +988,13 @@
             "apply",
             "monitor",
             "rollback"
-          ]
+          ],
+          "description": "The one step to request"
         },
         "recover": {
           "type": "boolean",
-          "default": false
+          "default": false,
+          "description": "Reconcile the same uncertain action instead of repeating it"
         },
         "comparison": {
           "type": "object",
@@ -1155,7 +1195,8 @@
             "comparison_report",
             "passed",
             "cases"
-          ]
+          ],
+          "description": "Measured comparison result; required for compare"
         },
         "application": {
           "type": "object",
@@ -1175,7 +1216,8 @@
               "type": "string"
             }
           },
-          "required": []
+          "required": [],
+          "description": "Version and trial refs for approve, apply or rollback"
         }
       },
       "required": [
@@ -1219,7 +1261,8 @@
               "minimum": 1,
               "maximum": 9223372036854775807
             }
-          }
+          },
+          "description": "Stored record (collection, id, revision) to follow one relation step from"
         },
         "ids": {
           "type": "array",
@@ -1244,6 +1287,11 @@
           "type": "string",
           "maxLength": 64,
           "description": "IANA time zone for time words"
+        },
+        "locale": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Reader's language tag (en-GB, en-US) so an ambiguous slashed date like 03/04/2026 is read"
         },
         "query_time": {
           "type": "string",
@@ -1559,7 +1607,8 @@
         "text": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 4000
+          "maxLength": 4000,
+          "description": "The memory, one self-contained statement"
         },
         "kind": {
           "type": "string",
@@ -1569,7 +1618,8 @@
             "procedural",
             "lesson"
           ],
-          "default": "decision"
+          "default": "decision",
+          "description": "Memory kind"
         },
         "tags": {
           "type": "array",
@@ -1579,7 +1629,8 @@
             "minLength": 1,
             "maxLength": 128,
             "pattern": "^[^:]+$"
-          }
+          },
+          "description": "Labels for later filtering"
         },
         "metadata": {
           "type": "object",
@@ -1591,7 +1642,8 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 80
-          }
+          },
+          "description": "Extra key-value facts"
         },
         "entities": {
           "type": "array",
@@ -1600,7 +1652,8 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 80
-          }
+          },
+          "description": "People, projects or things it is about"
         }
       },
       "required": [
@@ -1629,13 +1682,15 @@
           "type": "integer",
           "minimum": 256,
           "maximum": 8192,
-          "default": 2048
+          "default": 2048,
+          "description": "Token budget of the answer"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
           "maximum": 8,
-          "default": 4
+          "default": 4,
+          "description": "Max passages to return"
         },
         "mode": {
           "type": "string",
@@ -1669,7 +1724,8 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 5,
-          "default": 3
+          "default": 3,
+          "description": "Max summaries to return"
         }
       }
     }
@@ -1683,24 +1739,29 @@
       "properties": {
         "query": {
           "type": "string",
-          "maxLength": 512
+          "maxLength": 512,
+          "description": "Words to search titles and text"
         },
         "page": {
           "type": "string",
-          "maxLength": 256
+          "maxLength": 256,
+          "description": "Title or slug of one page"
         },
         "depth": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 2
+          "maximum": 2,
+          "description": "Link hops to follow"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 10
+          "maximum": 10,
+          "description": "Max pages to return"
         },
         "tree": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "List folders and page titles instead"
         }
       }
     }
@@ -1715,7 +1776,8 @@
         "query": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 2000
+          "maxLength": 2000,
+          "description": "The question"
         },
         "limit": {
           "type": "integer",
@@ -1729,7 +1791,8 @@
           "items": {
             "type": "string",
             "maxLength": 128
-          }
+          },
+          "description": "Use only memories with these tags"
         },
         "tags_match": {
           "type": "string",
@@ -1805,7 +1868,8 @@
           "type": "integer",
           "minimum": 64,
           "maximum": 4096,
-          "default": 1024
+          "default": 1024,
+          "description": "Token budget of the answer"
         },
         "max_iterations": {
           "type": "integer",
@@ -1822,6 +1886,19 @@
           "type": "string",
           "maxLength": 2000,
           "description": "Overrides the space's reflect mission for this call."
+        },
+        "about": {
+          "type": "string",
+          "maxLength": 256,
+          "description": "One entity (a person, an agent, a thing) the question is about: the memories that mention it are read first."
+        },
+        "created_by": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "string"
+          },
+          "description": "Read only records these principals wrote: the answer is their view."
         },
         "budget": {
           "type": "string",
@@ -1854,7 +1931,8 @@
           "items": {
             "type": "string",
             "maxLength": 256
-          }
+          },
+          "description": "Mental models to leave out"
         },
         "apply_all_directives": {
           "type": "boolean",
@@ -1874,7 +1952,8 @@
                 }
               }
             }
-          }
+          },
+          "description": "Extra detail to attach to the answer"
         },
         "disposition": {
           "type": "object",
@@ -1895,7 +1974,8 @@
               "minimum": 0,
               "maximum": 5
             }
-          }
+          },
+          "description": "Answer tone, each trait 0-5"
         }
       },
       "required": [
@@ -1926,11 +2006,13 @@
             "spaces",
             "tags",
             "stats"
-          ]
+          ],
+          "description": "Which data to read"
         },
         "id": {
           "type": "string",
-          "maxLength": 256
+          "maxLength": 256,
+          "description": "One record to read; omit to list"
         },
         "query": {
           "type": "string",
@@ -1939,13 +2021,15 @@
         },
         "cursor": {
           "type": "string",
-          "maxLength": 256
+          "maxLength": 256,
+          "description": "next_cursor from the previous page"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
           "maximum": 50,
-          "default": 20
+          "default": 20,
+          "description": "Max rows to return"
         }
       },
       "required": [
@@ -1965,7 +2049,8 @@
       "properties": {
         "query": {
           "type": "string",
-          "maxLength": 200
+          "maxLength": 200,
+          "description": "Symbol name or part of it"
         },
         "repo": {
           "type": "string",
@@ -1974,7 +2059,8 @@
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 200
+          "maximum": 200,
+          "description": "Max symbols to return"
         },
         "max_tokens": {
           "type": "integer",
@@ -2006,7 +2092,8 @@
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 200
+          "maximum": 200,
+          "description": "Max callers to return"
         },
         "max_tokens": {
           "type": "integer",
@@ -2038,7 +2125,8 @@
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 200
+          "maximum": 200,
+          "description": "Max callees to return"
         },
         "max_tokens": {
           "type": "integer",
@@ -2066,7 +2154,8 @@
         "depth": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 8
+          "maximum": 8,
+          "description": "Caller levels to walk"
         },
         "repo": {
           "type": "string",
@@ -2075,7 +2164,8 @@
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 200
+          "maximum": 200,
+          "description": "Max symbols to return"
         },
         "max_tokens": {
           "type": "integer",
@@ -2094,22 +2184,26 @@
       "additionalProperties": false,
       "properties": {
         "repository": {
-          "type": "string"
+          "type": "string",
+          "description": "Repository to read; defaults to the current one"
         },
         "session_id": {
-          "type": "string"
+          "type": "string",
+          "description": "Current session, left out of the result"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
           "maximum": 10,
-          "default": 3
+          "default": 3,
+          "description": "Max summaries to return"
         },
         "max_age_days": {
           "type": "integer",
           "minimum": 1,
           "maximum": 30,
-          "default": 7
+          "default": 7,
+          "description": "Oldest session age in days"
         }
       },
       "required": [
@@ -2131,22 +2225,26 @@
             "researcher",
             "implementer",
             "reviewer"
-          ]
+          ],
+          "description": "Server-defined role whose view to use"
         },
         "query": {
-          "type": "string"
+          "type": "string",
+          "description": "Words to find"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
           "maximum": 50,
-          "default": 8
+          "default": 8,
+          "description": "Max memories to return"
         },
         "max_chars": {
           "type": "integer",
           "minimum": 1,
           "maximum": 64000,
-          "default": 8000
+          "default": 8000,
+          "description": "Character budget of the result"
         }
       },
       "required": [
@@ -2176,19 +2274,22 @@
           "required": [
             "kind",
             "id"
-          ]
+          ],
+          "description": "Entity to start from: kind and id"
         },
         "max_depth": {
           "type": "integer",
           "minimum": 1,
           "maximum": 3,
-          "default": 1
+          "default": 1,
+          "description": "Relation steps to follow"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
           "maximum": 50,
-          "default": 20
+          "default": 20,
+          "description": "Max edges to return"
         }
       },
       "required": [
@@ -2204,41 +2305,51 @@
       "additionalProperties": false,
       "properties": {
         "id": {
-          "type": "string"
+          "type": "string",
+          "description": "New child work ID; a duplicate never reruns"
         },
         "parent_work_id": {
-          "type": "string"
+          "type": "string",
+          "description": "Work this task belongs to"
         },
         "sender": {
-          "type": "string"
+          "type": "string",
+          "description": "Agent handing off"
         },
         "recipient": {
-          "type": "string"
+          "type": "string",
+          "description": "Agent program to run"
         },
         "session_id": {
-          "type": "string"
+          "type": "string",
+          "description": "Current session ID"
         },
         "task": {
-          "type": "string"
+          "type": "string",
+          "description": "What the recipient must do"
         },
         "model": {
-          "type": "string"
+          "type": "string",
+          "description": "Model for the recipient; omit for its default"
         },
         "cwd": {
-          "type": "string"
+          "type": "string",
+          "description": "Directory the recipient works in"
         },
         "timeout_s": {
           "type": "integer",
           "minimum": 1,
           "maximum": 600,
-          "default": 120
+          "default": 120,
+          "description": "Seconds to wait for the run"
         },
         "skills": {
           "type": "array",
           "maxItems": 8,
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Skill IDs to load for the recipient"
         },
         "access": {
           "type": "string",
@@ -2246,7 +2357,8 @@
             "read",
             "write"
           ],
-          "default": "read"
+          "default": "read",
+          "description": "read, or write (Codex sandbox only)"
         }
       },
       "required": [
@@ -2279,7 +2391,8 @@
         },
         "text": {
           "type": "string",
-          "maxLength": 2000
+          "maxLength": 2000,
+          "description": "The message"
         },
         "event_id": {
           "type": "string",
@@ -2310,7 +2423,8 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 20,
-          "default": 20
+          "default": 20,
+          "description": "Max messages to read"
         }
       }
     }
@@ -2325,12 +2439,14 @@
         "title": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 200
+          "maxLength": 200,
+          "description": "Short name of the rule"
         },
         "rule": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 4000
+          "maxLength": 4000,
+          "description": "The rule text"
         },
         "applies_to": {
           "type": "string",
@@ -2339,13 +2455,15 @@
             "context",
             "both"
           ],
-          "default": "both"
+          "default": "both",
+          "description": "Where the rule applies"
         },
         "priority": {
           "type": "integer",
           "minimum": 0,
           "maximum": 100,
-          "default": 50
+          "default": 50,
+          "description": "Order among rules"
         }
       },
       "required": [
@@ -2364,12 +2482,14 @@
         "title": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 120
+          "maxLength": 120,
+          "description": "Topic name"
         },
         "query": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1000
+          "maxLength": 1000,
+          "description": "Recall query the summary is built from"
         }
       },
       "required": [
@@ -2388,7 +2508,8 @@
         "memory_id": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 256
+          "maxLength": 256,
+          "description": "Memory to correct"
         },
         "revision": {
           "type": "integer",
@@ -2398,7 +2519,8 @@
         "text": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 4000
+          "maxLength": 4000,
+          "description": "Corrected text"
         },
         "kind": {
           "type": "string",
@@ -2408,7 +2530,8 @@
             "procedural",
             "lesson"
           ],
-          "default": "decision"
+          "default": "decision",
+          "description": "Memory kind after the change"
         }
       },
       "required": [
@@ -2428,7 +2551,8 @@
         "memory_id": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 256
+          "maxLength": 256,
+          "description": "Memory to report"
         },
         "revision": {
           "type": "integer",
@@ -2442,7 +2566,8 @@
             "incorrect",
             "path_missing"
           ],
-          "default": "outdated"
+          "default": "outdated",
+          "description": "Why it no longer holds"
         }
       },
       "required": [
@@ -2474,12 +2599,14 @@
             "memories_clear",
             "space_create",
             "space_delete"
-          ]
+          ],
+          "description": "The change to ask for"
         },
         "target_id": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 256
+          "maxLength": 256,
+          "description": "Record the change applies to"
         },
         "revision": {
           "type": "integer",
@@ -2506,23 +2633,28 @@
         "filename": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 200
+          "maxLength": 200,
+          "description": "File name with its extension"
         },
         "text": {
           "type": "string",
-          "maxLength": 4194304
+          "maxLength": 4194304,
+          "description": "Plain text content"
         },
         "content_base64": {
           "type": "string",
-          "maxLength": 5242880
+          "maxLength": 5242880,
+          "description": "Binary content, base64"
         },
         "mime": {
           "type": "string",
-          "maxLength": 100
+          "maxLength": 100,
+          "description": "Media type; guessed from filename when omitted"
         },
         "dry_run": {
           "type": "boolean",
-          "default": false
+          "default": false,
+          "description": "Check the upload without storing it"
         }
       },
       "required": [
@@ -2542,12 +2674,14 @@
           "enum": [
             "file",
             "knowledge"
-          ]
+          ],
+          "description": "Where the document lives"
         },
         "id": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 256
+          "maxLength": 256,
+          "description": "Document ID"
         },
         "view": {
           "type": "string",
@@ -2555,17 +2689,20 @@
             "chunks",
             "history"
           ],
-          "default": "chunks"
+          "default": "chunks",
+          "description": "Text pieces or revision history"
         },
         "cursor": {
           "type": "string",
-          "maxLength": 256
+          "maxLength": 256,
+          "description": "next_cursor from the previous page"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
           "maximum": 200,
-          "default": 50
+          "default": 50,
+          "description": "Max rows to return"
         }
       },
       "required": [
@@ -2584,11 +2721,13 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 256
+          "maxLength": 256,
+          "description": "Job ID"
         },
         "expected_revision": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Latest revision read"
         }
       },
       "required": [

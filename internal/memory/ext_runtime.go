@@ -394,6 +394,9 @@ func (p *ProcessExtensions) CheckTenant(ctx context.Context, actor Decision, act
 	return nil
 }
 
+// Has reports whether an extension of that name is loaded.
+func (p *ProcessExtensions) Has(extension string) bool { return p.find(extension) != nil }
+
 // Route finds a declared route by exact path.
 // shortcut: no path parameters; an extension reads ids from the query or body until one needs them.
 func (p *ProcessExtensions) Route(extension, method, path string) (ExtensionRoute, bool) {

@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 const pgTextSearchExpression = `to_tsvector('simple', COALESCE(doc->>'text','') || ' ' || COALESCE(doc->>'summary','') || ' ' || COALESCE((doc->'keywords')::text,''))`
@@ -116,6 +118,8 @@ func pgTagTests(tests []TagTest, op string, next *int, args *[]any) string {
 			sql[i] = pgTagTests(t.And, " AND ", next, args)
 		case len(t.Or) > 0:
 			sql[i] = pgTagTests(t.Or, " OR ", next, args)
+		case t.Meta != nil:
+			sql[i] = pgMetaTest(*t.Meta, next, args)
 		default:
 			// COALESCE: a NULL from untagged rows must negate like Go's false does.
 			sql[i] = fmt.Sprintf("COALESCE(("+pgTagsMatch[t.Match]+"), false)", *next)
@@ -127,6 +131,44 @@ func pgTagTests(tests []TagTest, op string, next *int, args *[]any) string {
 		}
 	}
 	return "(" + strings.Join(sql, op) + ")"
+}
+
+// pgMetaTest is MetaTest.holds in SQL: some meta:<key>=<value> tag whose value passes the op.
+func pgMetaTest(m MetaTest, next *int, args *[]any) string {
+	prefix, value := *next, *next+1
+	*args = append(*args, m.prefix())
+	*next++
+	got := fmt.Sprintf("substr(t.v, length($%d::text)+1)", prefix)
+	cond := ""
+	switch m.Op {
+	case "exists":
+	case "in":
+		cond = fmt.Sprintf(" AND %s = ANY($%d::text[])", got, value)
+		*args = append(*args, m.Values)
+		*next++
+	default:
+		cond = " AND " + pgMetaCompare(m, got, fmt.Sprintf("$%d::text", value))
+		*args = append(*args, m.Value)
+		*next++
+	}
+	return fmt.Sprintf("EXISTS (SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(doc->'tags')='array' THEN doc->'tags' ELSE '[]'::jsonb END) AS t(v) WHERE starts_with(t.v, $%d::text)%s)", prefix, cond)
+}
+
+func pgMetaCompare(m MetaTest, got, want string) string {
+	switch m.Op {
+	case "", "eq":
+		return got + " = " + want
+	case "ne":
+		return got + " <> " + want
+	case "contains":
+		return "strpos(" + got + ", " + want + ") > 0"
+	}
+	sign := map[string]string{"gt": ">", "gte": ">=", "lt": "<", "lte": "<="}[m.Op]
+	if metaDecimal.MatchString(m.Value) {
+		// CASE: the cast must not run on a value the pattern rejected.
+		return "(CASE WHEN " + got + " ~ '" + metaDecimalPattern + "' THEN " + got + "::numeric " + sign + " " + want + "::numeric ELSE false END)"
+	}
+	return got + ` COLLATE "C" ` + sign + " " + want
 }
 
 func pgCriteria(criteria SearchCriteria, start int) (string, []any) {
@@ -141,7 +183,7 @@ func pgCriteria(criteria SearchCriteria, start int) (string, []any) {
 	if len(criteria.Kinds) > 0 {
 		add("doc->>'kind' = ANY($%d::text[])", criteria.Kinds)
 	}
-	// ST-824: the same rule as reachVisible, so other projects' memories never spend the LIMIT.
+	// the same rule as reachVisible, so other projects' memories never spend the LIMIT.
 	add("(doc->>'reach' IS DISTINCT FROM 'project' OR ($%[1]d <> '' AND doc->>'reach_project' = $%[1]d))", criteria.ProjectKey)
 	if f := criteria.Filters; f != nil {
 		if len(f.Tags) > 0 {
@@ -250,7 +292,7 @@ func (p *Postgres) SearchCollection(ctx context.Context, collection string, in S
 	if err != nil {
 		return nil, err
 	}
-	c.history, c.pending = in.IncludeInactive, pending
+	c.history, c.pending, c.listing = in.IncludeInactive, pending, aggregateIntent(in.Query)
 	if in.Limit <= 0 {
 		in.Limit = defaultSearchLimit
 	}
@@ -261,26 +303,34 @@ func (p *Postgres) searchCollections(ctx context.Context, collections []string, 
 	now := time.Now().UTC()
 	out := make([][]Hit, 3)
 	for _, collection := range collections {
+		// The lanes are independent reads: outside a transaction each takes its own
+		// pooled connection and they run side by side. A transaction owns one
+		// connection, so there they stay in order.
+		var g errgroup.Group
+		if p.tx != nil {
+			g.SetLimit(1)
+		}
+		rows := make([][]Hit, 3)
+		lane := func(i int, terms []string, name, vec, vecSpace string) {
+			g.Go(func() (err error) {
+				rows[i], err = p.pgLane(ctx, collection, scope, criteria, now, terms, name, vec, vecSpace, limit)
+				return err
+			})
+		}
 		if searchModeEnabled(modes, "exact") {
-			rows, err := p.pgLane(ctx, collection, scope, criteria, now, exactQueryKeywords(query), "exact", "", "", limit)
-			if err != nil {
-				return nil, err
-			}
-			out[0] = append(out[0], rows...)
+			lane(0, exactQueryKeywords(query), "exact", "", "")
 		}
 		if terms := searchQueryTerms(query); searchModeEnabled(modes, "fts") && len(terms) > 0 {
-			rows, err := p.pgLane(ctx, collection, scope, criteria, now, terms, "fts", "", "", limit)
-			if err != nil {
-				return nil, err
-			}
-			out[1] = append(out[1], rows...)
+			lane(1, terms, "fts", "", "")
 		}
 		if searchModeEnabled(modes, "vector") && len(vector) > 0 {
-			rows, err := p.pgLane(ctx, collection, scope, criteria, now, nil, "vector", vectorSQL(vector), space, limit)
-			if err != nil {
-				return nil, err
-			}
-			out[2] = append(out[2], rows...)
+			lane(2, nil, "vector", vectorSQL(vector), space)
+		}
+		if err := g.Wait(); err != nil {
+			return nil, err
+		}
+		for i := range out {
+			out[i] = append(out[i], rows[i]...)
 		}
 	}
 	return out, nil
@@ -300,12 +350,23 @@ const vectorKeepNearest = 3
 // within vectorRelativeCut of the best visible match, or among the vectorKeepNearest closest.
 // The nearest are taken over the same tenant and lane predicate, so filters and RLS bound
 // them exactly like the rows themselves.
-func pgVectorCut(where string, vectorParam int, maxDistance float64) string {
+// keepNearest lets the vectorKeepNearest closest pass maxDistance too: a request that needs a
+// skill seldom reads like the skill's text, so a small catalog's nearest few stay candidates
+// and only the service's VectorMatch says which are close.
+// listing drops the relative cut: the members of a list each sit a little farther from the
+// question than its best match, so only maxDistance bounds them.
+func pgVectorCut(where string, vectorParam int, maxDistance float64, keepNearest, listing bool) string {
 	distance := fmt.Sprintf("embedding <=> $%d::vector", vectorParam)
+	if listing && !keepNearest {
+		return where + fmt.Sprintf(" AND %s <= %g", distance, maxDistance)
+	}
 	nearest := fmt.Sprintf("(SELECT %s AS d FROM memory_records WHERE collection=$1 AND workspace_id=$2 AND project_id=$3 AND user_id=$4 AND agent_id=$5 AND (%s) ORDER BY 1 LIMIT %d) nearest",
 		distance, where, vectorKeepNearest)
-	cut := fmt.Sprintf("(SELECT GREATEST(1-%g*(1-min(d)), max(d)) FROM %s)", vectorRelativeCut, nearest)
-	return where + fmt.Sprintf(" AND %s <= LEAST(%g, %s)", distance, maxDistance, cut)
+	bound := fmt.Sprintf("LEAST(%g, (SELECT GREATEST(1-%g*(1-min(d)), max(d)) FROM %s))", maxDistance, vectorRelativeCut, nearest)
+	if keepNearest {
+		bound = fmt.Sprintf("(SELECT GREATEST(LEAST(%g, 1-%g*(1-min(d))), max(d)) FROM %s)", maxDistance, vectorRelativeCut, nearest)
+	}
+	return where + fmt.Sprintf(" AND %s <= %s", distance, bound)
 }
 
 func vectorSQL(vector []float64) string {
@@ -361,7 +422,7 @@ func (p *Postgres) pgLane(ctx context.Context, collection string, scope Scope, c
 	where, params := pgSearchWhere(criteria, collection, now, extra, args)
 	if lane == "vector" && p.vectorMaxDistance > 0 {
 		_, stateArgs := pgSearchState(criteria, now, 6)
-		where = pgVectorCut(where, 6+len(stateArgs)+1, p.vectorMaxDistance)
+		where = pgVectorCut(where, 6+len(stateArgs)+1, p.vectorMaxDistance, collection == colSkillVersions, criteria.listing)
 	}
 	order := "updated_at DESC, id ASC"
 	_, stateParams := pgSearchState(criteria, now, 6)

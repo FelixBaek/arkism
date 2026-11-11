@@ -66,13 +66,18 @@ func serveDaemonWorker(ctx context.Context, svc *memory.Service, cfg daemonOptio
 	if err != nil {
 		return err
 	}
-	worker := &daemonWorkerStep{service: svc, token: token, recovery: cfg.Recovery, noAgentRuntime: os.Getenv("MEMORY_PRIVACY_NO_AGENT_RUNTIME") == "true", expiryScope: scope, expiryDays: days}
+	worker := &daemonWorkerStep{service: svc, token: token, recovery: cfg.Recovery, noAgentRuntime: privacyNoAgentRuntime(), expiryScope: scope, expiryDays: days}
 	interval := 2 * time.Second
 	if cfg.dynamicsPlan != nil {
 		interval = time.Duration(cfg.dynamicsPlan.config.Limits.PollIntervalNS)
 	}
 	return runMemoryWorker(ctx, control, interval, worker.run)
 }
+
+// privacyNoAgentRuntime: the worker finishes a deletion itself unless the deployment says an
+// external agent runtime records that step (MEMORY_PRIVACY_NO_AGENT_RUNTIME=false). Waiting by
+// default left a deleted source's text in the database on every server installed by hand.
+func privacyNoAgentRuntime() bool { return os.Getenv("MEMORY_PRIVACY_NO_AGENT_RUNTIME") != "false" }
 
 func (w *daemonWorkerStep) run(ctx context.Context) {
 	op, cancel := context.WithTimeout(ctx, 90*time.Second)

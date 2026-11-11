@@ -1,9 +1,9 @@
 package memory
 
 // Arkism runs no external agent runtime: workflow runs keep no checkpoints, writes, blobs or
-// journals outside this database. A deletion's runtime step therefore has nothing to purge, and a
-// deployment that says so (MEMORY_PRIVACY_NO_AGENT_RUNTIME=true, which the desktop's built-in
-// Arkism sets) records that step itself: verified, every expected run absent. The worker's
+// journals outside this database. A deletion's runtime step therefore has nothing to purge, and
+// the worker records that step itself: verified, every expected run absent. Only a deployment
+// whose own agent runtime records the step turns this off (MEMORY_PRIVACY_NO_AGENT_RUNTIME=false). The worker's
 // WorkOnce then purges the derived records and verifies, as for any deletion.
 
 import (

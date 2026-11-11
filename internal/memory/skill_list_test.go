@@ -71,6 +71,9 @@ func checkSkillListPages(t *testing.T, f *fixture, store Repository) {
 	if err != nil || len(first.Items) != 2 || first.NextCursor == "" {
 		t.Fatal("first page", err, first)
 	}
+	if first.Items[0].ID != "alpha" || first.Items[0].ContentChars != len("alpha") {
+		t.Fatal("content size", first.Items[0])
+	}
 	after, err := decodeSkillCursor(scopeA, first.NextCursor)
 	if err != nil {
 		t.Fatal(err)

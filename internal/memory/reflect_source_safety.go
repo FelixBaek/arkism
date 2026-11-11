@@ -1,0 +1,115 @@
+package memory
+
+import (
+	"context"
+	"slices"
+	"unicode/utf8"
+)
+
+type reflectSourceSnapshot struct {
+	record   Record
+	transfer bool
+}
+
+func (run *reflectRun) keepSources(records []Record, transfer bool) {
+	if run.sourceRecords == nil {
+		run.sourceRecords = map[string]reflectSourceSnapshot{}
+	}
+	for _, r := range records {
+		old := run.sourceRecords[r.ID]
+		run.sourceRecords[r.ID] = reflectSourceSnapshot{record: r, transfer: transfer || old.transfer}
+	}
+}
+
+func (run *reflectRun) noteSourceFailure(tool, reason string) {
+	for _, note := range run.sourceNotes {
+		if note.Tool == tool && note.Error == reason {
+			return
+		}
+	}
+	run.sourceNotes = append(run.sourceNotes, ReflectToolStep{Tool: tool, IDs: []string{}, Error: reason})
+}
+
+// Stored source text needs the same record and transfer checks as other evidence.
+// The prompt-only passage is local; reread inputs always leave for their model.
+func (s *Service) reflectSourceReadable(ctx context.Context, token string, in ReflectInput, r Record, transfer bool) bool {
+	filters := reflectFilters(in)
+	criteria, err := normalizeSearchCriteria(SearchCriteria{Kinds: []string{conversationSourceKind}, Filters: &filters})
+	if err != nil || r.Scope != in.Scope || !live(r) || r.ContentErased || r.PrivacyQuarantined || r.Sensitivity == "restricted" || !criteria.matchesRecord(r) {
+		return false
+	}
+	if _, err = s.authorize(ctx, token, "read:sources", in.Scope, r.ID, structuredText(r)); err != nil {
+		return false
+	}
+	if len(r.Sources) > 0 && checkSources(ctx, s.Repo, r) != nil {
+		return false
+	}
+	if transfer {
+		refs := append(slices.Clone(r.Sources), sourceReference(r, "reflect_source"))
+		_, err = s.authorizeTransfer(ctx, token, "context:read", in.Scope, r.ID, r.Sensitivity, wikiDestination, redactSessionPrivate(r.Text), refs)
+		return err == nil
+	}
+	return true
+}
+
+// Preserve source snapshots through the model call and prompt-only delivery.
+// A later erasure/change must reject delivery, including when it keeps revision.
+func (s *Service) verifyReflectSources(ctx context.Context, token string, run *reflectRun) error {
+	if len(run.sourceRecords) == 0 {
+		return nil
+	}
+	for _, snapshot := range run.sourceRecords {
+		if !s.reflectSourceReadable(ctx, token, run.in, snapshot.record, snapshot.transfer) {
+			return ErrDenied
+		}
+	}
+	return s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		checked := searchReadTx{Tx: tx}
+		for id, snapshot := range run.sourceRecords {
+			current, err := tx.Get(ctx, "sources", run.in.Scope, id)
+			if err != nil {
+				return err
+			}
+			original := snapshot.record
+			current.MemoryReferenceFence, original.MemoryReferenceFence = 0, 0
+			if current.Scope != run.in.Scope || !live(current) || current.ContentErased || current.PrivacyQuarantined || structuredText(current) != structuredText(original) {
+				return ErrConflict
+			}
+			if len(current.Sources) > 0 {
+				if err := checkSources(ctx, checked, current); err != nil {
+					return err
+				}
+			}
+			if snapshot.transfer {
+				refs := append(slices.Clone(current.Sources), sourceReference(current, "reflect_source"))
+				if err := checkTransferSources(ctx, checked, current.Scope, current.Sensitivity, refs); err != nil {
+					return err
+				}
+			}
+			if err := tx.FenceSource(ctx, run.in.Scope, id); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// Optional sources must fit the combined prompt, including tools, directives and
+// reread lines. Drop whole optional blocks before consuming the answer's budget.
+func (run *reflectRun) boundSources() {
+	for {
+		system, user := reflectPrompt(run, false)
+		if utf8.RuneCountInString(system+user)/3 <= reflectMaxPromptTokens {
+			return
+		}
+		if len(run.passages) > 0 {
+			run.passages = run.passages[:len(run.passages)-1]
+			run.noteSourceFailure("conversation_passages", "prompt_budget")
+		} else if len(run.sourceLines) > 0 {
+			run.sourceLines = run.sourceLines[:len(run.sourceLines)-1]
+			run.noteSourceFailure("source_reread", "prompt_budget")
+		} else {
+			return
+		}
+	}
+}

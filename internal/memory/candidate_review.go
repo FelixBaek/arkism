@@ -21,6 +21,8 @@ type CandidateReviewInput struct {
 	ReachProject string `json:"reach_project,omitempty"`
 	// Occurred, on approve/edit_approve, is the reviewer's event span for the memory; {} clears the extracted one.
 	Occurred *RecallTimeWindow `json:"occurred,omitempty"`
+	// inTx runs inside the review's transaction with the record it settled (the dream logs its change there).
+	inTx func(context.Context, Tx, Record) error
 }
 type ReviewDecision struct {
 	ReceiptID string    `json:"receipt_id,omitempty" bson:"receipt_id,omitempty"`

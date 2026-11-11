@@ -59,6 +59,25 @@ pair stays as a tombstone, so the model cannot propose it again. Recall with
 `expand_causal` and context building follow approved links only, one step from
 the top results.
 
+## Slow model calls
+
+Six model-backed routes can outlast one request: `POST /v1/observations/consolidate`,
+`POST /v1/causal-links/propose`, `POST /v1/mental-models/{id}/refresh`,
+`POST /v1/wiki/build_from_memories` (`dry_run`), `POST /v1/skills/analyze` and
+`POST /v1/skills/generate`.
+
+- A call that ends within about 20 seconds answers `200` as before.
+- A slower call answers `202` with `{operation_id, kind: "deferred_call", status, location}`.
+  The work keeps running on the server (up to 15 minutes) and saves what it
+  would have saved, so a prepared skill draft is not lost.
+- Read `GET /v1/operations/{id}` (the `location`) until `status` leaves
+  `running`. `done` carries the route's own `200` body as `result`; `failed`
+  carries the error code as `error`. A call cut off by a restart reads as
+  `failed` with `interrupted`; repeating the request is safe.
+- The desktop app and both client libraries follow the `202` themselves and
+  return the same result or error as a call that answered in time.
+- A deferred call cannot be cancelled or retried through the operations routes.
+
 ## Files
 
 `POST /v1/files/memories` uploads a file and starts an extraction job. Each

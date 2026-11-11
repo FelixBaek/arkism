@@ -5,7 +5,7 @@
     {"key": "feed", "text": "ARKISM_UPDATE_FEED가 빠지면 자동 업데이트가 꺼진다", "keywords": ["업데이트", "빌드", "환경변수"]},
     {"key": "prodver", "text": "Arkism 운영 배포 버전은 v0.1.7이다", "keywords": ["arkism", "배포", "버전"]},
     {"key": "tz", "text": "The production server timezone is Asia/Seoul", "keywords": ["server", "timezone", "production"]},
-    {"key": "gh", "text": "GitHub 작업은 felix 계정의 gh 로그인으로 한다", "keywords": ["github", "gh", "계정"]},
+    {"key": "gh", "text": "GitHub 작업은 fixture-user의 gh 로그인으로 한다", "keywords": ["github", "gh", "계정"]},
     {"key": "memcap", "text": "Go tests run under systemd-run with MemoryMax=6G", "keywords": ["test", "memory", "go"]},
     {"key": "font", "text": "Crew cards use the Pretendard font", "keywords": ["font", "ui", "crew"]},
     {"key": "hook", "text": "Avoid calling setState inside useEffect without dependencies", "keywords": ["react", "useeffect", "hooks"]},

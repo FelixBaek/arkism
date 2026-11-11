@@ -1,6 +1,9 @@
 package memory
 
-import "net/http"
+import (
+	"context"
+	"net/http"
+)
 
 func registerCausalCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetrics) {
 	mux.HandleFunc("POST /v1/causal-links", func(w http.ResponseWriter, r *http.Request) {
@@ -25,8 +28,7 @@ func registerCausalCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetric
 		if !decode(w, r, &in) {
 			return
 		}
-		v, e := s.ProposeCausalLinks(r.Context(), bearer(r), in)
-		respond(w, v, e)
+		s.respondLater(w, r, in.Scope, func(ctx context.Context, token string) (any, error) { return s.ProposeCausalLinks(ctx, token, in) })
 	})
 	mux.HandleFunc("POST /v1/causal-links/{id}/review", func(w http.ResponseWriter, r *http.Request) {
 		var in CausalReviewInput

@@ -35,8 +35,12 @@ type SkillDrafter interface {
 
 type ChatSkillDrafter struct{ Config LLMConfig }
 
+// skillModelTimeout bounds one analysis or draft call. Both routes answer later when slow, so the
+// limit is the model's, not the request's; a long draft takes over a minute on a slow provider.
+const skillModelTimeout = 5 * time.Minute
+
 func (a *ChatSkillDrafter) Generator() Generator {
-	return Generator{Model: a.Config.Model, PromptVersion: "skill-draft-v3", PipelineVersion: "arkism-skill-draft-v1"}
+	return Generator{Model: a.Config.Model, PromptVersion: "skill-draft-v5", PipelineVersion: "arkism-skill-draft-v1"}
 }
 
 func invalidSkillDraftInput(in SkillDraftInput) bool {
@@ -74,7 +78,7 @@ func (a *ChatSkillDrafter) Draft(ctx context.Context, in SkillDraftInput) (Skill
 		clone.SkillID, clone.Version, clone.ContentHash, clone.SourcePath, clone.SourceFile = "", "", "", "", ""
 		in.BaselineAnalysis = &clone
 	}
-	reply, err := a.Config.chat(ctx, chatRequest{op: "skill draft", provider: "skill_llm", maxTokens: 8192, jsonOut: true, timeout: 60 * time.Second,
+	reply, err := a.Config.chat(ctx, chatRequest{op: "skill draft", provider: "skill_llm", maxTokens: 8192, jsonOut: true, timeout: skillModelTimeout,
 		system: skillDraftSystemPrompt(in), user: structuredText(in)})
 	if err != nil {
 		return zero, ProviderUsage{}, err

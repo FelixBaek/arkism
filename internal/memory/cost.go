@@ -139,19 +139,32 @@ type callCap struct {
 }
 
 // operationCap is the daily cap a metered operation reserves under: the server model's
-// wiki_ operations (wiki, extraction, media) share one; reflect, model rerank and recall expansion have their own.
+// wiki_ operations (wiki, extraction, media) share one; reflect, its source reread, model rerank and recall expansion have their own.
+// modelCallCap is operationCap with the configured reread cap in place of the default.
+func (s *Service) modelCallCap(operation string) callCap {
+	c := operationCap(operation)
+	if operation == reflectRereadOperation && s.ReflectRereadDailyLimit > 0 {
+		c.limit = s.ReflectRereadDailyLimit
+	}
+	return c
+}
+
 func operationCap(operation string) callCap {
 	switch {
 	case strings.HasPrefix(operation, "wiki_"):
 		return callCap{prefix: "wiki_", limit: wikiDailyCallLimit}
 	case operation == reflectOperation:
 		return callCap{prefix: reflectOperation, limit: reflectDailyCallLimit}
+	case operation == reflectRereadOperation:
+		return callCap{prefix: reflectRereadOperation, limit: reflectRereadDailyCallLimit}
 	case operation == evidenceSelectionOperation:
 		return callCap{prefix: evidenceSelectionOperation, limit: evidenceSelectionDailyCalls}
 	case operation == modelRerankOperation:
 		return callCap{prefix: modelRerankOperation, limit: modelRerankDailyCalls}
 	case operation == recallExpandOperation:
 		return callCap{prefix: recallExpandOperation, limit: recallExpandDailyCalls}
+	case strings.HasPrefix(operation, dreamOperationPrefix):
+		return callCap{prefix: dreamOperationPrefix, limit: dreamDailyCalls}
 	}
 	return callCap{}
 }

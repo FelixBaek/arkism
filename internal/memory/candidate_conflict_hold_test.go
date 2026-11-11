@@ -38,14 +38,12 @@ func TestCandidateConflictHoldAtomicServiceAndReplay(t *testing.T) {
 	}
 }
 func TestCandidateConflictHoldAuthorizationAndAtomicFailure(t *testing.T) {
-	for _, mode := range []string{"human", "agent", "expired", "audit"} {
+	for _, mode := range []string{"agent", "expired", "audit"} {
 		t.Run(mode, func(t *testing.T) {
 			f, c, _ := autoReviewFixture(t)
 			old := reviewedForEvaluation(t, f)
 			token := testPrincipalToken("reviewer")
 			switch mode {
-			case "human":
-				token = f.human
 			case "agent":
 				token = f.agent
 			case "expired":
@@ -62,6 +60,27 @@ func TestCandidateConflictHoldAuthorizationAndAtomicFailure(t *testing.T) {
 				t.Fatal("partial mutation")
 			}
 		})
+	}
+}
+
+// A person holds a correction on their own authority, with no review grant.
+func TestCandidateConflictHoldByAPerson(t *testing.T) {
+	f, c, _ := autoReviewFixture(t)
+	old := reviewedForEvaluation(t, f)
+	f.svc.MemoryReviewPolicies = nil
+	got, e := f.svc.HoldCandidateConflict(testCtx, f.human, c.ID, CandidateConflictHoldInput{Scope: scopeA, ExpectedRevision: c.Revision, Memory: Ref{Collection: colMemories, ID: old.ID, Revision: old.Revision}, OperationID: "by-hand"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	rel, _ := f.repo.Get(testCtx, "memory_relations", scopeA, got.Conflict.ID)
+	current, _ := f.repo.Get(testCtx, colMemories, scopeA, old.ID)
+	if rel.CreatedByType != roleHuman || !live(current) || current.ConflictID != got.Conflict.ID {
+		t.Fatal("hold by a person", rel.CreatedByType, current.Status)
+	}
+	for _, role := range []string{roleHuman, roleService} {
+		if p := httpRoutePolicies["POST /v1/memory_candidates/{id}/hold-conflict"]; !slices.Contains(p.roles, role) {
+			t.Fatal("route refuses", role)
+		}
 	}
 }
 func TestCaptureAutomatedCorrectionRetriesFailedHold(t *testing.T) {

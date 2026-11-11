@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -20,6 +21,17 @@ func newDaemonService(ctx context.Context, pg *memory.Postgres, cfg daemonOption
 		if e != nil || candidateLimit < 0 || candidateLimit > 100000 {
 			return nil, memory.ErrInvalid
 		}
+	}
+	if candidateLimit == 0 {
+		slog.Warn("MEMORY_CANDIDATE_DAILY_LIMIT is unset or 0; every AI-written memory candidate will be refused")
+	}
+	rereadLimit, e := rereadLimitFromEnv()
+	if e != nil {
+		return nil, e
+	}
+	passages, e := reflectPassagesFromEnv()
+	if e != nil {
+		return nil, e
 	}
 	mergeSimilarity, gateBudget, e := captureGateFromEnv()
 	if e != nil {
@@ -41,7 +53,7 @@ func newDaemonService(ctx context.Context, pg *memory.Postgres, cfg daemonOption
 	if err != nil {
 		return nil, err
 	}
-	svc := &memory.Service{BlobObjects: objects, GoogleLogin: google, SyntheticHandoff: syntheticHandoff == "1", BlobDirectory: os.Getenv("MEMORY_BLOB_DIRECTORY"), Repo: pg, Auth: auth, Embedder: embed, CandidateDailyLimit: candidateLimit, CaptureMergeSimilarity: mergeSimilarity, CaptureGateBudget: gateBudget, CostRates: costRates,
+	svc := &memory.Service{BlobObjects: objects, GoogleLogin: google, SyntheticHandoff: syntheticHandoff == "1", BlobDirectory: os.Getenv("MEMORY_BLOB_DIRECTORY"), Repo: pg, Auth: auth, Embedder: embed, CandidateDailyLimit: candidateLimit, ReflectRereadDailyLimit: rereadLimit, ReflectPassages: passages, CaptureMergeSimilarity: mergeSimilarity, CaptureGateBudget: gateBudget, CostRates: costRates,
 		Reranker: reranker, RecallGraph: os.Getenv("ARKISM_RECALL_GRAPH") == "1"}
 
 	if !cfg.Recovery {
@@ -148,9 +160,25 @@ func configureDaemonProviders(svc *memory.Service, cfg daemonOptions) error {
 	if config.Configured() {
 		svc.Analyzer = &memory.ChatSkillAnalyzer{Config: config}
 		svc.Drafter = &memory.ChatSkillDrafter{Config: config}
+		// MEMORY_DREAM_MODEL: the model the dream's generative stages call on the server model's endpoint.
+		if model := os.Getenv("MEMORY_DREAM_MODEL"); model != "" {
+			svc.DreamModel = config
+			svc.DreamModel.Model = model
+		}
+		// ARKISM_REFLECT_REREAD=on: a reflect answer first has a model copy the conversation lines it needs
+		// (ARKISM_REFLECT_REREAD_MODEL names a cheaper model on the same endpoint).
+		if v := os.Getenv("ARKISM_REFLECT_REREAD"); v == "on" || v == "1" {
+			reread := config
+			if model := os.Getenv("ARKISM_REFLECT_REREAD_MODEL"); model != "" {
+				reread.Model = model
+			}
+			svc.ReflectReread = &memory.ChatWikiLLM{Config: reread}
+		}
 		if os.Getenv("ARKISM_WIKI") == "on" { // optional LLM-Wiki jobs, off by default
 			// MEMORY_FILE_VISION=1: the model reads uploaded images and scanned PDFs.
 			svc.Wiki = &memory.ChatWikiLLM{Config: config, Vision: os.Getenv("MEMORY_FILE_VISION") == "1", Batch: os.Getenv("MEMORY_EXTRACT_BATCH") == "1"}
+		} else { // a file a person uploads is still extracted; the other model features stay off
+			svc.ExtractModel = &memory.ChatWikiLLM{Config: config}
 		}
 	}
 	svc.SignalRankingOff = os.Getenv("ARKISM_RANK_SIGNAL") == "off" // recall ranking ignores judged outcomes
@@ -245,6 +273,35 @@ func envList(name string) []string {
 		}
 	}
 	return out
+}
+
+// reflectPassagesDefault is ARKISM_REFLECT_PASSAGES when unset.
+const reflectPassagesDefault = 0
+
+// rereadLimitFromEnv reads ARKISM_REFLECT_REREAD_DAILY_LIMIT; 0 (unset) keeps the default cap.
+func rereadLimitFromEnv() (int, error) {
+	raw := os.Getenv("ARKISM_REFLECT_REREAD_DAILY_LIMIT")
+	if raw == "" {
+		return 0, nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 1 || n > 100000 {
+		return 0, memory.ErrInvalid
+	}
+	return n, nil
+}
+
+// reflectPassagesFromEnv reads ARKISM_REFLECT_PASSAGES; unset keeps the default.
+func reflectPassagesFromEnv() (int, error) {
+	raw := os.Getenv("ARKISM_REFLECT_PASSAGES")
+	if raw == "" {
+		return reflectPassagesDefault, nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 || n > memory.ReflectPassagesMax {
+		return 0, memory.ErrInvalid
+	}
+	return n, nil
 }
 
 // captureGateFromEnv reads the capture merge gate's MEMORY_CAPTURE_MERGE_SIMILARITY and

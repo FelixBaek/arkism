@@ -26,8 +26,12 @@ func (p *Postgres) ListFlowDeliveries(ctx context.Context, scope Scope, connecto
 	return p.selectRecords(ctx, colJobs, scope, `kind=$6 AND doc->'delivery'->'origin'->>'connector'=$7 AND doc->'delivery'->'origin'->>'bot_id'=$8 AND status=ANY($9) AND id>$10`, []any{flowDeliveryKind, connector, botID, statuses, after}, "id ASC", limit)
 }
 
+// maxListRows is the 1000-row window plus the one probe row a caller reads to
+// learn that the window is full.
+const maxListRows = 1001
+
 func (p *Postgres) ListRecords(ctx context.Context, scope Scope, collection string, limit int) ([]Record, error) {
-	if !knownCollection(collection) || limit < 1 || limit > 1000 {
+	if !knownCollection(collection) || limit < 1 || limit > maxListRows {
 		return nil, ErrInvalid
 	}
 	return p.selectRecords(ctx, collection, scope, "", nil, "updated_at DESC, id ASC", limit)
@@ -65,6 +69,10 @@ func (p *Postgres) ListSources(ctx context.Context, in SourceListInput) ([]Recor
 	if in.OriginProduct != "" {
 		w += fmt.Sprintf(` AND doc->>'origin_product'=$%d`, len(args)+6)
 		args = append(args, in.OriginProduct)
+	}
+	if in.SourceRef != "" {
+		w += fmt.Sprintf(` AND doc->>'source_ref'=$%d`, len(args)+6)
+		args = append(args, in.SourceRef)
 	}
 	if in.CollectedFrom != nil {
 		w += fmt.Sprintf(` AND (doc->'collected_at'->>'$date')::timestamptz >= $%d`, len(args)+6)
@@ -110,6 +118,10 @@ func (p *Postgres) ListMemories(ctx context.Context, in MemoryListInput) ([]Reco
 	if in.UpdatedSince != nil {
 		w += fmt.Sprintf(` AND %s > $%d`, pgUpdated, len(args)+6)
 		args = append(args, *in.UpdatedSince)
+	}
+	if in.Tag != "" {
+		w += fmt.Sprintf(` AND doc->'tags' ? $%d`, len(args)+6)
+		args = append(args, in.Tag)
 	}
 	if !in.IncludeInactive {
 		w += ` AND status='active' AND (doc->'effective_at' IS NULL OR (doc->'effective_at'->>'$date')::timestamptz <= now()) AND (doc->'expires_at' IS NULL OR (doc->'expires_at'->>'$date')::timestamptz > now())`
@@ -607,7 +619,7 @@ func (p *Postgres) ListSkillTrialRecords(ctx context.Context, scope Scope, skill
 	return p.selectRecords(ctx, colSkillTrials, scope, `doc->>'skill_id'=$6 AND doc->'skill_trial'->'candidate'->>'id'=$7 AND id>$8`, []any{skillID, candidateID, after}, "id ASC", limit+1)
 }
 
-// memoryOutcomeWhere is the one filter for ST-812 reads; selectRecords and the
+// memoryOutcomeWhere is the one filter for outcome reads; selectRecords and the
 // aggregate below add the scope columns. Arguments start at $6.
 func memoryOutcomeWhere(in MemoryOutcomeQuery) (string, []any) {
 	w, args := memoryOutcomeFilter(in, []any{in.MemoryIDs})
@@ -734,7 +746,7 @@ SELECT CASE WHEN delivered THEN 'delivered' WHEN returned THEN 'returned_only' E
 }
 
 // MemoryUseCounts counts distinct context_usage receipts that handed out each
-// memory id; the scope columns are the only range condition for ST-813 uses.
+// memory id; the scope columns are the only range condition for memory usage reads.
 func (p *Postgres) MemoryUseCounts(ctx context.Context, s Scope, ids []string) ([]MemoryUseCount, error) {
 	if checkScope(s) != nil || len(ids) == 0 || len(ids) > memoryGraphMapNodes {
 		return nil, ErrInvalid

@@ -96,6 +96,9 @@ func (p *contextPacker) add(out *ContextBundle, hits []Hit, lane *[]Hit, reason 
 		if n > p.budget {
 			*lane = (*lane)[:len(*lane)-1]
 			noteContextDrop(out, reason)
+			if reason == "token_budget" {
+				out.budgetDropped++
+			}
 			continue
 		}
 		p.text, p.count = candidate, n

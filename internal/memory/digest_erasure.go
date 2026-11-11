@@ -29,6 +29,9 @@ func eraseMemoryFromDerived(ctx context.Context, tx Tx, scope Scope, memoryID, a
 	if err != nil {
 		return err
 	}
+	if err = eraseDreamDerived(ctx, tx, lister, scope, memoryID, actor, now); err != nil {
+		return err
+	}
 	return eraseFromMentalModels(ctx, tx, lister, scope, append(erased, memoryID), actor, now)
 }
 
@@ -187,4 +190,65 @@ func eraseCitedFromMentalModels(ctx context.Context, tx Tx, scope Scope, ref Ref
 		return ErrUnavailable
 	}
 	return eraseFromMentalModels(ctx, tx, lister, scope, []string{ref.ID}, actor, time.Now().UTC().Truncate(time.Millisecond))
+}
+
+// dreamDerivedStatuses: every status a memory a dream merged or derived, or its review entry, can hold.
+var dreamDerivedStatuses = []struct{ col, status string }{
+	{colMemories, statusActive}, {colMemories, "superseded"}, {colMemories, "expired"}, {colMemories, "rejected"},
+	{"memory_candidates", "candidate"}, {"memory_candidates", "approved"}, {"memory_candidates", "rejected"},
+}
+
+// eraseDreamDerived blanks every memory and review entry a dream merged or derived from the erased
+// memory, and in turn what it derived from those, so the erased text survives in none of them.
+func eraseDreamDerived(ctx context.Context, tx Tx, lister statusLister, scope Scope, memoryID, actor string, now time.Time) error {
+	queue, done := []string{memoryID}, map[string]bool{memoryID: true}
+	for len(queue) > 0 {
+		derived, err := dreamDerivedOf(ctx, lister, scope, queue[0])
+		if err != nil {
+			return err
+		}
+		queue = queue[1:]
+		for _, ref := range derived {
+			if err = eraseDerivedText(ctx, tx, scope, ref, actor, now); err != nil {
+				return err
+			}
+			if !done[ref.ID] {
+				done[ref.ID], queue = true, append(queue, ref.ID)
+			}
+		}
+	}
+	return nil
+}
+
+// dreamDerivedOf lists the rows that name id as one they were derived from.
+// shortcut: reads the newest 1000 rows per status, as digest erasure does; query by the field if a scope outgrows it.
+func dreamDerivedOf(ctx context.Context, lister statusLister, scope Scope, id string) ([]Ref, error) {
+	out := []Ref{}
+	for _, cs := range dreamDerivedStatuses {
+		rows, err := lister.ListRecordsByStatus(ctx, scope, cs.col, cs.status, 1000)
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			if slices.Contains(row.DreamDerivedFrom, id) {
+				out = append(out, Ref{Collection: cs.col, ID: row.ID})
+			}
+		}
+	}
+	return out, nil
+}
+
+// eraseDerivedText blanks one derived row and takes it out of use; one already erased is left alone.
+func eraseDerivedText(ctx context.Context, tx Tx, scope Scope, ref Ref, actor string, now time.Time) error {
+	cur, err := tx.Get(ctx, ref.Collection, scope, ref.ID)
+	if err != nil || cur.ContentErased && cur.Text == "" {
+		return err
+	}
+	prev := cur.Revision
+	cur.Text, cur.Summary, cur.Keywords, cur.KeywordsLower, cur.Embedding, cur.Entities, cur.EntityRelations = "", "", nil, nil, nil, nil, nil
+	cur.Status, cur.ContentErased, cur.Revision, cur.UpdatedAt = "rejected", true, prev+1, now
+	if err = tx.Replace(ctx, ref.Collection, cur, prev); err != nil {
+		return err
+	}
+	return audit(ctx, tx, scope, actor, "erase:dream_derived:"+ref.Collection, cur.ID)
 }

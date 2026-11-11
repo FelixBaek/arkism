@@ -84,7 +84,10 @@ class BaseClient:
             req = urllib.request.Request(url, data=data, headers=headers, method=method)
             try:
                 with urllib.request.urlopen(req, timeout=self.timeout) as res:
-                    return _decode(res.read())
+                    out = _decode(res.read())
+                    if res.status == 202 and isinstance(out, dict) and out.get("kind") == "deferred_call" and out.get("location"):
+                        return self._later(out["location"])
+                    return out
             except urllib.error.HTTPError as err:
                 raw = err.read()
                 err.close()
@@ -94,6 +97,17 @@ class BaseClient:
                     raise ArkismError(err.code, _decode(raw)) from None
                 wait = retry_after_seconds(after)
                 self._sleep(min(self.max_delay, wait if wait is not None else self.base_delay * 2 ** attempt))
+
+    def _later(self, location):
+        """A slow model call answered 202: read its operation until it ends, so the
+        caller gets the route's own body or its coded error."""
+        while True:
+            self._sleep(2)
+            op = self.request("GET", location)
+            if op["status"] == "done":
+                return op.get("result")
+            if op["status"] != "running":
+                raise ArkismError(500, {"code": op.get("error") or "dependency_unavailable"})
 
     def recall(self, scope, query, **options):
         """Recall: the scope's memories that answer query (POST /v1/search); options are the other search fields."""
@@ -387,7 +401,7 @@ class ArkismClient(BaseClient):
         return self.request("POST", f"/v1/skills/{urllib.parse.quote(id, safe='')}/availability", None, body)
 
     def post_v1_skills_by_id_rollback(self, id, body=None):
-        """POST /v1/skills/{id}/rollback — Select a previously approved superseded version; empty version_id disables the skill"""
+        """POST /v1/skills/{id}/rollback — Select a previously approved superseded version; empty version_id goes back to the version before the active one, or disables the skill when none can be restored"""
         return self.request("POST", f"/v1/skills/{urllib.parse.quote(id, safe='')}/rollback", None, body)
 
     def get_v1_skills(self, query=None):
@@ -489,6 +503,14 @@ class ArkismClient(BaseClient):
     def post_v1_maintenance_proposals_by_id_decide(self, id):
         """POST /v1/maintenance_proposals/{id}/decide — A person's answer to a proposal (human principals only)"""
         return self.request("POST", f"/v1/maintenance_proposals/{urllib.parse.quote(id, safe='')}/decide", None, None)
+
+    def get_v1_dream_runs(self, query=None):
+        """GET /v1/dream_runs — What dreaming did: the newest automatic consolidation runs of a scope (read:maintenance_proposals, human principals only)"""
+        return self.request("GET", f"/v1/dream_runs", query, None)
+
+    def post_v1_dream_runs_by_id_undo(self, id):
+        """POST /v1/dream_runs/{id}/undo — Undo one change of a dream run, or the whole run (human principals only)"""
+        return self.request("POST", f"/v1/dream_runs/{urllib.parse.quote(id, safe='')}/undo", None, None)
 
     def get_v1_context_pins(self, query=None):
         """GET /v1/context/pins — Resolved pins of a work agent or team (read:crew, context:read)"""

@@ -185,10 +185,14 @@ func decodeStrict(body []byte, dest any) error {
 // dependencyStatusError classifies a non success status without copying any
 // provider message into the error.
 func dependencyStatusError(operation string, status int) error {
-	if status == http.StatusTooManyRequests || status >= 500 {
-		return fmt.Errorf("%s: dependency status %d: %w", operation, status, ErrUnavailable)
+	reason := "the provider refused the request"
+	base := ErrInvalid
+	if status == http.StatusTooManyRequests {
+		reason, base = "the provider is rate limited; retry later", ErrUnavailable
+	} else if status >= 500 {
+		reason, base = "the provider failed", ErrUnavailable
 	}
-	return fmt.Errorf("%s: dependency status %d: %w", operation, status, ErrInvalid)
+	return fmt.Errorf("%s: dependency status %d: %w", operation, status, reasonError{base, fmt.Sprintf("%s: %s (status %d)", operation, reason, status)})
 }
 
 // providerClient keeps the injected transport but always blocks redirects and

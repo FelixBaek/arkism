@@ -24,3 +24,12 @@ func TestCaptureGateFromEnv(t *testing.T) {
 		t.Fatal("accepted similarity 1.5")
 	}
 }
+
+func TestPrivacyDeletionFinishesUnlessTurnedOff(t *testing.T) {
+	for value, want := range map[string]bool{"": true, "true": true, "false": false} {
+		t.Setenv("MEMORY_PRIVACY_NO_AGENT_RUNTIME", value)
+		if privacyNoAgentRuntime() != want {
+			t.Fatal(value, "want", want)
+		}
+	}
+}

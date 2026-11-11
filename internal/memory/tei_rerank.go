@@ -42,6 +42,9 @@ type TEIRerankConfig struct {
 const (
 	RerankPassages = "passages"
 	RerankRecords  = "records"
+	// teiRerankBatch is the self-hosted service's default per-request text limit; a longer
+	// list is sent in batches so a recall with a large limit is still reranked.
+	teiRerankBatch = 32
 	// rerankKeyFileMax bounds a key file read on every call.
 	rerankKeyFileMax = 16 << 10
 )
@@ -251,6 +254,23 @@ func (t *TEIReranker) Rerank(ctx context.Context, query string, texts []string) 
 	if err != nil {
 		return nil, err
 	}
+	if t.model == "" && t.protocol == "" && len(texts) > teiRerankBatch {
+		scores := make([]float64, 0, len(texts))
+		for len(texts) > 0 {
+			n := min(len(texts), teiRerankBatch)
+			part, err := t.rerankOnce(ctx, key, query, texts[:n])
+			if err != nil {
+				return nil, err
+			}
+			scores, texts = append(scores, part...), texts[n:]
+		}
+		return scores, nil
+	}
+	return t.rerankOnce(ctx, key, query, texts)
+}
+
+// rerankOnce scores one request's worth of texts.
+func (t *TEIReranker) rerankOnce(ctx context.Context, key, query string, texts []string) ([]float64, error) {
 	body, status, err := postJSON(ctx, t.client, t.endpoint, key, t.request(query, texts), defaultRequestMax, defaultResponseMax)
 	if err != nil {
 		return nil, err

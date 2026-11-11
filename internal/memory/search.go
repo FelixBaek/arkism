@@ -15,6 +15,8 @@ type SearchInput struct {
 	ConversationContext bool `json:"conversation_context,omitempty"`
 	WholeItems          bool `json:"whole_items,omitempty"`
 	BestEffortLanes     bool `json:"best_effort_lanes,omitempty"`
+	// AggregateItems lets a question asking for every instance return up to twice limit memories (recall_aggregate.go).
+	AggregateItems      bool `json:"aggregate_items,omitempty"`
 	optionalFailures    *[]string
 	conversationRecords map[Ref]Record
 	contextView         *ContextInvocationView
@@ -42,6 +44,9 @@ type SearchInput struct {
 	Explain bool `json:"explain,omitempty"`
 	// Timezone (IANA) is the calendar time words like "yesterday" resolve in; empty is Asia/Seoul.
 	Timezone string `json:"timezone,omitempty"`
+	// Locale (a BCP 47 tag such as en-GB) is the reader's locale for callers that cannot send
+	// Accept-Language; it outranks the header. An unusable value is dropped, not refused.
+	Locale string `json:"locale,omitempty"`
 	// QueryTime is the "now" time words and recency resolve against (default: the server clock),
 	// so "yesterday" can be asked as of a past moment.
 	QueryTime *time.Time `json:"query_time,omitempty"`
@@ -83,7 +88,7 @@ type SearchInput struct {
 	// client and session label the receipt (which coding agent, which of its sessions). They come
 	// from request headers, not the body, so older servers that reject unknown fields keep working.
 	client, session string
-	// locale is the request's Accept-Language, which notices follow when the space sets no memory_language.
+	// locale is the request's Locale, else its Accept-Language, which notices follow when the space sets no memory_language.
 	locale string
 	// queryVector and querySpace are the recall's embedded query, reused by the provisional lane.
 	queryVector []float64
@@ -196,10 +201,19 @@ func mergeFusionLane(merged map[string]*fusedEntry, lane int, list []Hit, weight
 		entry := merged[key]
 		if entry == nil {
 			hit.Reasons = slices.Clone(hit.Reasons)
+			hit.laneRanks = map[string]int{}
 			entry = &fusedEntry{ScoredHit: ScoredHit{Hit: hit}, key: key}
 			merged[key] = entry
 		}
 		entry.Lanes = append(entry.Lanes, lane)
+		for _, reason := range hit.Reasons {
+			if name, ok := laneByReason[reason]; ok {
+				if best := entry.laneRanks[name]; best == 0 || position+1 < best {
+					entry.laneRanks[name] = position + 1
+				}
+				break
+			}
+		}
 		if entry.VectorMatch == nil && hit.VectorMatch != nil {
 			entry.VectorMatch = hit.VectorMatch
 		}
@@ -262,6 +276,12 @@ func sortFused(rows []*fusedEntry) {
 }
 
 func (s *Service) Search(ctx context.Context, token string, in SearchInput) (ContextBundle, error) {
+	if in.Locale != "" {
+		if !localeTag.MatchString(in.Locale) {
+			return ContextBundle{}, invalidf("locale: %q is not a language tag such as \"ko\" or \"en-US\"", recallLabel(in.Locale, 64))
+		}
+		in.locale = in.Locale
+	}
 	return withOperation(s, ctx, token, OpRecall, in.Scope, in, func() (ContextBundle, error) {
 		out, _, err := s.searchWithActor(ctx, token, in)
 		if err == nil {
@@ -329,7 +349,10 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 	ctx = withLaneClock(ctx, in.Explain)
 	collection, ok := searchCollection(in.Purpose)
 	if !ok {
-		return out, Decision{}, ErrInvalid
+		return out, Decision{}, invalidf("purpose: unknown purpose %q", recallLabel(in.Purpose, 64))
+	}
+	if e := knownSearchKinds(collection, in.Kinds); e != nil {
+		return out, Decision{}, e
 	}
 	d, e := s.authorizeSearch(ctx, token, collection, &in, searchContent)
 	if e != nil {
@@ -979,6 +1002,10 @@ func (s *Service) runClaimedJob(ctx context.Context, workerToken string, job *Re
 	}
 	if job.Kind == deriveScheduleKind {
 		e = s.runDeriveSchedule(ctx, workerToken, *job)
+		return false, e == nil, e
+	}
+	if job.Kind == dreamJobKind {
+		e = s.runDream(ctx, workerToken, *job)
 		return false, e == nil, e
 	}
 	if job.Kind == approvedEntitiesJobKind {

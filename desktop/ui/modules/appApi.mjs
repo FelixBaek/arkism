@@ -51,7 +51,23 @@ export function createAppApi(deps) {
       throw error;
     }
     if (bytes) return bytes; // binary: a file (a kept original, the wiki archive) as bytes
+    if (status === 202 && body.kind === "deferred_call" && body.location) return later(body.location);
     return options.raw ? text : body; // raw: a file body (NDJSON download) the caller saves as is
+  }
+
+  // A model-backed call that outlived its request answers 202 with an operation to read: wait for it
+  // here, so callers get the same result or the same coded error as a call that answered in time.
+  async function later(location) {
+    const wait = deps.wait || ((ms) => new Promise((done) => setTimeout(done, ms)));
+    for (;;) {
+      await wait(2000);
+      const op = await request(location);
+      if (op.status === "running") continue;
+      if (op.status === "done") return op.result ?? {};
+      const error = new Error(op.error || "dependency_unavailable");
+      error.status = 500; error.code = op.error || "dependency_unavailable";
+      throw error;
+    }
   }
 
   return {

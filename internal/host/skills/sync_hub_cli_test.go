@@ -92,9 +92,9 @@ func TestSyncFrontmatterWithoutDescriptionGetsAPlainDefault(t *testing.T) {
 func TestSyncReportsAHubRefusalPerSkill(t *testing.T) {
 	w := newSyncWorld(t, "---\nname: tidy\ndescription: d\n---\nbody\n")
 	llmURL = ""
-	w.importErr = &host.HTTPError{Code: 400, Body: []byte(`{"code":"invalid_request","detail":"secret body"}`)}
+	w.importErr = &host.HTTPError{Code: 400, Body: []byte(`{"code":"invalid_request","detail":"content: 9 bytes is over the limit"}`)}
 	got := w.run(t, true)
-	if canon(t, objGet(got, "failed")) != `{"tidy":"400 invalid_request"}` {
+	if canon(t, objGet(got, "failed")) != `{"tidy":"400 invalid_request: content: 9 bytes is over the limit"}` {
 		t.Fatal(canon(t, got))
 	}
 	// A refused skill is not remembered as imported.
@@ -239,6 +239,10 @@ func TestSkillsCommandResolveAndProject(t *testing.T) {
 	t.Setenv("ARKISM_SKILL_SCOPE", "{")
 	if rc, _, errOut := skillsCLI("resolve", "code-review@1"); rc != 1 || errOut == "" {
 		t.Fatal(rc, errOut)
+	}
+	// Without a scope the hub answers a bare 400, so the usage must name the variable.
+	if _, _, errOut := skillsCLI("--help"); !strings.Contains(errOut, "ARKISM_SKILL_SCOPE") {
+		t.Error(errOut)
 	}
 	for _, args := range [][]string{nil, {"--help"}, {"nope"}, {"resolve"}} {
 		if rc, _, errOut := skillsCLI(args...); rc != 2 || errOut == "" {

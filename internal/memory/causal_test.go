@@ -62,14 +62,16 @@ func TestCausalLinkHumanCreateValidationAndRead(t *testing.T) {
 	if _, err := f.svc.LinkCausal(testCtx, f.human, in); !errors.Is(err, ErrConflict) {
 		t.Fatalf("duplicate: %v", err)
 	}
-	// A cycle is allowed; reads stay one hop.
-	if _, err := f.svc.LinkCausal(testCtx, f.human, CausalLinkInput{Scope: scopeA, CauseID: b.ID, EffectID: a.ID}); err != nil {
-		t.Fatal(err)
+	// The reverse of a standing link is refused, so two memories never cause each other.
+	if _, err := f.svc.LinkCausal(testCtx, f.human, CausalLinkInput{Scope: scopeA, CauseID: b.ID, EffectID: a.ID}); !errors.Is(err, ErrConflict) {
+		t.Fatalf("reverse link: %v", err)
 	}
-	got := lineageRelations(t, f, a.ID)
-	slices.Sort(got)
-	if !slices.Equal(got, []string{"caused_by:" + b.ID, "causes:" + b.ID}) {
+	if got := lineageRelations(t, f, a.ID); !slices.Equal(got, []string{"causes:" + b.ID}) {
 		t.Fatalf("lineage %v", got)
+	}
+	// With no status the list shows the links that stand, not only the review queue.
+	if all, err := f.svc.ListCausalLinks(testCtx, f.human, scopeA, "", "", 0); err != nil || len(all.Items) != 1 || all.Items[0].ID != link.ID {
+		t.Fatalf("default list %+v %v", all, err)
 	}
 	g, err := f.svc.MemoryGraph(testCtx, f.human, MemoryGraphQuery{Scope: scopeA, MemoryID: a.ID, Depth: 1})
 	if err != nil || !slices.ContainsFunc(g.Edges, func(e MemoryGraphEdge) bool { return e.Type == GraphCauses && e.From == a.ID && e.To == b.ID }) {
@@ -82,7 +84,7 @@ func TestCausalLinkHumanCreateValidationAndRead(t *testing.T) {
 	if _, err := f.svc.ReviewCausalLink(testCtx, f.human, link.ID, CausalReviewInput{Scope: scopeA, ExpectedRevision: link.Revision, Action: "reject"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := lineageRelations(t, f, a.ID); !slices.Equal(got, []string{"caused_by:" + b.ID}) {
+	if got := lineageRelations(t, f, a.ID); len(got) != 0 {
 		t.Fatalf("after reject %v", got)
 	}
 	if again, err := f.svc.LinkCausal(testCtx, f.human, in); err != nil || again.Status != statusActive || again.Revision != link.Revision+2 {
@@ -177,18 +179,16 @@ func TestCausalNeighborsAreOneHopAndBounded(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// A second hop and a cycle back to the hub are never followed.
+	// A second hop is never followed.
 	far := f.activeMemory("two hops away")
-	for _, l := range []CausalLinkInput{{Scope: scopeA, CauseID: effects[0], EffectID: far.ID}, {Scope: scopeA, CauseID: effects[1], EffectID: hub.ID}} {
-		if _, err := f.svc.LinkCausal(testCtx, f.human, l); err != nil {
-			t.Fatal(err)
-		}
+	if _, err := f.svc.LinkCausal(testCtx, f.human, CausalLinkInput{Scope: scopeA, CauseID: effects[0], EffectID: far.ID}); err != nil {
+		t.Fatal(err)
 	}
 	ids, err := f.svc.causalNeighbors(testCtx, scopeA, []string{hub.ID}, 5)
 	if err != nil || len(ids) != 5 || slices.Contains(ids, hub.ID) || slices.Contains(ids, far.ID) {
 		t.Fatalf("%v %v", ids, err)
 	}
-	if got := lineageRelations(t, f, hub.ID); len(got) != 9 {
+	if got := lineageRelations(t, f, hub.ID); len(got) != 8 {
 		t.Fatalf("hub lineage %v", got)
 	}
 }

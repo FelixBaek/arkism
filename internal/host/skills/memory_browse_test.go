@@ -154,16 +154,16 @@ func TestRecallPassesExplainAndTimezoneWithServerLanes(t *testing.T) {
 	t.Setenv("ARKISM_REPO", "")
 	hit := `{"id":"m1","kind":"decision","status":"active","text":"어제 결정","sources":[{"source_id":"s"}],"score":0.04,"lanes":["keyword","temporal"],"explain":{"lane_ranks":{"temporal":1}}}`
 	calls := fakeRequest(t, `{"items":[`+hit+`],"explain":{"lanes":["exact","keyword","vector","temporal"],"time_window":{"phrase":"어제"}}}`)
-	out := structured(t, call(t, "recall", `{"query":"어제 뭘 정했지","explain":true,"expand_causal":true,"timezone":"Asia/Seoul"}`))
+	out := structured(t, call(t, "recall", `{"query":"어제 뭘 정했지","explain":true,"expand_causal":true,"timezone":"Asia/Seoul","locale":"en-GB"}`))
 	payload := asMap((*calls)[0].payload)
-	if _, hasModes := payload["modes"]; hasModes || payload["explain"] != true || payload["expand_causal"] != true || payload["timezone"] != "Asia/Seoul" {
+	if _, hasModes := payload["modes"]; hasModes || payload["explain"] != true || payload["expand_causal"] != true || payload["timezone"] != "Asia/Seoul" || payload["locale"] != "en-GB" {
 		t.Fatal(payload)
 	}
 	if asMap(field(out, "explain"))["time_window"] == nil || !strings.Contains(canon(t, field(out, "memories")), `"explain":{"lane_ranks":{"temporal":1}}`) {
 		t.Fatal(out)
 	}
 	*calls = nil
-	for _, bad := range []string{`{"query":"q","explain":"yes"}`, `{"query":"q","expand_causal":1}`, `{"query":"q","timezone":3}`, `{"query":"q","timezone":"Asia/Seoul?x=1"}`, `{"query":"q","timezone":"` + strings.Repeat("a", 65) + `"}`} {
+	for _, bad := range []string{`{"query":"q","explain":"yes"}`, `{"query":"q","expand_causal":1}`, `{"query":"q","timezone":3}`, `{"query":"q","locale":"en GB"}`, `{"query":"q","timezone":"Asia/Seoul?x=1"}`, `{"query":"q","timezone":"` + strings.Repeat("a", 65) + `"}`} {
 		if _, err := callTool("recall", j(t, bad)); err == nil {
 			t.Fatal(bad)
 		}

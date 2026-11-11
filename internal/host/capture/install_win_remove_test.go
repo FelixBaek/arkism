@@ -70,3 +70,15 @@ func TestInstUninstallUndoesTheInstallAndKeepsEverythingElse(t *testing.T) {
 		t.Fatal(again, err)
 	}
 }
+
+// Asking for help must not connect or disconnect anything.
+func TestInstallCommandsStopOnUnknownArguments(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // a regression must not reach the real settings
+	var out, errs strings.Builder
+	if instMain([]string{"--help"}, nil, &out, &errs) != 2 || uninstMain([]string{"--help"}, nil, &out, &errs) != 2 {
+		t.Fatal("unknown argument ran the command")
+	}
+	if out.Len() != 0 || strings.Count(errs.String(), "usage: arkism ") != 2 {
+		t.Fatal(out.String(), errs.String())
+	}
+}

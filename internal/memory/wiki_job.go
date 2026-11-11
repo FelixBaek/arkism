@@ -384,12 +384,17 @@ func (s *Service) budgetedCall(job *WikiJob, estimate int64, call func() (string
 // modelCall makes one call to the configured server model (Service.Wiki) and files it in
 // the provider_usage ledger; the operation's daily cap (operationCap) is reserved first.
 func (s *Service) modelCall(ctx context.Context, scope Scope, operation, system, user string, maxTokens int) (string, ProviderUsage, error) {
-	if s.Wiki == nil {
+	return s.modelCallWith(ctx, s.Wiki, scope, operation, system, user, maxTokens)
+}
+
+// modelCallWith is modelCall on a given model (the dream has its own, dream_model.go).
+func (s *Service) modelCallWith(ctx context.Context, llm WikiLLM, scope Scope, operation, system, user string, maxTokens int) (string, ProviderUsage, error) {
+	if llm == nil {
 		return "", ProviderUsage{}, ErrModelNotConfigured
 	}
-	return s.ledgerCall(ctx, modelCallSpec{scope: scope, operation: operation, kind: "complete", provider: wikiProvider, model: s.Wiki.Generator().Model, prompt: system + "\n\n" + user},
+	return s.ledgerCall(ctx, modelCallSpec{scope: scope, operation: operation, kind: "complete", provider: wikiProvider, model: llm.Generator().Model, prompt: system + "\n\n" + user},
 		func(ctx context.Context) (string, ProviderUsage, error) {
-			return s.Wiki.Complete(ctx, system, user, maxTokens)
+			return llm.Complete(ctx, system, user, maxTokens)
 		})
 }
 

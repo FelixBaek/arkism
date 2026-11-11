@@ -366,7 +366,7 @@ func conceptsFound(terms []string, h Hit) (found, concepts int) {
 	seen := map[string]bool{}
 	for _, t := range terms {
 		// Any spelling of the concept counts, as in the keyword lane's tsquery.
-		if slices.ContainsFunc(searchConceptWords(t), func(w string) bool { return slices.Contains(have, w) }) {
+		if termInTokens(t, func(w string) bool { return slices.Contains(have, w) }) {
 			seen[searchQueryConcepts([]string{t})[0]] = true
 		}
 	}
@@ -593,7 +593,10 @@ func recordReviewOutcome(ctx context.Context, tx Tx, id, principal string, revie
 	if err := recordMemoryReview(ctx, tx, id, principal, *review, result); err != nil {
 		return err
 	}
-	return closeCorrectedFact(ctx, tx, review, result, autoClose, principal)
+	if err := closeCorrectedFact(ctx, tx, review, result, autoClose, principal); err != nil || review.inTx == nil {
+		return err
+	}
+	return review.inTx(ctx, tx, result)
 }
 
 // autoCloseOn reads the space switch before a review that resolves a conflict keeping both.

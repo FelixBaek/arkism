@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -244,6 +245,30 @@ func DoJSON(client *http.Client, req *http.Request) (map[string]any, error) {
 	return obj, nil
 }
 
+// aggregateOptInTaken is set once the server answers a request that carried aggregate_items: it
+// knows the field, so a later 400 is a bad request and is not sent twice.
+var aggregateOptInTaken atomic.Bool
+
+// ForgetAggregateOptIn clears what this process learned about the server (tests, a changed server).
+func ForgetAggregateOptIn() { aggregateOptInTaken.Store(false) }
+
+// DropAggregateOptIn reports whether err is an older server rejecting the unknown aggregate_items
+// opt-in, and removes it from body so the caller asks once more without it. Such a server answers
+// every bad request with the same 400, so the only proof is that it never accepted the field.
+func DropAggregateOptIn(body map[string]any, err error) bool {
+	if body["aggregate_items"] == nil {
+		return false
+	}
+	if err == nil {
+		aggregateOptInTaken.Store(true)
+	}
+	if HTTPCode(err) != 400 || aggregateOptInTaken.Load() {
+		return false
+	}
+	delete(body, "aggregate_items")
+	return true
+}
+
 // Search recalls memories for query; on an embedder outage it keeps lexical recall
 // within the same time budget instead of returning nothing.
 func Search(query string, limit int, timeout time.Duration) ([]any, error) {
@@ -257,8 +282,11 @@ func SearchTo(query string, limit int, timeout time.Duration, destination string
 		query = string(r[:1000])
 	}
 	body := map[string]any{"scope": Scope(), "query": query, "modes": []any{"exact", "fts", "vector"}, "purpose": "answer",
-		"destination": destination, "limit": limit, "max_chars": 6000}
+		"destination": destination, "limit": limit, "max_chars": 6000, "aggregate_items": true}
 	res, err := Post("/v1/search", body, timeout)
+	if DropAggregateOptIn(body, err) && time.Until(deadline) > 0 {
+		res, err = Post("/v1/search", body, time.Until(deadline))
+	}
 	if err != nil {
 		if HTTPCode(err) != 503 || time.Until(deadline) <= 0 {
 			return nil, err

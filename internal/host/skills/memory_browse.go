@@ -194,7 +194,7 @@ func reflectGuidanceArgs(args map[string]any, payload map[string]any) error {
 	return nil
 }
 
-// reflectOptionArgs copies budget, fact_types and the mental-model and directive switches; the server checks them in full.
+// reflectOptionArgs copies budget, about, created_by, fact_types and the mental-model and directive switches; the server checks them in full.
 func reflectOptionArgs(args map[string]any, payload map[string]any) error {
 	if v, has := args["budget"]; has && v != nil {
 		b, ok := v.(string)
@@ -203,7 +203,14 @@ func reflectOptionArgs(args map[string]any, payload map[string]any) error {
 		}
 		payload["budget"] = b
 	}
-	for key, max := range map[string]int{"fact_types": 2, "exclude_mental_model_ids": 20} {
+	if v, has := args["about"]; has && v != nil {
+		about, ok := v.(string)
+		if !ok || host.Len(about) > 256 {
+			return errors.New("about must be a string of at most 256 characters")
+		}
+		payload["about"] = about
+	}
+	for key, max := range map[string]int{"fact_types": 2, "exclude_mental_model_ids": 20, "created_by": 16} {
 		if v, has := args[key]; has && v != nil {
 			list, ok := v.([]any)
 			if !ok || len(list) > max || slices.ContainsFunc(list, func(x any) bool { s, isStr := x.(string); return !isStr || s == "" || host.Len(s) > 256 }) {

@@ -40,6 +40,11 @@ var (
 	entityQuoted      = regexp.MustCompile(`["“「『]([^"”」』\n]{2,60})["”」』]`)
 	entityCapitalized = regexp.MustCompile(`[A-Z][A-Za-z0-9]*(?:[ -][A-Z][A-Za-z0-9]*){0,3}`)
 	entityKoreanTitle = regexp.MustCompile(`([가-힣]{2,4}) ?(?:선생님|교수님|대표님|팀장님|과장님|부장님|님|씨)`)
+	// A bare Korean name counts only where the sentence shows a person acting, owning or being asked.
+	// shortcut: three-syllable names behind a common surname and a short predicate list; the model pass covers the rest.
+	entityKoreanActor = regexp.MustCompile(`(?:^|[.!?\n,] *)([가-힣]{3})[는은이가] [^.!?\n]*?(?:담당이|담당자|보고했|요청했|제안했|승인했|말했|합류했)`)
+	entityKoreanOwner = regexp.MustCompile(`([가-힣]{3})의 (?:보고|요청|제안|의견|승인|검토|지시|담당)`)
+	entityKoreanAsked = regexp.MustCompile(`(?i)\b(?:from|by|with|ask|cc) ([가-힣]{3})(?:[^가-힣]|$)`)
 	entityHexLike     = regexp.MustCompile(`^[0-9a-fA-F]{7,}$`)
 	entityFileExt     = regexp.MustCompile(`[\w-]{2,}\.[A-Za-z][A-Za-z0-9]{0,5}$`)
 )
@@ -50,7 +55,12 @@ var entityStopWords = map[string]bool{"The": true, "A": true, "An": true, "This"
 	"And": true, "But": true, "Or": true, "So": true, "For": true, "In": true, "On": true, "At": true, "To": true, "Of": true,
 	"With": true, "By": true, "From": true, "As": true, "Is": true, "Are": true, "Was": true, "Use": true, "Do": true, "Not": true,
 	"No": true, "Yes": true, "All": true, "Any": true, "Each": true, "After": true, "Before": true, "Also": true, "Only": true,
-	"Always": true, "Never": true, "Note": true, "Why": true, "What": true, "How": true, "OK": true, "TODO": true}
+	"Always": true, "Never": true, "Note": true, "Why": true, "What": true, "How": true, "OK": true, "TODO": true,
+	"Monday": true, "Tuesday": true, "Wednesday": true, "Thursday": true, "Friday": true, "Saturday": true, "Sunday": true,
+	"January": true, "February": true, "March": true, "April": true, "June": true, "July": true, "August": true,
+	"September": true, "October": true, "November": true, "December": true}
+
+const entityKoreanSurnames = "김이박최정강조윤장임한오서신권황안송류전홍고문양손배백허유남심노하곽성차주우구민진지엄채원천방공현함변염여추도소석선설마길연위표명기반라왕금옥육인맹제모탁국어은편용"
 
 var entityRepoStop = map[string]bool{"and/or": true, "read/write": true, "input/output": true, "on/off": true, "yes/no": true,
 	"true/false": true, "client/server": true, "i/o": true}
@@ -115,12 +125,20 @@ func extractEntityCandidates(text string) []entityCandidate {
 			add(m[1], "person", false)
 		}
 	}
+	for _, re := range []*regexp.Regexp{entityKoreanActor, entityKoreanOwner, entityKoreanAsked} {
+		for _, m := range re.FindAllStringSubmatch(text, -1) {
+			if first, _ := utf8.DecodeRuneInString(m[1]); strings.ContainsRune(entityKoreanSurnames, first) && !entityCommonPeople[m[1]] {
+				add(m[1], "person", false)
+			}
+		}
+	}
 	for _, raw := range strings.Fields(text) {
 		if word := koreanOrganization(raw); word != "" {
 			add(word, "organization", false)
 		}
-		// Identifiers, paths and file names: the same rule the keyword index uses.
-		if kw := keywordFromToken(raw); len(kw) >= 4 && !strings.ContainsAny(kw, "'’") && !strings.ContainsFunc(kw, isHangul) && !entityRepoStop[strings.ToLower(kw)] {
+		// Identifiers, paths and file names: the same rule the keyword index uses. A word cut out of
+		// a call's argument list ("invoices(customer_id," then "created_at)") is no name.
+		if kw := keywordFromToken(raw); strings.Count(raw, "(") == strings.Count(raw, ")") && len(kw) >= 4 && !strings.ContainsAny(kw, "'’") && !strings.ContainsFunc(kw, isHangul) && !entityRepoStop[strings.ToLower(kw)] {
 			add(kw, codeEntityType(kw), false)
 		}
 	}

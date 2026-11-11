@@ -73,6 +73,14 @@ func NewPostgres(ctx context.Context, dsn string) (*Postgres, error) {
 }
 func (p *Postgres) SetRecoveryMode(enabled bool) { p.erasureOnly = enabled }
 
+// DefaultVectorMaxDistance is the daemon's vector-lane cutoff when MEMORY_VECTOR_MAX_DISTANCE is
+// unset. Measured on 72 mixed Korean/English memories with the documented local embedder and query
+// prefix: the right memory for 15 reworded questions sat at cosine distance 0.29-0.495, the nearest
+// memory for 11 unrelated questions at 0.508-0.655. Without a cutoff an unrelated question still
+// returned its nearest neighbours and no hit carried the VectorMatch evidence hosts rely on.
+// shortcut: one value for every embedding space, re-measure and set the variable for another embedder.
+const DefaultVectorMaxDistance = 0.5
+
 // SetVectorMaxDistance sets the cosine distance above which a vector-only match is not
 // returned. The value belongs to one embedding space (measured per model); 0 disables it.
 func (p *Postgres) SetVectorMaxDistance(d float64) { p.vectorMaxDistance = d }
@@ -634,7 +642,7 @@ func (p *Postgres) ClaimJob(ctx context.Context, now time.Time, lease time.Durat
 				claimErr = err
 			}
 		}()
-		kinds := append([]string{"embedding", webhookDeliveryKind, autoDeriveJobKind, deriveScheduleKind, captureMergeGateKind, approvedEntitiesJobKind}, erasureJobKinds...)
+		kinds := append([]string{"embedding", webhookDeliveryKind, autoDeriveJobKind, deriveScheduleKind, captureMergeGateKind, approvedEntitiesJobKind, dreamJobKind}, erasureJobKinds...)
 		if pp.erasureOnly {
 			kinds = erasureJobKinds
 		}

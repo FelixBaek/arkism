@@ -272,7 +272,16 @@ export class ArkismClient {
       // not JSON: keep the text
     }
     if (!res.ok) throw new ArkismError(res.status, parsed);
-    return parsed as T;
+    const later = parsed as { kind?: string; location?: string } | undefined;
+    if (res.status !== 202 || later?.kind !== "deferred_call" || !later.location) return parsed as T;
+    // A slow model call answered 202: read its operation until it ends, so the caller gets the route's own body.
+    const [opPath, opQuery] = later.location.split("?");
+    for (;;) {
+      await sleep(2000);
+      const op = await this.request<{ status: string; result?: T; error?: string }>("GET", opPath, Object.fromEntries(new URLSearchParams(opQuery)));
+      if (op.status === "done") return op.result as T;
+      if (op.status !== "running") throw new ArkismError(500, { code: op.error ?? "dependency_unavailable" });
+    }
   }
 
   /** Recall: the scope's memories that answer query (POST /v1/search); options are the other SearchInput fields. */
@@ -406,7 +415,10 @@ class BaseClient:
             req = urllib.request.Request(url, data=data, headers=headers, method=method)
             try:
                 with urllib.request.urlopen(req, timeout=self.timeout) as res:
-                    return _decode(res.read())
+                    out = _decode(res.read())
+                    if res.status == 202 and isinstance(out, dict) and out.get("kind") == "deferred_call" and out.get("location"):
+                        return self._later(out["location"])
+                    return out
             except urllib.error.HTTPError as err:
                 raw = err.read()
                 err.close()
@@ -416,6 +428,17 @@ class BaseClient:
                     raise ArkismError(err.code, _decode(raw)) from None
                 wait = retry_after_seconds(after)
                 self._sleep(min(self.max_delay, wait if wait is not None else self.base_delay * 2 ** attempt))
+
+    def _later(self, location):
+        """A slow model call answered 202: read its operation until it ends, so the
+        caller gets the route's own body or its coded error."""
+        while True:
+            self._sleep(2)
+            op = self.request("GET", location)
+            if op["status"] == "done":
+                return op.get("result")
+            if op["status"] != "running":
+                raise ArkismError(500, {"code": op.get("error") or "dependency_unavailable"})
 
     def recall(self, scope, query, **options):
         """Recall: the scope's memories that answer query (POST /v1/search); options are the other search fields."""

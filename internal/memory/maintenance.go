@@ -20,8 +20,8 @@ import (
 // Each pair of memories has one proposal record, whose id comes from the pair,
 // so "asked before?" is a single read in the same transaction as the write.
 //
-// ST-814: a signal proposal names one memory whose stored trust signal
-// (ST-813) shows it often fails: a rule often broken or a lesson that often
+// a signal proposal names one memory whose stored trust signal
+// shows it often fails: a rule often broken or a lesson that often
 // fails. It carries the signal's counts as the AI's evidence. Deciding it never
 // changes the memory; a person who agrees fixes or retires it the usual way.
 //
@@ -50,7 +50,7 @@ type MaintenanceProposal struct {
 	Type   string `json:"type"`
 	Keep   Ref    `json:"keep"`
 	Retire Ref    `json:"retire"`
-	// Memory and Evidence are set only on a signal proposal (ST-814).
+	// Memory and Evidence are set only on a signal proposal.
 	Memory   *Ref                 `json:"memory,omitempty"`
 	Evidence *MaintenanceEvidence `json:"evidence,omitempty"`
 	// Change is set only on a change proposal (maintenance_change.go).
@@ -261,6 +261,9 @@ func (s *Service) ProposeMaintenance(ctx context.Context, token string, in Maint
 		}
 		return audit(ctx, tx, in.Scope, d.PrincipalID, "create:"+colMaintenance, out.ID)
 	})
+	if err == nil && !out.Duplicate {
+		s.noteDreamActivity(ctx, in.Scope)
+	}
 	return out, err
 }
 
@@ -353,7 +356,7 @@ func (s *Service) DecideMaintenance(ctx context.Context, token, id string, in Ma
 		}
 		mark = &m
 	}
-	out, err := s.decideTx(ctx, in.Scope, seen, mark, forget, removal, status, in.Decision, d.PrincipalID)
+	out, err := s.decideTx(ctx, in.Scope, seen, mark, forget, removal, status, in.Decision, d.PrincipalID, roleHuman)
 	if errors.Is(err, errMemoryChanged) {
 		if _, e := s.closeMaintenance(ctx, in.Scope, seen, maintenanceStale, "", d.PrincipalID); e != nil && !errors.Is(e, ErrConflict) {
 			return Record{}, e
@@ -414,31 +417,36 @@ func forgetRefs(p MaintenanceProposal, decision string) []Ref {
 }
 
 // decideTx changes the memories (when mark is set) and closes the proposal in one transaction.
-func (s *Service) decideTx(ctx context.Context, scope Scope, seen Record, mark *ConflictInput, forget []Ref, removal *Removal, status, decision, principal string) (Record, error) {
+func (s *Service) decideTx(ctx context.Context, scope Scope, seen Record, mark *ConflictInput, forget []Ref, removal *Removal, status, decision, principal, role string) (Record, error) {
 	var out Record
 	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		if forget != nil {
-			for _, ref := range forget {
-				if err := forgetMemoryTx(ctx, tx, scope, ref, *removal, principal); err != nil {
-					return err
-				}
-			}
-		} else if err := changeMemories(ctx, tx, scope, seen, mark, principal); err != nil {
-			return err
-		}
 		var err error
-		out, err = closeMaintenanceTx(ctx, tx, scope, seen, status, decision, principal)
+		out, err = decideInTx(ctx, tx, scope, seen, mark, forget, removal, status, decision, principal, role)
 		return err
 	})
 	return out, err
 }
 
+// decideInTx is decideTx in the caller's transaction (the dream reads the revisions it left there).
+func decideInTx(ctx context.Context, tx Tx, scope Scope, seen Record, mark *ConflictInput, forget []Ref, removal *Removal, status, decision, principal, role string) (Record, error) {
+	if forget != nil {
+		for _, ref := range forget {
+			if err := forgetMemoryTx(ctx, tx, scope, ref, *removal, principal); err != nil {
+				return Record{}, err
+			}
+		}
+	} else if err := changeMemories(ctx, tx, scope, seen, mark, principal, role); err != nil {
+		return Record{}, err
+	}
+	return closeMaintenanceTx(ctx, tx, scope, seen, status, decision, principal)
+}
+
 // changeMemories supersedes one memory (mark set) or, for dismiss, only checks
 // that both are still as proposed: keeping two changed memories as two would
 // silence a pair nobody has looked at.
-func changeMemories(ctx context.Context, tx Tx, scope Scope, seen Record, mark *ConflictInput, principal string) error {
+func changeMemories(ctx context.Context, tx Tx, scope Scope, seen Record, mark *ConflictInput, principal, role string) error {
 	if mark != nil {
-		return supersedeInTx(ctx, tx, *mark, principal)
+		return supersedeInTx(ctx, tx, *mark, principal, role)
 	}
 	err := checkProposalMemories(ctx, tx, MaintenanceInput{Scope: scope, Proposal: *seen.Maintenance})
 	if errors.Is(err, ErrConflict) || errors.Is(err, ErrNotFound) {
@@ -481,18 +489,18 @@ func supersedeInput(scope Scope, r Record, decision string) ConflictInput {
 
 // supersedeInTx marks the pair as a conflict and resolves it with mark.Resolution
 // (the second superseding the first, or both rejected), in the caller's transaction: the conflict path's own
-// history and audit, with no moment where both memories sit conflicted.
-func supersedeInTx(ctx context.Context, tx Tx, mark ConflictInput, principal string) error {
+// history and audit, with no moment where both memories sit conflicted. role is who decided (a person, or the dream).
+func supersedeInTx(ctx context.Context, tx Tx, mark ConflictInput, principal, role string) error {
 	resolution := mark.Resolution
 	if resolution == "" {
 		resolution = "second_supersedes_first"
 	}
 	mark.Resolution = ""
-	marked, err := applyConflict(ctx, tx, mark, principal, -1)
+	marked, err := applyConflictAs(ctx, tx, mark, principal, role, -1)
 	if err == nil {
 		resolve := ConflictInput{Scope: mark.Scope, Memories: marked.Relation.Relations, Action: "resolve", Reason: mark.Reason,
 			ConflictID: marked.Relation.ID, ExpectedRevision: marked.Relation.Revision, Resolution: resolution}
-		_, err = applyConflict(ctx, tx, resolve, principal, resolutionWinner[resolution])
+		_, err = applyConflictAs(ctx, tx, resolve, principal, role, resolutionWinner[resolution])
 	}
 	if errors.Is(err, ErrConflict) || errors.Is(err, ErrNotFound) {
 		return errors.Join(errMemoryChanged, err)

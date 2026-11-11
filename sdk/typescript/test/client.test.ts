@@ -116,3 +116,13 @@ test("generated methods build paths and queries", async () => {
   await client.getV1Memories({ workspace_id: "w s", project_id: "p", limit: 2 });
   assert.equal(calls[0].url, "http://x/v1/memories?workspace_id=w+s&project_id=p&limit=2");
 });
+
+test("a deferred call (202) is followed to its operation result", async () => {
+  const { calls, fetchFn } = fake([{ status: 202, body: { kind: "deferred_call", location: "/v1/operations/d1?workspace_id=w" } }, { status: 200, body: { status: "running" } }, { status: 200, body: { status: "done", result: { ok: 1 } } }]);
+  const client = new ArkismClient({ baseUrl: "http://x", fetch: fetchFn, retry: { sleep: async () => {} } });
+  assert.deepEqual(await client.request("POST", "/v1/skills/generate", undefined, {}), { ok: 1 });
+  assert.equal(calls[2].url, "http://x/v1/operations/d1?workspace_id=w");
+  const failed = fake([{ status: 202, body: { kind: "deferred_call", location: "/v1/operations/d2" } }, { status: 200, body: { status: "failed", error: "dependency_unavailable" } }]);
+  const other = new ArkismClient({ baseUrl: "http://x", fetch: failed.fetchFn, retry: { sleep: async () => {} } });
+  await assert.rejects(other.request("POST", "/v1/skills/generate", undefined, {}), (e: ArkismError) => e.status === 500 && (e.body as { code: string }).code === "dependency_unavailable");
+});

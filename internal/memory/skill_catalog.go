@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 )
 
 const importedSkillBaselineKind = "imported_skill_baseline"
@@ -50,6 +51,8 @@ type SkillListItem struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 	// Which agent runtimes can use this version (supported | requires_adapter | ...); absent until analysed.
 	SkillCompatibility map[string]string `json:"skill_compatibility,omitempty"`
+	// ContentChars is the length of the body load_skill would return, so a host can leave out one over its load budget.
+	ContentChars int `json:"content_chars,omitempty"`
 }
 
 type SkillPage struct {
@@ -234,15 +237,20 @@ func (s *Service) ListSkills(ctx context.Context, token string, scope Scope, lim
 				out.Withheld = append(out.Withheld, skill.ID)
 				continue
 			}
-			sourceID := ""
+			sourceID, chars := "", 0
 			if len(version.Sources) > 0 {
 				sourceID = version.Sources[0].SourceID
+				source, err := tx.Get(ctx, "sources", scope, sourceID)
+				if err != nil && !errors.Is(err, ErrNotFound) {
+					return err
+				}
+				chars = utf8.RuneCountInString(source.Text)
 			}
 			out.Items = append(out.Items, SkillListItem{
 				ID: skill.ID, VersionID: version.ID, Version: version.Analysis.Version,
 				Name: version.Analysis.Name, Description: version.Analysis.Description,
 				SourceID: sourceID, SourcePath: version.Analysis.SourcePath, UpdatedAt: version.UpdatedAt,
-				SkillCompatibility: listedCompatibility(version, skill),
+				SkillCompatibility: listedCompatibility(version, skill), ContentChars: chars,
 			})
 		}
 		return nil
@@ -266,8 +274,39 @@ func (s *Service) ImportSkill(ctx context.Context, token string, in ImportSkillI
 	return s.importSkill(ctx, token, in, nil)
 }
 
+// Size limits of an imported skill: its SKILL.md, one bundled file, and the bundle's files together.
+const (
+	maxSkillContentBytes = 64000
+	maxSkillFileBytes    = 200000
+	maxSkillBundleBytes  = 1 << 20
+)
+
+// skillSizeReason says which size limit an import is over, so the caller is not left with a bare invalid_request.
+func skillSizeReason(in ImportSkillInput) error {
+	if len(in.Content) > maxSkillContentBytes {
+		return invalidf("content: SKILL.md is %d bytes, larger than the %d byte limit", len(in.Content), maxSkillContentBytes)
+	}
+	if in.Bundle == nil {
+		return nil
+	}
+	if len(in.Bundle.Files) > maxSkillBundleEntries {
+		return invalidf("bundle.files: %d files, more than the %d file limit", len(in.Bundle.Files), maxSkillBundleEntries)
+	}
+	total := 0
+	for _, f := range in.Bundle.Files {
+		if len(f.Content) > maxSkillFileBytes {
+			return invalidf("bundle.files: one file is %d bytes, larger than the %d byte limit", len(f.Content), maxSkillFileBytes)
+		}
+		total += len(f.Content)
+	}
+	if total > maxSkillBundleBytes {
+		return invalidf("bundle.files: %d bytes in all, larger than the %d byte limit", total, maxSkillBundleBytes)
+	}
+	return nil
+}
+
 func invalidImportSkillInput(in ImportSkillInput) bool {
-	return !validSkillBundle(in.Bundle) || !validComparisonPlan(in.ComparisonPlan) || !validScope(in.Scope) || !validRunLabel(in.SkillID, 256) || in.Path == "" || len(in.Path) > 4096 || strings.TrimSpace(in.Path) != in.Path || strings.IndexFunc(in.Path, unicode.IsControl) >= 0 || !strings.HasSuffix(in.Path, "SKILL.md") || strings.TrimSpace(in.Content) == "" || len(in.Content) > 64000 || in.Analysis == nil || !validSkillOrigin(in.Origin) || !validSkillCompatibility(in.Compatibility)
+	return !validSkillBundle(in.Bundle) || !validComparisonPlan(in.ComparisonPlan) || !validScope(in.Scope) || !validRunLabel(in.SkillID, 256) || in.Path == "" || len(in.Path) > 4096 || strings.TrimSpace(in.Path) != in.Path || strings.IndexFunc(in.Path, unicode.IsControl) >= 0 || !strings.HasSuffix(in.Path, "SKILL.md") || strings.TrimSpace(in.Content) == "" || len(in.Content) > maxSkillContentBytes || in.Analysis == nil || !validSkillOrigin(in.Origin) || !validSkillCompatibility(in.Compatibility)
 }
 
 // Snapshot caller-owned slices; secrets are withheld (hash only), never redacted in place.
@@ -400,6 +439,9 @@ func applyProposalEvidence(source, version *Record, skillID string, proposal *Pr
 
 func (s *Service) importSkill(ctx context.Context, token string, in ImportSkillInput, proposal *ProposeSkillInput) (ImportSkillResult, error) {
 	var out ImportSkillResult
+	if err := skillSizeReason(in); err != nil {
+		return out, err
+	}
 	if invalidImportSkillInput(in) {
 		return out, ErrInvalid
 	}

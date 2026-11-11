@@ -68,12 +68,12 @@ func exerciseSearchFilters(t *testing.T, repo Repository) {
 			c     SearchCriteria
 			found bool
 		}{
-			{"kind", SearchCriteria{Kinds: []string{"decision", "unknown"}}, true},
+			{"kind", SearchCriteria{Kinds: []string{"decision", "lesson"}}, true},
 			{"tag", SearchCriteria{Filters: &SearchFilters{Tags: []string{"입시", "missing"}}}, true},
 			{"created", SearchCriteria{Filters: &SearchFilters{CreatedFrom: &start, CreatedTo: &end}}, true},
 			{"updated", SearchCriteria{Filters: &SearchFilters{UpdatedFrom: &start, UpdatedTo: &end}}, true},
 			{"combined", SearchCriteria{Kinds: []string{"decision"}, Filters: &SearchFilters{Tags: []string{"Qwen"}, CreatedFrom: &start, CreatedTo: &end, UpdatedFrom: &start, UpdatedTo: &end}}, true},
-			{"unknown kind", SearchCriteria{Kinds: []string{"unrecognized"}}, false},
+			{"other kind", SearchCriteria{Kinds: []string{"lesson"}}, false},
 			{"case", SearchCriteria{Filters: &SearchFilters{Tags: []string{"qwen"}}}, false},
 			{"exclusive end", SearchCriteria{Kinds: []string{"decision"}, Filters: &SearchFilters{CreatedTo: &start}}, false},
 			{"author", SearchCriteria{Filters: &SearchFilters{CreatedBy: []string{"owner", "someone-else"}}}, true},

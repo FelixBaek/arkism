@@ -42,6 +42,10 @@ func TestSearchTokensQuerySideMatchesDocumentSide(t *testing.T) {
 	if got := searchQueryTerms("서버 서버를 서버에서"); !slices.Equal(got, []string{"서버"}) {
 		t.Fatalf("query terms not distinct: %q", got)
 	}
+	// A rarer particle or a request ending adds the stem beside the word, as one concept.
+	if got := searchQueryTerms("김철수랑 다온물류라는 회의록을 정리해"); !slices.Equal(got, []string{"김철수랑", "다온물류라", "회의록", "정리해", "김철수", "다온물류", "정리"}) || len(searchQueryConcepts(got)) != 4 {
+		t.Fatalf("query stems: %q", got)
+	}
 }
 
 func TestSearchQueryScaffoldingRetainsActualConditions(t *testing.T) {
@@ -166,5 +170,35 @@ func TestPostgresSearchKoreanParticlesIntegration(t *testing.T) {
 	}
 	if hits := fts("로그"); len(hits) != 1 || hits[0].ID != ko.ID {
 		t.Fatalf("replaced text hits=%v", hits)
+	}
+}
+
+func TestQueryOffersNumberFormsAndCompoundSplits(t *testing.T) {
+	has := func(tokens ...string) func(string) bool {
+		return func(w string) bool { return slices.Contains(tokens, w) }
+	}
+	for _, c := range []struct {
+		term string
+		doc  []string
+		want bool
+	}{
+		{"deploys", []string{"deploy"}, true},
+		{"engineer", []string{"engineers"}, true},
+		{"policies", []string{"policy"}, true},
+		{"boxes", []string{"box"}, true},
+		{"class", []string{"clas"}, false},
+		{"재정렬모델", []string{"재정렬", "모델"}, true},
+		{"재정렬모델", []string{"재정렬"}, false},
+		{"계약만료일", []string{"계약", "만료일"}, true},
+	} {
+		if got := termInTokens(c.term, has(c.doc...)); got != c.want {
+			t.Errorf("termInTokens(%q, %v) = %v, want %v", c.term, c.doc, got, c.want)
+		}
+	}
+	if a, b := searchQueryConcepts([]string{"deploy"}), searchQueryConcepts([]string{"deploys"}); a[0] != b[0] {
+		t.Fatalf("both number forms are one concept: %v %v", a, b)
+	}
+	if got := searchQueryConcepts([]string{"재정렬모델"})[0]; got != "('재정렬모델' | ('재정' & '렬모델') | ('재정렬' & '모델'))" {
+		t.Fatalf("compound concept = %s", got)
 	}
 }

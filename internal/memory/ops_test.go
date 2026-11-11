@@ -245,7 +245,7 @@ func TestOpsTagEditsKeepSystemTagsAndCountSkips(t *testing.T) {
 	f := newOpsFixture(t)
 	f.put(colMemories, Record{ID: "m1", Kind: "decision", Status: "active", Text: "a", Tags: []string{"session:s1", "old"}})
 	f.put(colMemories, Record{ID: "m2", Kind: "decision", Status: "active", Text: "b", Tags: []string{"old"}, ConflictID: "c1"})
-	for _, in := range []MemoryTagsInput{{Scope: scopeA, Add: []string{"session:s2"}}, {Scope: scopeA, Remove: []string{"session:s1"}}} {
+	for _, in := range []MemoryTagsInput{{Scope: scopeA, Add: []string{"session:s2"}}, {Scope: scopeA, Remove: []string{"session:s1"}}, {Scope: scopeA, Add: []string{"sys:x"}}, {Scope: scopeA, Add: []string{"event_id:e9"}}} {
 		if _, err := f.svc.SetMemoryTags(testCtx, f.human, "m1", in); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("system tag edit %+v err = %v", in, err)
 		}
@@ -254,6 +254,12 @@ func TestOpsTagEditsKeepSystemTagsAndCountSkips(t *testing.T) {
 		if _, err := f.svc.RenameTag(testCtx, f.human, in); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("system tag rename %+v err = %v", in, err)
 		}
+	}
+	// One event's id is no filter: the tag list leaves it out.
+	f.put(colMemories, Record{ID: "m3", Kind: "decision", Status: "active", Text: "c", Tags: []string{"event_id:e1", "trace:t1", "repo:r1"}})
+	list, err := f.svc.ListTags(testCtx, f.human, TagListInput{Scope: scopeA})
+	if err != nil || slices.ContainsFunc(list.Items, func(c TagCount) bool { return tagHasPrefix(c.Tag, idTagPrefixes) }) || !slices.ContainsFunc(list.Items, func(c TagCount) bool { return c.Tag == "repo:r1" }) {
+		t.Fatalf("tag list = %+v, %v", list, err)
 	}
 	res, err := f.svc.RenameTag(testCtx, f.human, TagRenameInput{Scope: scopeA, From: "old", To: "legacy"})
 	if err != nil || res != (TagRenameResult{Renamed: 1, Skipped: 1}) {

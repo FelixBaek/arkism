@@ -41,7 +41,7 @@ func (s *Service) QueryMemoryCatalog(ctx context.Context, token string, in Catal
 	return out, err
 }
 func (s *Service) memoryCatalogRows(ctx context.Context, token string, in CatalogQueryInput, candidates bool) ([]Record, error) {
-	if candidates && in.State == "all" {
+	if candidates && in.State == "all" { // all waiting for review; a decided state is asked for by name
 		active := in
 		active.State = "candidate"
 		first, err := s.memoryCatalogRows(ctx, token, active, true)

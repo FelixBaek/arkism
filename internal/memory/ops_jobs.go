@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 )
 
@@ -32,6 +33,10 @@ type OperationView struct {
 	// model_budget_exceeded, denied or model_not_configured.
 	LastRun *time.Time `json:"last_run,omitempty"`
 	Outcome string     `json:"outcome,omitempty"`
+	// Route and Result belong to a deferred call (ops_deferred.go). Result is the answer the
+	// route would have returned and is only on the single read, never in a list.
+	Route  string          `json:"route,omitempty"`
+	Result json.RawMessage `json:"result,omitempty"`
 }
 
 type OperationPage struct {
@@ -62,6 +67,12 @@ func viewOperation(r Record) OperationView {
 	if d := r.DeriveSchedule; d != nil {
 		v.LastRun, v.Outcome = d.LastRun, d.Outcome
 	}
+	if c := r.Deferred; c != nil {
+		v.Route, v.Error, v.Result = c.Route, c.Error, c.Result
+		if r.Status == JobStatusRunning && !r.LeaseUntil.After(time.Now()) { // the process that ran it is gone
+			v.Status, v.Error = JobStatusFailed, deferredInterrupted
+		}
+	}
 	return v
 }
 
@@ -82,7 +93,9 @@ func (s *Service) ListOperations(ctx context.Context, token string, in OpsListIn
 		return out, err
 	}
 	for _, r := range rows {
-		out.Items = append(out.Items, viewOperation(r))
+		v := viewOperation(r)
+		v.Result = nil // a list names the work; the answer is on the single read
+		out.Items = append(out.Items, v)
 	}
 	out.NextCursor = next
 	return out, nil

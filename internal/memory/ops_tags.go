@@ -60,13 +60,21 @@ type TagRenameResult struct {
 	More    bool `json:"more"`
 }
 
-// systemTagPrefix marks capture provenance that session archive use checks
-// read (session_archive.go); a human edit must not forge or cut that link.
-const systemTagPrefix = "session:"
+// systemTagPrefixes mark what the server writes itself: capture provenance that session archive
+// use checks read (session_archive.go) and the reserved "sys:" space. A human edit must not forge
+// or cut them.
+var systemTagPrefixes = []string{"session:", "event_id:", "event:", "trace:", "basis:", "sys:"}
 
-// validTagEdit accepts plain labels only: valid, and no system provenance tag.
+// idTagPrefixes are system tags that hold one event's id: no use as a filter, so the tag list leaves them out.
+var idTagPrefixes = []string{"event_id:", "trace:"}
+
+func tagHasPrefix(tag string, prefixes []string) bool {
+	return slices.ContainsFunc(prefixes, func(p string) bool { return strings.HasPrefix(tag, p) })
+}
+
+// validTagEdit accepts plain labels only: valid, and no system tag.
 func validTagEdit(tags []string) bool {
-	return validTags(tags) && !slices.ContainsFunc(tags, func(t string) bool { return strings.HasPrefix(t, systemTagPrefix) })
+	return validTags(tags) && !slices.ContainsFunc(tags, func(t string) bool { return tagHasPrefix(t, systemTagPrefixes) })
 }
 
 // validTagInput is validTagEdit plus the ingestion privacy filters.
@@ -105,7 +113,7 @@ func (s *Service) ListTags(ctx context.Context, token string, in TagListInput) (
 	}
 	all := []TagCount{}
 	for _, r := range rows {
-		if tag := opsText(r.Key); tagMatches(in.Q, tag) {
+		if tag := opsText(r.Key); tagMatches(in.Q, tag) && !tagHasPrefix(tag, idTagPrefixes) {
 			all = append(all, TagCount{Tag: tag, Count: r.Count})
 		}
 	}

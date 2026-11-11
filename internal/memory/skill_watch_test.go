@@ -59,15 +59,24 @@ func unevaluated(t *testing.T, f *fixture, v Record) {
 	}
 }
 
-func failedUses(t *testing.T, f *fixture, v Record, n int) {
+func failedUses(t *testing.T, f *fixture, v Record, n int) { recordedUses(t, f, v, "failure", n) }
+
+// recordedUses stores n use events of the version that ended with status.
+func recordedUses(t *testing.T, f *fixture, v Record, status string, n int) {
 	t.Helper()
 	time.Sleep(2 * time.Millisecond)
 	for i := 0; i < n; i++ {
-		at := time.Now().UTC()
-		u := SkillUsage{SkillID: v.SkillID, Version: 2, VersionID: v.ID, ContentHash: v.Analysis.ContentHash, Runtime: "codex", Status: "failure", StartedAt: at, CompletedAt: at}
-		if e := f.repo.Insert(testCtx, "sources", Record{ID: fmt.Sprintf("use-%s-%d", v.ID, i), Scope: scopeA, Kind: skillUsageEventKind, Status: "active", Revision: 1, Text: structuredText(u), CreatedAt: at, UpdatedAt: at}); e != nil {
-			t.Fatal(e)
-		}
+		id := fmt.Sprintf("use-%s-%s-%d", v.ID, status, i)
+		recordUse(t, f, v, status, id, id, time.Now().UTC())
+	}
+}
+
+// recordUse stores one use event of the version, as part of the named run.
+func recordUse(t *testing.T, f *fixture, v Record, status, id, run string, at time.Time) {
+	t.Helper()
+	u := SkillUsage{SkillID: v.SkillID, Version: 2, VersionID: v.ID, ContentHash: v.Analysis.ContentHash, Runtime: "codex", Status: status, StartedAt: at, CompletedAt: at}
+	if e := f.repo.Insert(testCtx, "sources", Record{ID: id, TraceID: run, Scope: scopeA, Kind: skillUsageEventKind, Status: "active", Revision: 1, Text: structuredText(u), CreatedAt: at, UpdatedAt: at}); e != nil {
+		t.Fatal(e)
 	}
 }
 
@@ -224,5 +233,14 @@ func TestSkillWatchOwnerMayGoBackByHandToTheVersionJustBefore(t *testing.T) {
 	// The watch has ended, so the exception is gone: v3 has its evaluation, v1 still does not.
 	if rollback(f.human, v1) == nil {
 		t.Fatal("exception outlived the watch")
+	}
+}
+
+func TestSkillRollbackWithoutAVersionGoesBackOneStep(t *testing.T) {
+	f, v := watchVersions(t, 2)
+	head, _ := f.repo.Get(testCtx, colSkills, scopeA, v[1].SkillID)
+	back, e := f.svc.ApplySkill(testCtx, f.human, v[1].SkillID, ChangeInput{Scope: scopeA, ExpectedRevision: head.Revision}, true)
+	if e != nil || back.ActiveVersion != v[0].ID {
+		t.Fatal("a rollback that names no version left the skill without one", back.ActiveVersion, e)
 	}
 }

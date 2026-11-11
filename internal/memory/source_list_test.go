@@ -22,7 +22,7 @@ func (f *fakeRepo) ListSources(_ context.Context, in SourceListInput) ([]Record,
 	}
 	var rows []Record
 	for _, r := range f.rows("sources") {
-		if !strings.Contains(r.Text, in.Query) || r.Scope != in.Scope || !live(r) || r.CollectedAt == nil || !r.CollectedAt.After(time.Time{}) || in.Kind != "" && r.Kind != in.Kind || in.OriginProduct != "" && r.OriginProduct != in.OriginProduct || in.CollectedFrom != nil && r.CollectedAt.Before(*in.CollectedFrom) || in.CollectedTo != nil && !r.CollectedAt.Before(*in.CollectedTo) {
+		if !strings.Contains(r.Text, in.Query) || r.Scope != in.Scope || !live(r) || r.CollectedAt == nil || !r.CollectedAt.After(time.Time{}) || in.Kind != "" && r.Kind != in.Kind || in.OriginProduct != "" && r.OriginProduct != in.OriginProduct || in.SourceRef != "" && r.SourceRef != in.SourceRef || in.CollectedFrom != nil && r.CollectedAt.Before(*in.CollectedFrom) || in.CollectedTo != nil && !r.CollectedAt.Before(*in.CollectedTo) {
 			continue
 		}
 		if after != nil && !(r.CollectedAt.Before(after.At) || r.CollectedAt.Equal(after.At) && r.ID < after.ID) {

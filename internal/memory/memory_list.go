@@ -22,11 +22,13 @@ type MemoryListInput struct {
 	FoldQuery           bool
 	Limit               int
 	Cursor              string
-	// ProjectKey (ST-824), when set, lists only what recall would show for that project
+	// ProjectKey, when set, lists only what recall would show for that project
 	// (empty key: personal and general). Unset lists every reach, for management screens.
 	ProjectKey *string
 	// UpdatedSince lists only rows changed after this time, so a screen can refresh without reading everything again.
 	UpdatedSince *time.Time
+	// Tag lists only memories carrying this tag (the reflect reread follows a session tag); not a request field.
+	Tag string `json:"-"`
 }
 type MemoryPage struct {
 	Items      []Record `json:"items"`
@@ -133,7 +135,7 @@ func memoryListTextMatches(r Record, in MemoryListInput) bool {
 }
 func memoryListMatches(r Record, in MemoryListInput) bool {
 	return r.Scope == in.Scope && !r.ContentErased && !r.PrivacyQuarantined && (in.IncludeInactive || live(r)) && (in.Status == "" || r.Status == in.Status) && (in.Kind == "" || r.Kind == in.Kind) && memoryListTextMatches(r, in) &&
-		(in.ProjectKey == nil || reachVisible(memoryReach(r), r.ReachProject, *in.ProjectKey)) && (in.UpdatedSince == nil || r.UpdatedAt.After(*in.UpdatedSince))
+		(in.ProjectKey == nil || reachVisible(memoryReach(r), r.ReachProject, *in.ProjectKey)) && (in.UpdatedSince == nil || r.UpdatedAt.After(*in.UpdatedSince)) && (in.Tag == "" || slices.Contains(r.Tags, in.Tag))
 }
 
 func (s *Service) ListMemories(ctx context.Context, token string, in MemoryListInput) (MemoryPage, error) {

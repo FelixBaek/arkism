@@ -12,6 +12,7 @@ package memory
 // and this host's model gateway, so no host needs its own copy of this client.
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -80,6 +81,9 @@ func loopbackURL(raw string) bool {
 	return err == nil && isLoopbackHost(parsed.Hostname())
 }
 
+// llmRetryWait is the pause before the one retry of a rate limited or failing model call.
+var llmRetryWait = 500 * time.Millisecond
+
 func (c LLMConfig) chat(ctx context.Context, req chatRequest) (chatReply, error) {
 	if model, ok := ctx.Value(modelOverrideKey{}).(string); ok {
 		c.Model = model // a model call extension named another model on this endpoint
@@ -87,16 +91,25 @@ func (c LLMConfig) chat(ctx context.Context, req chatRequest) (chatReply, error)
 	if !c.usable(req) {
 		return chatReply{}, ErrUnavailable
 	}
-	encoded, err := json.Marshal(c.payload(req))
-	if err != nil || len(encoded) > defaultRequestMax {
-		return chatReply{}, ErrInvalid
-	}
 	client := providerClient(nil, req.timeout)
 	if c.APIKey == "" && !req.keyless {
 		// A keyless preset: the connection itself, after DNS, must stay on this machine.
 		client.Transport = httpguard.LoopbackClient(req.timeout).Transport
 	}
-	body, status, err := postBody(ctx, client, c.Endpoint, c.header(), encoded, defaultResponseMax)
+	body, status, err := c.send(ctx, client, c.payload(req))
+	if err == nil && status == http.StatusBadRequest && bytes.Contains(body, []byte(`"unsupported_field"`)) {
+		// The route cannot honour a tuning field (one that cannot enforce an output limit refuses
+		// max_tokens): ask once more without the optional fields.
+		body, status, err = c.send(ctx, client, withoutOptional(c.payload(req)))
+	}
+	if err == nil && (status == http.StatusTooManyRequests || status >= 500) {
+		// A busy or failing provider often answers the next call: wait briefly and ask once more.
+		select {
+		case <-ctx.Done():
+		case <-time.After(llmRetryWait):
+			body, status, err = c.send(ctx, client, c.payload(req))
+		}
+	}
 	if err != nil {
 		return chatReply{}, err
 	}
@@ -121,6 +134,24 @@ func (c LLMConfig) chat(ctx context.Context, req chatRequest) (chatReply, error)
 		return chatReply{}, ErrUnavailable
 	}
 	return reply, nil
+}
+
+// optionalLLMFields are the request fields a provider route may refuse; the prompt works without them.
+var optionalLLMFields = []string{"max_tokens", "max_output_tokens", "temperature", "response_format", "text"}
+
+func withoutOptional(payload map[string]any) map[string]any {
+	for _, k := range optionalLLMFields {
+		delete(payload, k)
+	}
+	return payload
+}
+
+func (c LLMConfig) send(ctx context.Context, client *http.Client, payload map[string]any) ([]byte, int, error) {
+	encoded, err := json.Marshal(payload)
+	if err != nil || len(encoded) > defaultRequestMax {
+		return nil, 0, ErrInvalid
+	}
+	return postBody(ctx, client, c.Endpoint, c.header(), encoded, defaultResponseMax)
 }
 
 func (c LLMConfig) header() http.Header {

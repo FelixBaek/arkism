@@ -35,9 +35,9 @@ func swapRouter(t *testing.T) {
 	t.Cleanup(func() { host.CaptureState = capState })
 	routerCacheDir, fromPC, receiveOnly, loadedSkills, routeOf = t.TempDir(), false, false, map[string]loadedSkill{}, map[string]string{}
 	stubSpaceTools(t, nil, nil) // every tool, no extension tools: never this machine's server
-	sessions, maxChars, pinRoot := routerSessions, skillMaxChars, t.TempDir()
+	sessions, maxChars, pinRoot := routerSessions, host.SkillMaxChars, t.TempDir()
 	routerSessions = func() host.SessionStore { return host.SessionStore{Root: pinRoot} }
-	t.Cleanup(func() { routerSessions, skillMaxChars = sessions, maxChars })
+	t.Cleanup(func() { routerSessions, host.SkillMaxChars = sessions, maxChars })
 	t.Cleanup(func() {
 		routerRequest, routerBaseURL, routerTokenFile, routerCacheDir, routerRuntime, receiveOnly, fromPC, loadedSkills, routeOf = req, base, tok, cache, rt, ro, pc, loaded, routes
 	})
@@ -96,6 +96,9 @@ func TestRouterGoldenSessionAndTools(t *testing.T) {
 	fakeRequest(t, `{"items":[{"id":"m1","status":"candidate","text":"\u2028한글"}],"a":2,"z":1}`)
 	var out strings.Builder
 	routerMain(nil, strings.NewReader(g["session_in"].(string)), &out, nil)
+	if os.Getenv("ARKISM_UPDATE_GOLDEN") == "1" {
+		g["session_out"] = out.String()
+	}
 	if out.String() != g["session_out"] {
 		t.Fatalf("session:\n%s\nwant:\n%s", out.String(), g["session_out"])
 	}
@@ -354,7 +357,7 @@ func TestRecallByIDOrQuery(t *testing.T) {
 	if (*calls)[0].path != "/v1/search" || len(asList(field(out, "memories"))) != 1 {
 		t.Fatal(*calls)
 	}
-	// ST-811: search hits keep the server's fused score and lanes.
+	// search hits keep the server's fused score and lanes.
 	if got := host.MustDumps(field(out, "memories"), host.DumpOpts{Compact: true, NoASCII: true}); !strings.HasSuffix(got, `"conflict_pending":false,"score":0.0327,"lanes":["exact","keyword"]}]`) {
 		t.Fatal(got)
 	}
@@ -363,7 +366,7 @@ func TestRecallByIDOrQuery(t *testing.T) {
 	}
 }
 
-// ST-815: the MCP recall tool drops hits below the shared score floor and says nothing related was found.
+// the MCP recall tool drops hits below the shared score floor and says nothing related was found.
 func TestRecallBelowScoreFloorReturnsNoRelatedMemory(t *testing.T) {
 	swapRouter(t)
 	t.Setenv("ARKISM_RECALL_MIN_SCORE", "0.025")
@@ -448,7 +451,7 @@ func TestRememberIsACandidateAndReportsRejection(t *testing.T) {
 	}
 	p := (*calls)[0].payload.(map[string]any)
 	claim := p["claims"].([]any)[0].(map[string]any)
-	if (*calls)[0].path != "/v1/capture" || claim["basis"] != "inferred" || claim["text"] != "답은 짧게" {
+	if (*calls)[0].path != "/v1/capture" || claim["basis"] != "inferred" || claim["text"] != "답은 짧게" || claim["reason"] != nil { // reason would become the approved memory's summary
 		t.Fatal(p)
 	}
 	call(t, "remember", `{"text":"Falcon ships Fridays","tags":["release"],"metadata":{"channel":"chat"},"entities":["Falcon"]}`)
@@ -684,7 +687,7 @@ func TestPCClientsLeaveAMarkAndErrorsFlipIt(t *testing.T) {
 	}
 }
 
-// ST-824 / TC-SEC-011: recall by id never shows another project's project-reach memory.
+// recall by id never shows another project's project-reach memory.
 func TestRecallByIDKeepsOtherProjectsOut(t *testing.T) {
 	swapRouter(t)
 	t.Setenv("ARKISM_REPO", "owner/mine")
@@ -703,7 +706,7 @@ func TestRecallByIDKeepsOtherProjectsOut(t *testing.T) {
 	}
 }
 
-// ST-818: a recalled memory naming a file that is not in the working folder is marked, never hidden or reordered.
+// a recalled memory naming a file that is not in the working folder is marked, never hidden or reordered.
 func TestRecallMarksMissingPaths(t *testing.T) {
 	swapRouter(t)
 	dir := t.TempDir()

@@ -46,6 +46,21 @@ func dynamicsCrashChild(t *testing.T, svc *Service, token string, scope Scope) {
 		}
 		hold.armed = true
 		t.Fatal("apply returned instead of waiting:", svc.applyDynamicsClaim(ctx, token, scope, claim))
+	case "probe":
+		// The parent starts this process before enqueueing. Waiting for its signal
+		// keeps process/PG startup outside the original, unchanged lease window.
+		fmt.Println("probe ready")
+		if line, err := bufio.NewReader(os.Stdin).ReadString('\n'); err != nil || line != "drain\n" {
+			t.Fatal("probe signal", line, err)
+		}
+		report := dynamicsCrashProbeReport{StartedNS: dynamicsNowNS(), Result: "ok"}
+		if err := svc.WorkDynamicsOnce(testCtx, token); err != nil {
+			report.Result = err.Error()
+		}
+		report.FinishedNS = dynamicsNowNS()
+		raw, err := json.Marshal(report)
+		dynamicsRebindExpect(t, err, nil, "probe report")
+		fmt.Printf("probe %s\n", raw)
 	case "drain":
 		result := "ok"
 		if err := svc.WorkDynamicsOnce(testCtx, token); err != nil {
@@ -100,6 +115,57 @@ func dynamicsCrashDrain(t *testing.T, p *nativePGFixture, cfg DynamicsLoadConfig
 	return ""
 }
 
+type dynamicsCrashProbeReport struct {
+	StartedNS  int64  `json:"started_ns"`
+	FinishedNS int64  `json:"finished_ns"`
+	Result     string `json:"result"`
+}
+
+// Prepare a separate replacement worker before the accepted entry's wait clock
+// starts. Read its report before Wait: the race detector's process-exit delay is
+// not part of the worker operation and must not consume the live-lease probe.
+func dynamicsCrashReadyProbe(t *testing.T, p *nativePGFixture, cfg DynamicsLoadConfig) func() dynamicsCrashProbeReport {
+	t.Helper()
+	command := dynamicsCrashCommand(t, p, cfg, "probe")
+	var stderr bytes.Buffer
+	command.Stderr = &stderr
+	input, err := command.StdinPipe()
+	dynamicsRebindExpect(t, err, nil, "probe input")
+	output, err := command.StdoutPipe()
+	dynamicsRebindExpect(t, err, nil, "probe output")
+	dynamicsRebindExpect(t, command.Start(), nil, "probe process")
+	used := false
+	t.Cleanup(func() {
+		_ = input.Close()
+		if !used || t.Failed() {
+			_ = command.Process.Kill()
+		}
+		if err := command.Wait(); err != nil && !t.Failed() {
+			t.Errorf("probe process: %v %s", err, stderr.String())
+		}
+	})
+	reader := bufio.NewReader(output)
+	line, err := reader.ReadString('\n')
+	if err != nil || line != "probe ready\n" {
+		t.Fatalf("probe not ready: %q %v", line, err)
+	}
+	return func() dynamicsCrashProbeReport {
+		t.Helper()
+		if used {
+			t.Fatal("probe reused")
+		}
+		used = true
+		_, err := fmt.Fprintln(input, "drain")
+		dynamicsRebindExpect(t, err, nil, "probe signal")
+		line, err := reader.ReadString('\n')
+		var report dynamicsCrashProbeReport
+		if err != nil || !strings.HasPrefix(line, "probe ") || json.Unmarshal([]byte(strings.TrimPrefix(line, "probe ")), &report) != nil {
+			t.Fatalf("probe gave no timed report: %q %v", line, err)
+		}
+		return report
+	}
+}
+
 // dynamicsCrashFixture is dynamicsRefreshFixture with an explicit lease length and
 // queue wait limit (0 keeps the fixture's).
 func dynamicsCrashFixture(t *testing.T, leaseNS, maxWaitNS int64) (*nativePGFixture, DynamicsLoadConfig) {
@@ -115,13 +181,12 @@ func dynamicsCrashFixture(t *testing.T, leaseNS, maxWaitNS int64) (*nativePGFixt
 	}
 	runtime := dynamicsFixtureRuntime(t, cfg)
 	p.checker.DynamicsLoad, p.worker.DynamicsLoad, p.worker.NativeSearchShadow = runtime, runtime, shadow
-	p.accept(t)
 	return p, cfg
 }
 
 // dynamicsCrashKill starts a claiming worker process, kills it with SIGKILL once it
 // holds the lease and checks that the dead lease still blocks a new process.
-func dynamicsCrashKill(t *testing.T, p *nativePGFixture, cfg DynamicsLoadConfig, events int, role string) (*DynamicsLoadPayload, int64, string) {
+func dynamicsCrashKill(t *testing.T, p *nativePGFixture, cfg DynamicsLoadConfig, events int, role string, probe func() dynamicsCrashProbeReport) (*DynamicsLoadPayload, int64, string) {
 	t.Helper()
 	queued := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad.Count
 	claim := dynamicsCrashCommand(t, p, cfg, role)
@@ -145,7 +210,12 @@ func dynamicsCrashKill(t *testing.T, p *nativePGFixture, cfg DynamicsLoadConfig,
 	if held.LeaseToken == "" || held.LeaseUntilNS <= killedAt || held.Count != queued || len(p.rows(t, "event")) != events {
 		t.Fatalf("dead worker's lease not held or state changed: %+v", held)
 	}
-	early := dynamicsCrashDrain(t, p, cfg)
+	earlyReport := probe()
+	if earlyReport.StartedNS < killedAt || earlyReport.FinishedNS < earlyReport.StartedNS || earlyReport.FinishedNS >= held.LeaseUntilNS {
+		t.Fatalf("early probe did not complete within the held lease: killed=%d started=%d finished=%d lease_until=%d; no live-lease conclusion", killedAt, earlyReport.StartedNS, earlyReport.FinishedNS, held.LeaseUntilNS)
+	}
+	t.Logf("live-lease probe: killed=%d started=%d finished=%d lease_until=%d", killedAt, earlyReport.StartedNS, earlyReport.FinishedNS, held.LeaseUntilNS)
+	early := earlyReport.Result
 	if after := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad; after.Count != queued || after.LeaseToken != held.LeaseToken || len(p.rows(t, "event")) != events {
 		t.Fatalf("a new process took a live lease (%s): %+v", early, after)
 	}
@@ -177,11 +247,13 @@ func TestDynamicsWorkerProcessCrashPG(t *testing.T) {
 func dynamicsCrashCase(t *testing.T, leaseNS, lateNS int64, role string) map[string]any {
 	t.Helper()
 	p, cfg := dynamicsCrashFixture(t, leaseNS, 0)
+	probe := dynamicsCrashReadyProbe(t, p, cfg)
+	p.accept(t)
 	events := len(p.rows(t, "event"))
 	if q := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad; q.Count != 1 {
 		t.Fatalf("fixture did not queue one update: %d", q.Count)
 	}
-	held, killedAt, early := dynamicsCrashKill(t, p, cfg, events, role)
+	held, killedAt, early := dynamicsCrashKill(t, p, cfg, events, role, probe)
 	time.Sleep(time.Duration(lateNS))
 	late := dynamicsCrashDrain(t, p, cfg)
 	after := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad
@@ -227,6 +299,11 @@ func dynamicsCrashFullQueue(t *testing.T, crash bool) map[string]any {
 	// The wait limit leaves room for the dead lease plus several drain processes on a
 	// slow race runner; this test is about the full queue, not the wait limit.
 	p, cfg := dynamicsCrashFixture(t, int64(2*time.Second), int64(30*time.Second))
+	var probe func() dynamicsCrashProbeReport
+	if crash {
+		probe = dynamicsCrashReadyProbe(t, p, cfg)
+	}
+	p.accept(t)
 	for i := 1; i < int(cfg.Limits.QueueCountLimit); i++ {
 		p.in.EventID = fmt.Sprintf("crash-load-%d", i)
 		p.accept(t)
@@ -237,7 +314,7 @@ func dynamicsCrashFullQueue(t *testing.T, crash bool) map[string]any {
 	}
 	out := map[string]any{"queue_limit": cfg.Limits.QueueCountLimit, "batch_limit": cfg.Limits.BatchLimit}
 	if crash {
-		dynamicsCrashKill(t, p, cfg, events, "apply")
+		dynamicsCrashKill(t, p, cfg, events, "apply", probe)
 		p.in.EventID = "crash-load-overflow"
 		_, err := p.checker.RecordMemoryOutcome(testCtx, p.checkerToken, p.in)
 		if !errors.Is(err, ErrDynamicsQueueFull) {

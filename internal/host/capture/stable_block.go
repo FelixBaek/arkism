@@ -119,6 +119,10 @@ func skillSectionFrom(get func(string, time.Duration) (map[string]any, error), s
 		if id == "" || vid == "" || name == "" {
 			continue
 		}
+		// load_skill would refuse this body, so listing it only invites a failed load.
+		if n, _ := num(it["content_chars"]); int(n) > host.SkillMaxChars {
+			continue
+		}
 		if sid != "" {
 			// Never describe the latest version while load_skill is pinned to another.
 			if pinned, ok := store.SkillPin(sid, id); ok && pinned.VersionID != vid {

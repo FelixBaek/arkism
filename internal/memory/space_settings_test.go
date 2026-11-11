@@ -381,3 +381,16 @@ func TestSpaceSettingsPatchNullInherits(t *testing.T) {
 		t.Fatal("unknown key accepted", code)
 	}
 }
+
+func TestSpaceSettingsReportAWrongValueBeforeAStaleRevision(t *testing.T) {
+	f := newFixture(t)
+	putSettings(t, f, scopeA, SpaceConfigInput{ExpectedRevision: -1})
+	bad := "no-such-mode"
+	if _, err := f.svc.PutSpaceConfig(testCtx, f.human, scopeA, SpaceConfigInput{ExpectedRevision: 99, ExtractionMode: &bad}, false); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("wrong value with a stale revision: %v", err)
+	}
+	on := true
+	if _, err := f.svc.PutSpaceConfig(testCtx, f.human, scopeA, SpaceConfigInput{ExpectedRevision: 99, ExtractionEnabled: &on}, false); !errors.Is(err, ErrConflict) {
+		t.Fatalf("stale revision: %v", err)
+	}
+}

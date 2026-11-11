@@ -24,6 +24,8 @@ type SourceListInput struct {
 	CollectedTo   *time.Time `json:"collected_to,omitempty"`
 	Limit         int        `json:"limit"`
 	Cursor        string     `json:"cursor,omitempty"`
+	// SourceRef, set by the server only, keeps the sources of one capture batch (reflect_reread.go).
+	SourceRef string `json:"-"`
 }
 type SourceListItem struct {
 	ID            string    `json:"id"`

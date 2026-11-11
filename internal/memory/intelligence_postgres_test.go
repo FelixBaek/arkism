@@ -197,6 +197,9 @@ func TestPostgresFailedUsageBecomesReflection(t *testing.T) {
 	if err = p.Insert(ctx, colSkillVersions, Record{ID: "etsy-v1", Scope: skillScope, Kind: "skill_version", Status: "active", Revision: 1, Text: "etsy", SkillID: "etsy-listing", Analysis: &SkillAnalysis{SkillID: "etsy-listing", ContentHash: ContentHash("etsy")}, CreatedAt: now, UpdatedAt: now}); err != nil {
 		t.Fatal(err)
 	}
+	// The route binds the HTTP caller; the hub reflecting under its own
+	// principal must not flag that caller as switched (the reply became 403).
+	caller := &httpActor{principal: "demo-user", role: "human"}
 	ingest := func(i int, status string) TraceIngestResult {
 		t.Helper()
 		start := now.Add(time.Duration(i) * time.Minute)
@@ -209,7 +212,7 @@ func TestPostgresFailedUsageBecomesReflection(t *testing.T) {
 		in := TraceIngestInput{Scope: scope, TraceID: id, ThreadID: "demo-session-1",
 			AgentRun: CompletedAgentRunInput{ID: "run-" + id, TaskType: "skill:etsy-listing", Outcome: "failed", StartedAt: start, FinishedAt: start.Add(time.Second), Text: "skill usage"},
 			Events:   []TraceEventInput{{ID: "event-" + id, Kind: skillUsageEventKind, OccurredAt: start, Payload: payload}}}
-		out, err := svc.IngestCompletedTrace(ContextWithPostgresToken(ctx, testPrincipalToken("h")), testPrincipalToken("h"), in)
+		out, err := svc.IngestCompletedTrace(context.WithValue(ContextWithPostgresToken(ctx, testPrincipalToken("h")), httpActorKey{}, caller), testPrincipalToken("h"), in)
 		if err != nil {
 			t.Fatal("ingest", err)
 		}
@@ -235,6 +238,9 @@ func TestPostgresFailedUsageBecomesReflection(t *testing.T) {
 	third := ingest(4, "validation_failed")
 	if third.Learning == nil || third.Learning.Learning == nil {
 		t.Fatalf("validation_failed: %+v %q", third.Learning, third.LearningError)
+	}
+	if caller.changed.Load() {
+		t.Fatal("hub reflection marked the HTTP caller as switched")
 	}
 	human, _ := app.WithToken(testPrincipalToken("h"))
 	view := &Service{Repo: human, Auth: auth}

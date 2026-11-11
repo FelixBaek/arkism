@@ -66,6 +66,10 @@ func checkSkillTrial(t *testing.T, f *fixture, existing bool) {
 	if err != nil {
 		t.Fatal("start", err)
 	}
+	// A person's trial is checked like an automatic one, so it does not sit past its end unnoticed.
+	if job, e := f.svc.Repo.Get(testCtx, colJobs, scopeA, skillTrialCheckID(scopeA, trial.ID)); e != nil || job.Status != JobStatusPending {
+		t.Fatalf("no check job for a person's trial: %+v %v", job.Status, e)
+	}
 	again, err := f.svc.StartSkillTrial(testCtx, f.human, start)
 	if err != nil || again.ID != trial.ID || again.Revision != 1 {
 		t.Fatal("retry", err)
@@ -288,7 +292,7 @@ func TestStopSkillTrialClosesCheckJob(t *testing.T) {
 	if _, e := f.svc.StopSkillTrial(testCtx, f.human, trial.ID, SkillTrialStopInput{Scope: scopeA, SkillID: candidate.SkillID, ExpectedRevision: trial.Revision}); e != nil {
 		t.Fatal(e)
 	}
-	if job, e := f.repo.Get(testCtx, colJobs, scopeA, skillTrialCheckID(scopeA, trial.ID)); e != nil || job.Status != JobStatusDone {
+	if job, e := f.svc.Repo.Get(testCtx, colJobs, scopeA, skillTrialCheckID(scopeA, trial.ID)); e != nil || job.Status != JobStatusDone {
 		t.Fatal("stopped trial left its check job open", job.Status, e)
 	}
 }
