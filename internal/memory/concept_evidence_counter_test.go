@@ -1,9 +1,6 @@
 package memory
 
-import (
-	"slices"
-	"testing"
-)
+import "testing"
 
 func TestConceptEvidenceCountsEachGroupOnce(t *testing.T) {
 	for _, tc := range []struct {
@@ -40,7 +37,7 @@ func TestPostgresConceptEvidenceRejectsRepeatedSubject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := ids(out.Items); !slices.Equal(got, []string{good.ID}) {
-		t.Fatalf("one repeated subject passed the gate: got %d records, want the independently supported record", len(got))
+	if len(out.Items) != 1 || out.Items[0].ID != good.ID {
+		t.Fatalf("one repeated subject passed the gate: got %d records, want the independently supported record", len(out.Items))
 	}
 }
