@@ -217,3 +217,32 @@ func TestReflectPassagesAddMatchedTurnsWithoutAModelCall(t *testing.T) {
 		t.Fatal("answer prompt", llm.prompts[1])
 	}
 }
+
+// Unranked session expansion must not consume the bounded reread budget before
+// a directly matching conversation that holds another part of the answer.
+func TestReflectRereadQueryMatchPrecedesSessionExpansion(t *testing.T) {
+	f, _, m := rereadFixture(t)
+	for i := range reflectRereadBatches {
+		event := "filler-" + strconv.Itoa(i)
+		cand := f.create(f.human, "memory_candidates", candidateInput(CreateInput{Scope: scopeA, Text: "routine lunch note " + strconv.Itoa(i), Tags: []string{"event_id:" + event, "session:s1"}, Sources: refs(f.source())}))
+		approved := f.transition(f.human, "memory_candidates", cand.ID, ChangeInput{Scope: scopeA, ExpectedRevision: cand.Revision, Status: "approved"})
+		f.transition(f.human, "memories", approved.ID, ChangeInput{Scope: scopeA, ExpectedRevision: approved.Revision, Status: "active"})
+		reflectConversationBatch(f, "[2026-03-02] Rowan: routine lunch.", captureTurnsRef+event, 0)
+	}
+	line := "[2026-03-04] Mira: the observatory shuttle departs at noon."
+	matched := reflectConversationBatch(f, line, captureTurnsRef+"matching", 0)
+	run := &reflectRun{in: ReflectInput{Scope: scopeA, Query: "observatory shuttle"}, hits: []Hit{{ID: m.ID, Tags: m.Tags}}}
+	user, allowed := f.svc.rereadTranscripts(testCtx, f.human, run)
+	if !allowed[line] || !strings.Contains(user, line) {
+		t.Fatal("direct query evidence displaced by unrelated session batches")
+	}
+	if n := strings.Count(user, "--- conversation "); n > reflectRereadBatches {
+		t.Fatal("reread batch bound changed", n)
+	}
+	f.svc.Auth = passageTransferDeny{Authorizer: f.svc.Auth, id: matched.ID}
+	deniedRun := &reflectRun{in: run.in, hits: run.hits}
+	deniedPrompt, deniedLines := f.svc.rereadTranscripts(testCtx, f.human, deniedRun)
+	if deniedLines[line] || strings.Contains(deniedPrompt, line) {
+		t.Fatal("ranked source bypassed its transfer refusal")
+	}
+}

@@ -104,11 +104,11 @@ func TestReflectPassagesCombinedPromptBudget(t *testing.T) {
 		t.Fatal("combined budget or fallback", len(a+b), len(run.passages), len(run.sourceLines))
 	}
 }
-func TestReflectPassagesOffKeepsOriginalRulesAndVersion(t *testing.T) {
+func TestReflectPassagesOffUsesEvidenceRulesWithoutPassageInstructions(t *testing.T) {
 	f, llm, _ := rereadFixture(t)
 	llm.answers = []string{"ok"}
 	out, err := f.svc.Reflect(testCtx, f.human, ReflectInput{Scope: scopeA, Query: "needle", MaxIterations: 1})
-	if err != nil || out.Generator.PromptVersion != "reflect-v3" || strings.Contains(llm.prompts[0], "gather every item") {
+	if err != nil || out.Generator.PromptVersion != "reflect-v5" || !strings.Contains(llm.prompts[0], "gather all supported items") || !strings.Contains(llm.prompts[0], "do not guess personal attributes") || strings.Contains(llm.prompts[0], "Conversation passages, when given") {
 		t.Fatal("default changed", err, out.Generator)
 	}
 }

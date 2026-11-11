@@ -280,3 +280,30 @@ The user selected first completed result for prospective primary analysis. Final
 `project_native.py` optionally accepts both `--attribution-inputs` and `--trusted-attribution-sha256`. The latter is an independently supplied SHA of the exact envelope bytes. Protocol `exp03-native-attribution-inputs-v1` binds the source plan/schedule/native plan/index/projection and explicit root+ArtifactRef inputs for the sealed view definition, labels, and each view's criterion/evaluator/label source. Artifact roles are `source`; all source files are bounded and hash-read before helper work. Label-source protocol `exp03-attribution-label-source-v1` contains exact `view_id`, `queries` and `grades` matching the supplied view labels. No truth rule is inferred or executed by this adapter.
 
 Fresh native execution evidence is mandatory; confirmatory sources also retain the existing full final/REF binding. The public standalone view analyzer continues to reject confirmatory self-declarations. New sensitivity is always exploratory, including a caller's `before_results` declaration, because label timing is not authenticated. Source primary, REF and cost/denominator remain unchanged. Missing labels withhold the whole affected view. The output's `attribution_sensitivity` is computational evidence only; no additional policy execution or provider call occurs.
+
+### Per-category binary accuracy diagnostic
+
+`category_scorecard.py --plan FILE --schedule FILE --observations FILE
+--category-map FILE --trusted-category-map-sha256 SHA` prints a JSON diagnostic.
+It consumes existing validated primary `exp03-observations-v1` rows with
+`provided_grader_accuracy`; run the native projector first to establish the
+first-completed attempt policy. It never substitutes for that execution replay.
+
+The category map is `exp03-category-map-v1` with `schedule_sha256`, a nonempty
+unique `categories` list, and one `assignments` row (`stream_id`, `query_id`,
+`category`) for every scheduled query. Pin the exact map bytes before examining
+outcomes; the externally supplied hash verifies bytes, not timing or identity.
+Every declared category must have scheduled questions. All scheduled repetitions
+remain in denominators, including missing, failed and truncated outcomes.
+Only successful rows with a true grade count as correct. Threshold checks use
+exact integer arithmetic at9/10; query-weighted numerical scores are not
+confidence bounds or claims of independent samples.
+
+The output includes per-category counts, status counts and deficits. Numerical
+threshold flags are separate from scientific acceptance, which is always false
+in this standalone diagnostic. Exit0 means valid input/report generation, not
+90% achievement. Malformed input exits2 without printing its contents. No source
+conversation, answer or gold text is emitted. Historical permissive grades need
+fresh frozen evaluation evidence; relabelling their category map cannot establish
+holdout independence. Existing EXP03 research metrics and native acceptance
+contracts remain unchanged.
