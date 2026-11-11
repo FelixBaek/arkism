@@ -64,6 +64,42 @@ still marks that interval wrong. The observation repair therefore changes actual
 answer behavior, while its score effect remains unproven. No gold, question or
 grader was changed to accept it.
 
+## Full frozen 1,085-question diagnostic
+
+The source-date candidate completed the entire scheduled set with 983 correct
+answers out of 1,085 (90.60%). It does **not** meet the per-category target.
+
+| Category | Correct / scheduled | Accuracy | More correct answers needed to exceed 90% |
+| --- | ---: | ---: | ---: |
+| Single-hop | 581 / 602 | 96.51% | 0 |
+| Temporal | 202 / 233 | 86.70% | 8 |
+| Multi-hop | 161 / 188 | 85.64% | 9 |
+| Open-domain | 39 / 62 | 62.90% | 17 |
+
+All 1,085 retrieval requests succeeded on their first attempt. Identical model
+request fingerprints reused their first completed result; all 64 pilot calls
+were preserved exactly. The full run used 2,147 unique answer/judge requests.
+One answer stream terminated without a completion event. Its partial response
+and missing usage were retained, and it remains non-correct in the denominator.
+The run stopped, the failure was audited (no quota/auth/rate refusal was found),
+and only unattempted work resumed. The failed fingerprint was never retried.
+All started requests were resolved; no invalid grading responses were accepted.
+There are 101 judged wrong answers plus the one transport failure.
+
+Reported usage is 6,276,017 tokens, a **lower bound** because the truncated call
+returned no usage. Dollar cost is unavailable. Wall time including acquisition
+and the failure pause was 27.26 minutes. No external tools were executed.
+The final consolidation issued zero new model calls. The frozen prompt-file
+SHA-256 is `ec718c3ee233d962cfd9c2700a265a94ab0bb426d995c67afad2cb23525cdcc7`.
+
+An early manual audit of 21 failures found five missing-evidence cases, five
+imprecise gold/question inconsistencies, eight unsupported-inference cases,
+two relative-week ambiguities and one unavailable visual attribute. These are
+provisional diagnoses, not exclusions or a classification of all failures.
+None was removed from the primary score. Historical scores used a different
+execution path and are not a controlled baseline for claiming a gain/regression.
+Further native-service validation is separate from this completed protocol.
+
 ## Acquisition integrity and next measurement
 
 An initial bulk retrieval attempt encountered transaction retries and was stopped;
@@ -72,12 +108,15 @@ excluded from the model score. The canonical 32 prompts all succeeded on their
 first request. A source audit found 4,519 memories missing their own observation
 anchors, all with hash-matching original source references and historical source
 dates. The follow-up source-date repair is evaluated separately against the same
-fixed questions. The full 1,085-question schedule is frozen; full results and any
-90% acceptance are pending.
+fixed questions. The full 1,085-question schedule was frozen and completed as reported above;
+per-category acceptance remains unmet. A separate dataset audit found this
+historical subset omits two available questions, and three other conversations
+were not part of it. It must not be represented as the full 1,540-question set.
 
 ## 한국어 기록
 
 변경 이유: 실제 검색과 모델 답변으로 분야별 품질을 측정하고 실패 원인을 보존한다.
 검증: 사전 고정 32문항에서 28개 정답, 모델 호출 64회 성공. 도구 실행과 누락은 없다.
 한계: 이미 개발에 사용한 소규모 자료이며 모든 분야 90%를 달성하지 못했다.
-전체 평가와 수정본 비교는 아직 진행 중이다. 운영 배포는 하지 않는다.
+전체 평가 결과는 983/1,085(90.60%)이며 단일 기억 검색만 90%를 넘었다.
+한 번의 응답 중단은 실패 분모에 남겼으며 재시도하지 않았다. 운영 배포는 하지 않는다.
