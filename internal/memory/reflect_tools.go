@@ -46,6 +46,9 @@ func reflectToolsText(run *reflectRun) string {
 	for _, t := range reflectToolLines {
 		if run.toolExcluded(t.name) == "" {
 			b.WriteString(t.text)
+			if t.name == reflectToolRecall && run.conversationRecall {
+				b.WriteString("  Recall also searches permitted original conversation wording within the same filters and shared token budget.\n")
+			}
 		}
 	}
 	b.WriteString("max_tokens caps what one call returns. Call a tool only when it can add something; answer as soon as the records suffice.\n")
@@ -99,7 +102,7 @@ func (s *Service) reflectTool(ctx context.Context, token string, run *reflectRun
 	var err error
 	switch call.Name {
 	case reflectToolRecall, reflectToolObservations:
-		hits, err = s.reflectRecall(ctx, token, run.in, call)
+		hits, err = s.reflectRecall(ctx, token, run, call)
 	case reflectToolMentalModels, reflectToolReadModels:
 		hits, err = s.reflectMentalModels(ctx, token, run, call)
 	case reflectToolEntity:
@@ -121,6 +124,11 @@ func (s *Service) reflectTool(ctx context.Context, token string, run *reflectRun
 	}
 	walked := call.Name == reflectToolEntity || call.Name == reflectToolExpand && (call.Args.Depth == "" || call.Args.Depth == "memory")
 	step.IDs = run.add(hits, walked)
+	if step.Error == "" && call.Name == reflectToolRecall && factTypeKept(run.in.FactTypes, colMemories) {
+		remaining := reflectRemainingToolTokens(run.toolTokens(call), hits)
+		ids := s.reflectFollowupPassages(ctx, token, run, reflectRecallSearch(run.in, call), remaining, run.chunkTokens(call))
+		step.IDs = append(step.IDs, ids...)
+	}
 	if run.in.Include != nil && run.in.Include.ToolCalls.Output {
 		step.Output = hitTexts(hits, run)
 	}
@@ -196,7 +204,13 @@ func hitTexts(hits []Hit, run *reflectRun) []ReflectToolOutput {
 	return out
 }
 
-func (s *Service) reflectRecall(ctx context.Context, token string, in ReflectInput, call reflectToolCall) ([]Hit, error) {
+func (s *Service) reflectRecall(ctx context.Context, token string, run *reflectRun, call reflectToolCall) ([]Hit, error) {
+	search := reflectRecallSearch(run.in, call)
+	bundle, err := s.Search(ctx, token, search)
+	return bundle.Items, err
+}
+
+func reflectRecallSearch(in ReflectInput, call reflectToolCall) SearchInput {
 	search := reflectSearch(in, call.Args.Query)
 	search.ExpandCausal = call.Args.Causal
 	if call.Args.From != nil || call.Args.To != nil {
@@ -204,15 +218,29 @@ func (s *Service) reflectRecall(ctx context.Context, token string, in ReflectInp
 		if search.Filters != nil {
 			f = *search.Filters
 		}
-		// The request's own window wins over the tool's.
-		f.CreatedFrom, f.CreatedTo = cmp.Or(f.CreatedFrom, call.Args.From), cmp.Or(f.CreatedTo, call.Args.To)
+		// Observation recall preserves its existing window policy. Ordinary
+		// recall intersects the tool window with the original request.
+		f = reflectRecallFilters(f, in, call)
 		search.Filters = &f
 	}
 	if call.Name == reflectToolObservations {
 		search.Kinds = []string{observationKind}
 	}
-	bundle, err := s.Search(ctx, token, search)
-	return bundle.Items, err
+	return search
+}
+
+func reflectRecallFilters(f SearchFilters, in ReflectInput, call reflectToolCall) SearchFilters {
+	if call.Name == reflectToolObservations || !factTypeKept(in.FactTypes, colMemories) {
+		f.CreatedFrom, f.CreatedTo = cmp.Or(f.CreatedFrom, call.Args.From), cmp.Or(f.CreatedTo, call.Args.To)
+		return f
+	}
+	if call.Args.From != nil && (f.CreatedFrom == nil || call.Args.From.After(*f.CreatedFrom)) {
+		f.CreatedFrom = call.Args.From
+	}
+	if call.Args.To != nil && (f.CreatedTo == nil || call.Args.To.Before(*f.CreatedTo)) {
+		f.CreatedTo = call.Args.To
+	}
+	return f
 }
 
 // reflectExpand reads around memories this reflect already retrieved: linked memories
@@ -282,9 +310,9 @@ func (s *Service) reflectSources(ctx context.Context, token string, run *reflect
 		}
 		text := current.Excerpt
 		if document {
-			text = s.transferableSource(ctx, token, scope, mem, *current.Source)
-			if text != r.Text {
-				return nil, ErrConflict
+			text, err = s.reflectDocumentText(ctx, token, scope, mem, *current.Source, r.Text)
+			if err != nil {
+				return nil, err
 			}
 		}
 		if text == "" || containsSecret(text) {
@@ -360,16 +388,21 @@ func (s *Service) reflectMentalModels(ctx context.Context, token string, run *re
 		if err != nil {
 			return nil, err
 		}
-		if ok {
-			if err := s.keepReflectMentalModel(ctx, token, run, m); err != nil {
-				return nil, err
-			}
-			at, text := m.Active.At, m.Active.Text
-			if !read {
-				text = runeCutString(text, reflectSnippetRunes)
-			}
-			hits = append(hits, Hit{ID: m.ID, Collection: colMentalModels, Kind: mentalModelKind, Revision: m.Revision, Text: m.Title + ": " + text, EffectiveAt: &at})
+		if !ok {
+			continue
 		}
+		ok, err = s.admitReflectMentalModel(ctx, token, run, m)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			continue
+		}
+		at, text := m.Active.At, m.Active.Text
+		if !read {
+			text = runeCutString(text, reflectSnippetRunes)
+		}
+		hits = append(hits, Hit{ID: m.ID, Collection: colMentalModels, Kind: mentalModelKind, Revision: m.Revision, Text: m.Title + ": " + text, EffectiveAt: &at})
 	}
 	return hits, nil
 }
@@ -397,4 +430,19 @@ func (s *Service) mentalModelTransferable(ctx context.Context, token string, sco
 		return false, nil
 	}
 	return err == nil, err
+}
+
+func reflectRemainingToolTokens(budget int, hits []Hit) int {
+	for _, hit := range hits {
+		budget -= approxTokens(hit.Text)
+	}
+	return max(0, budget)
+}
+
+func (s *Service) reflectDocumentText(ctx context.Context, token string, scope Scope, mem Record, ref Ref, expected string) (string, error) {
+	text := s.transferableSource(ctx, token, scope, mem, ref)
+	if text != "" && text != expected {
+		return "", ErrConflict
+	}
+	return text, nil
 }

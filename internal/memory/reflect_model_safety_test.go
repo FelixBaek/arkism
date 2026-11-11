@@ -181,3 +181,47 @@ func checkPostgresReflectMentalModelMutation(t *testing.T, mode string) {
 		t.Fatalf("PG changed citation escaped: %v %q", err, out.Answer)
 	}
 }
+
+func TestReflectMentalModelStaleAdmissionKeepsEligibleSummary(t *testing.T) {
+	f, _ := reflectFixture(t, "unused")
+	staleMemory := f.activeMemory("old summary evidence")
+	stale := reflectModelSafetyRecord(staleMemory)
+	f.put(colMentalModels, stale)
+	staleMemory.Revision++
+	reflectMemoryRawPut(f, staleMemory)
+	freshMemory := f.activeMemory("fresh summary evidence")
+	fresh := reflectModelSafetyRecord(freshMemory)
+	fresh.ID = "fresh-model"
+	f.put(colMentalModels, fresh)
+	run := &reflectRun{in: ReflectInput{Scope: scopeA}}
+	hits, err := f.svc.reflectMentalModels(testCtx, f.human, run, reflectToolCall{Name: reflectToolMentalModels})
+	if err != nil || len(hits) != 1 || hits[0].ID != fresh.ID {
+		t.Fatalf("stale summary hid eligible model: hits=%v err=%v", hits, err)
+	}
+	if len(run.modelRecords) != 1 {
+		t.Fatalf("rejected summary retained: %v", run.modelRecords)
+	}
+	if err := f.svc.verifyReflectMentalModels(testCtx, f.human, run); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReflectMentalModelAdmissionCannotForgetPreviouslyUsedSummary(t *testing.T) {
+	f, _ := reflectFixture(t, "unused")
+	m := f.activeMemory("retained evidence")
+	model := reflectModelSafetyRecord(m)
+	f.put(colMentalModels, model)
+	run := &reflectRun{in: ReflectInput{Scope: scopeA}}
+	view := f.svc.mentalModelView(testCtx, model)
+	if ok, err := f.svc.admitReflectMentalModel(testCtx, f.human, run, view); !ok || err != nil {
+		t.Fatalf("initial admission: %v", err)
+	}
+	m.Revision++
+	reflectMemoryRawPut(f, m)
+	if ok, err := f.svc.admitReflectMentalModel(testCtx, f.human, run, view); ok || err == nil {
+		t.Fatal("previous evidence conflict silently skipped")
+	}
+	if len(run.modelRecords) != 1 {
+		t.Fatal("previous snapshot discarded")
+	}
+}

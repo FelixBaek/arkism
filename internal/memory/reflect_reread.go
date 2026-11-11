@@ -215,8 +215,13 @@ const (
 // reflectPassages fills run.passages with up to Service.ReflectPassages matched turns, each with
 // the turn before and after it in its batch. Like the reread it never fails the answer.
 func (s *Service) reflectPassages(ctx context.Context, token string, run *reflectRun, degraded []string) {
+	run.conversationRecall = s.ReflectPassages > 0 && factTypeKept(run.in.FactTypes, colMemories) && s.probeAllowed(ctx, token, "read:sources", run.in.Scope)
+	s.reflectPassagesBounded(ctx, token, run, degraded, 0, 0)
+}
+
+func (s *Service) reflectPassagesBounded(ctx context.Context, token string, run *reflectRun, degraded []string, tokens, chunkTokens int) []string {
 	if s.ReflectPassages <= 0 || !s.probeAllowed(ctx, token, "read:sources", run.in.Scope) {
-		return
+		return nil
 	}
 	reserve := reflectAnswerReserve
 	if run.in.PromptOnly {
@@ -228,7 +233,7 @@ func (s *Service) reflectPassages(ctx context.Context, token string, run *reflec
 	}
 	if budget <= 0 {
 		run.noteSourceFailure("conversation_passages", "deadline")
-		return
+		return nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
@@ -238,9 +243,10 @@ func (s *Service) reflectPassages(ctx context.Context, token string, run *reflec
 	rows, err := s.sideLane(ctx, "sources", in, criteria)
 	if err != nil {
 		run.noteSourceFailure("conversation_passages", "lookup_unavailable")
-		return
+		return nil
 	}
 	shown, spare := map[string]bool{}, reflectPassageRunes
+	used, ids := 0, []string{}
 	for _, row := range rows {
 		if len(run.passages) == min(s.ReflectPassages, ReflectPassagesMax) {
 			break
@@ -252,15 +258,20 @@ func (s *Service) reflectPassages(ctx context.Context, token string, run *reflec
 		part := s.passagePart(ctx, r, shown)
 		lines, records := s.turnLines(ctx, token, run, part, !run.in.PromptOnly)
 		block := strings.Join(lines, "\n")
-		if n := utf8.RuneCountInString(block); n > 0 && n <= spare {
+		if n := utf8.RuneCountInString(block); reflectPassageFits(block, spare, tokens, used, chunkTokens) {
+			used += approxTokens(block)
 			spare -= n
 			run.passages = append(run.passages, block)
 			run.keepSources(records, !run.in.PromptOnly)
+			for _, record := range records {
+				ids = appendMissing(ids, []string{record.ID})
+			}
 			for _, p := range part {
 				shown[p.ID] = true
 			}
 		}
 	}
+	return ids
 }
 
 // Embed only when the initial memory search already allowed its vector lane.
@@ -294,4 +305,63 @@ func (s *Service) passagePart(ctx context.Context, r Record, shown map[string]bo
 		}
 	}
 	return part
+}
+
+// A recall reformulation may find original wording absent from the first query.
+// Search already spent its embedding allowance: this optional follow-up uses
+// keyword passage retrieval only, with no additional model or embedding call.
+func (s *Service) reflectFollowupPassages(ctx context.Context, token string, run *reflectRun, search SearchInput, tokens, chunkTokens int) []string {
+	if s.ReflectPassages <= 0 || tokens <= 0 {
+		return nil
+	}
+	follow := *run
+	follow.in.Query = search.Query
+	if search.Filters != nil {
+		follow.in.CreatedFrom = search.Filters.CreatedFrom
+		follow.in.CreatedTo = search.Filters.CreatedTo
+	}
+	follow.passages = nil
+	ids := s.reflectPassagesBounded(ctx, token, &follow, []string{"memory_vector_disabled"}, tokens, chunkTokens)
+	// Retain every first source snapshot, even for passages replaced below: an
+	// earlier generation may still have used their text.
+	run.sourceRecords, run.sourceNotes = follow.sourceRecords, follow.sourceNotes
+	run.passages = mergeReflectPassages(follow.passages, run.passages, min(s.ReflectPassages, ReflectPassagesMax))
+	run.boundSources()
+	return ids
+}
+
+func mergeReflectPassages(fresh, previous []string, limit int) []string {
+	out := []string{}
+	seen := map[string]bool{}
+	spare := reflectPassageRunes
+	for _, group := range [][]string{fresh, previous} {
+		for _, block := range group {
+			n := utf8.RuneCountInString(block)
+			if seen[block] || n == 0 || n > spare || len(out) >= limit {
+				continue
+			}
+			out = append(out, block)
+			seen[block] = true
+			spare -= n
+		}
+	}
+	return out
+}
+
+func reflectPassageFits(block string, spare, tokens, used, chunkTokens int) bool {
+	n := utf8.RuneCountInString(block)
+	cost := approxTokens(block)
+	return n > 0 && n <= spare && (tokens <= 0 || used+cost <= tokens) && (chunkTokens <= 0 || cost <= chunkTokens)
+}
+
+const reflectConversationPromptVersion = "reflect-v7"
+
+func reflectEvidencePromptVersion(run *reflectRun) string {
+	if run.conversationRecall {
+		return reflectConversationPromptVersion
+	}
+	if len(run.passages) > 0 {
+		return "reflect-v6"
+	}
+	return reflectPromptVersion
 }
