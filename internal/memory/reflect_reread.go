@@ -96,37 +96,42 @@ func (s *Service) reflectReread(ctx context.Context, token string, run *reflectR
 	return usage, nil
 }
 
-// rereadRefs names the capture batches to reread: those the retrieved memories came from,
-// then query-matched conversation batches, then unranked session siblings. Session expansion
-// must not exhaust the bounded reread budget before directly relevant source evidence.
-// shortcut: turns carry no session, so a session's other batches are found through its memories' tags (100 per session); store the session on the turns once a batch without a memory must be read.
+// rereadRefs prioritizes directly retrieved capture batches, then query matches,
+// then imported session references, before unranked capture-session siblings.
+// References only locate candidates: rereadBatch applies exact scope/ref matching
+// and turnLines rechecks every source's permissions, filters and transfer policy.
 func (s *Service) rereadRefs(ctx context.Context, run *reflectRun) []string {
 	var refs, sessions []string
-	events := func(tags []string) {
-		for _, t := range tags {
-			if event, ok := strings.CutPrefix(t, "event_id:"); ok && !slices.Contains(refs, captureTurnsRef+event) {
-				refs = append(refs, captureTurnsRef+event)
-			}
-		}
-	}
 	for _, h := range run.hits {
-		events(h.Tags)
-		for _, t := range h.Tags {
-			if strings.HasPrefix(t, "session:") && !slices.Contains(sessions, t) {
-				sessions = append(sessions, t)
+		refs = rereadEventRefs(refs, h.Tags)
+		for _, tag := range h.Tags {
+			if session, ok := strings.CutPrefix(tag, "session:"); ok && strings.TrimSpace(session) != "" {
+				sessions = appendMissing(sessions, []string{tag})
 			}
 		}
 	}
 	rows, _ := s.sideLane(ctx, "sources", SearchInput{Scope: run.in.Scope, Query: run.in.Query, space: run.in.space}, SearchCriteria{Kinds: []string{conversationSourceKind}})
 	for _, row := range rows[:min(len(rows), conversationLaneHits)] {
-		if r, err := s.Repo.Get(ctx, "sources", run.in.Scope, row.ID); err == nil && strings.HasPrefix(r.SourceRef, captureTurnsRef) && !slices.Contains(refs, r.SourceRef) {
-			refs = append(refs, r.SourceRef)
+		if r, err := s.Repo.Get(ctx, "sources", run.in.Scope, row.ID); err == nil && strings.TrimSpace(r.SourceRef) != "" {
+			refs = appendMissing(refs, []string{r.SourceRef})
 		}
+	}
+	for _, session := range sessions {
+		refs = appendMissing(refs, []string{strings.TrimPrefix(session, "session:")})
 	}
 	for _, session := range sessions {
 		siblings, _ := s.Repo.ListMemories(ctx, MemoryListInput{Scope: run.in.Scope, Tag: session, Limit: 100})
 		for _, m := range siblings {
-			events(m.Tags)
+			refs = rereadEventRefs(refs, m.Tags)
+		}
+	}
+	return refs
+}
+
+func rereadEventRefs(refs, tags []string) []string {
+	for _, tag := range tags {
+		if event, ok := strings.CutPrefix(tag, "event_id:"); ok && event != "" {
+			refs = appendMissing(refs, []string{captureTurnsRef + event})
 		}
 	}
 	return refs
@@ -162,12 +167,35 @@ func (s *Service) rereadTranscripts(ctx context.Context, token string, run *refl
 
 // rereadBatch is one capture batch's lines in order.
 func (s *Service) rereadBatch(ctx context.Context, token string, run *reflectRun, ref string) ([]string, []Record) {
+	if strings.TrimSpace(ref) == "" {
+		return nil, nil
+	}
 	rows, err := s.Repo.ListSources(ctx, SourceListInput{Scope: run.in.Scope, Kind: conversationSourceKind, SourceRef: ref, Limit: 100})
 	if err != nil {
 		run.noteSourceFailure("source_reread", "lookup_unavailable")
 		return nil, nil
 	}
+	if len(rows) > 100 {
+		run.noteSourceFailure("source_reread", "batch_limit")
+		return nil, nil
+	}
+	if mixedRereadOrigins(rows) {
+		run.noteSourceFailure("source_reread", "ambiguous_source_ref")
+		return nil, nil
+	}
 	return s.turnLines(ctx, token, run, rows, true)
+}
+
+func mixedRereadOrigins(rows []Record) bool {
+	if len(rows) < 2 {
+		return false
+	}
+	for _, row := range rows[1:] {
+		if row.OriginProduct != rows[0].OriginProduct {
+			return true
+		}
+	}
+	return false
 }
 
 // turnLines is the conversation turns' lines in conversation order, from the turns the caller
