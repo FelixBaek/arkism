@@ -199,3 +199,42 @@ func TestSessionWindowOnPrivateTranscriptIsTerminal(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestSessionDeliverSavesUnlinkedWhenArchiveRefsGoStale(t *testing.T) {
+	capState = t.TempDir()
+	request := map[string]any{"scope": "s", "id": "session-x", "event_id": "op-1", "expected_revision": int64(2),
+		"package": map[string]any{}, "archive_messages": []any{map[string]any{"archive_id": "old"}}}
+	prepared := map[string]any{"capture_ack": true, "checkpoint_request": request}
+	var saves []map[string]any
+	post := func(path string, body any) (map[string]any, error) {
+		b := body.(map[string]any)
+		switch path {
+		case "/v1/work-checkpoints/get":
+			return map[string]any{"id": "session-x", "revision": int64(3)}, nil
+		case "/v1/work-checkpoints/save":
+			saves = append(saves, b)
+			if len(anyList(b["archive_messages"])) > 0 {
+				return nil, &host.HTTPError{Code: 409}
+			}
+			return map[string]any{"id": "session-x", "revision": int64(4)}, nil
+		}
+		t.Fatal("unexpected", path)
+		return nil, nil
+	}
+	persisted := 0
+	err := sessionDeliver(map[string]any{}, prepared, "s", "turn_completed", "sid", "codex", "session-x",
+		func() error { return nil }, func() error { persisted++; return nil }, post)
+	if err != nil || len(saves) != 2 || persisted != 1 {
+		t.Fatal("stale refs must fall back to one unlinked save", err, len(saves), persisted)
+	}
+	if got := prepared["checkpoint_request"].(map[string]any); got["expected_revision"] != int64(3) || len(anyList(got["archive_messages"])) != 0 {
+		t.Fatal("retry must use the current revision and no refs", got)
+	}
+	// Any other failure, or a request that already had no refs, still fails as before.
+	prepared["checkpoint_request"] = map[string]any{"scope": "s", "id": "session-x", "expected_revision": int64(3), "archive_messages": []any{}}
+	failing := func(path string, body any) (map[string]any, error) { return nil, &host.HTTPError{Code: 409} }
+	if err := sessionDeliver(map[string]any{}, prepared, "s", "turn_completed", "sid", "codex", "session-x",
+		func() error { return nil }, func() error { return nil }, failing); host.HTTPCode(err) != 409 {
+		t.Fatal("an unlinked conflict is not retried again", err)
+	}
+}

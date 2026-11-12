@@ -6,6 +6,8 @@ package capture
 // transcripts, chat logs, reflect) gets it.
 
 import (
+	"bytes"
+	"encoding/json"
 	"io"
 	"os"
 	"regexp"
@@ -60,7 +62,7 @@ func onlyPrivate(text string) bool {
 	return strings.Contains(text, privateMark) && strings.TrimSpace(strings.ReplaceAll(text, privateMark, "")) == ""
 }
 
-// privateMarked reports whether a transcript file has a <private> mark anywhere. Such a session is
+// privateMarked reports whether a person typed a <private> mark in a transcript. Such a session is
 // not archived: the archive keeps transcripts byte for byte (offsets and hashes), so the marked
 // text cannot be cut out of it. Its memories are still captured, from redacted text.
 // Inspection failures remain errors so callers can retry without declaring an opt-out.
@@ -97,6 +99,88 @@ func privateMarkedLimit(path string, limit int64) (bool, error) {
 	return scanPrivateLimit(f, limit)
 }
 
+// privateLineCap bounds one transcript line kept for parsing; a longer marked line counts as typed.
+const privateLineCap = 64 << 20
+
+// scanPrivateTyped reads a JSONL transcript and reports a <private> mark only where a person typed
+// it. Agent replies and tool output that merely quote the tag (code, docs, logs) must not drop the
+// whole session; a line of unknown shape still counts (fail closed).
+func scanPrivateTyped(r io.Reader) (bool, error) {
+	var marker privateMarker
+	var line []byte
+	over := false
+	typedEnd := func() bool { return marker.marked() && (over || privateTypedLine(line)) }
+	buf := make([]byte, 64<<10)
+	for {
+		n, err := r.Read(buf)
+		if err != nil && err != io.EOF {
+			return false, err
+		}
+		for data := buf[:n]; len(data) > 0; {
+			part := data
+			nl := bytes.IndexByte(data, '\n')
+			if nl >= 0 {
+				part = data[:nl+1]
+			}
+			data = data[len(part):]
+			marker.write(part)
+			if !over && len(line)+len(part) > privateLineCap {
+				over, line = true, nil
+			} else if !over {
+				line = append(line, part...)
+			}
+			if marker.marked() && !over && !bytes.HasPrefix(bytes.TrimLeft(line, " \t\r"), []byte("{")) {
+				return true, nil // not a JSON record: no need to read the rest of the line
+			}
+			if nl >= 0 {
+				if typedEnd() {
+					return true, nil
+				}
+				marker, line, over = privateMarker{}, line[:0], false
+			}
+		}
+		if err == io.EOF {
+			return typedEnd(), nil
+		}
+	}
+}
+
+// privateTypedLine reports a record that carries typed words: a human user turn outside tool
+// results (Claude Code) or a user message (Codex). Unknown or unparsable records count.
+func privateTypedLine(line []byte) bool {
+	var d map[string]any
+	if json.Unmarshal(line, &d) != nil {
+		return true
+	}
+	payload, _ := d["payload"].(map[string]any)
+	switch d["type"] {
+	case "assistant", "api-request-blob", "queue-operation":
+		// Request blobs and queued prompts repeat records judged on their own lines.
+		return false
+	case "user":
+		if !humanTyped(d) {
+			return false
+		}
+		msg, _ := d["message"].(map[string]any)
+		content, isList := msg["content"].([]any)
+		if !isList {
+			return true
+		}
+		typed := []any{}
+		for _, b := range content {
+			if m, ok := b.(map[string]any); !ok || m["type"] != "tool_result" {
+				typed = append(typed, b)
+			}
+		}
+		return privatePayload(typed)
+	case "response_item":
+		return payload["type"] == "message" && payload["role"] == "user"
+	case "event_msg":
+		return payload["type"] == "user_message"
+	}
+	return true
+}
+
 // Record only bytes and errors actually observed before the marker's early exit.
 // A growing source can supply at most one byte beyond the inspection budget.
 type privateInspectionReader struct {
@@ -117,7 +201,7 @@ func scanPrivateLimit(source io.Reader, limit int64) (bool, error) {
 		return false, valueErr("too_large")
 	}
 	r := privateInspectionReader{LimitedReader: io.LimitedReader{R: source, N: limit + 1}}
-	marked, err := scanPrivate(&r)
+	marked, err := scanPrivateTyped(&r)
 	if r.N == 0 {
 		return false, valueErr("too_large")
 	}

@@ -17,6 +17,10 @@ var errArchivePolicySkipped = errors.New("archive_capture_skipped")
 // archiveMetadataRecordBytes, archiveMetadataPaths or archiveMetadataDepth).
 const errArchiveInspectionLimit = valueErr("archive_metadata_inspection_limit")
 
+// errArchiveInspectionFailed: a record that is not valid JSON (a writer that
+// crashed mid-line). Like the limit, the file is never uploaded.
+const errArchiveInspectionFailed = valueErr("archive_metadata_inspection_failed")
+
 const (
 	archiveMetadataRecordBytes = 8 << 20
 	archiveMetadataPaths       = 4096
@@ -246,12 +250,12 @@ func readArchiveMetadataRecord(r *bufio.Reader, record []byte) (any, error) {
 		if err == nil {
 			var extra any
 			if decoder.Decode(&extra) != io.EOF {
-				return nil, valueErr("archive_metadata_inspection_failed")
+				return nil, errArchiveInspectionFailed
 			}
 			return value, nil
 		}
 		if !errors.Is(err, io.ErrUnexpectedEOF) {
-			return nil, valueErr("archive_metadata_inspection_failed")
+			return nil, errArchiveInspectionFailed
 		}
 		if len(record) >= archiveMetadataRecordBytes {
 			return nil, valueErr("archive_metadata_inspection_limit")
@@ -261,7 +265,7 @@ func readArchiveMetadataRecord(r *bufio.Reader, record []byte) (any, error) {
 			return nil, readErr
 		}
 		if len(line) == 0 {
-			return nil, valueErr("archive_metadata_inspection_failed")
+			return nil, errArchiveInspectionFailed
 		}
 		if len(record)+len(line)+1 > archiveMetadataRecordBytes {
 			return nil, valueErr("archive_metadata_inspection_limit")
