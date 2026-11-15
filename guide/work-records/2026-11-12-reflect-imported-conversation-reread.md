@@ -26,7 +26,7 @@ Limits: first-stage query ranking remains bounded; unknown imported session refe
 
 ## 검증
 
-수정 전 두 경로의 실패를 확인했고 수정 후 Reflect 전체 race 회귀가 통과했다. 추가 합성 테스트로 필터·삭제·배치 한도·빈 참조를 검증한다. 실제 평가 점수 향상은 아직 검증하지 않았고 외부 모델 호출은 하지 않았다.
+수정 전 두 경로의 실패를 확인했고 수정 후 Reflect 전체 race 회귀가 통과했다. 추가 합성 테스트로 필터·삭제·배치 한도·빈 참조를 검증한다. 이 회귀검사는 로컬 가짜 모델만 사용했다. 이후 실제 모델 평가의 진행 상황은 아래 별도 기록을 따른다.
 
 ## Actual-store diagnosis and SQL validation
 
@@ -51,3 +51,27 @@ plausible alternatives, insufficiently supported labels and source/label
 inconsistencies. No labels were removed or altered, and no rule forcing personal
 attributes or diagnoses into answers was added. Actual accuracy is being measured
 separately on the same frozen 62 questions with the same grader.
+
+## Actual evaluation status — 2026-11-15
+
+Task: continue the open-domain quality investigation after the interrupted run.
+The frozen baseline completed all 62 questions and scored 38/62 (61.29%) with
+`historical_primary_v1`: 60 new judge calls, two exact-match reused judgments,
+zero missing or invalid judgments. The earlier historical 39/62 result is a
+separate run and is not substituted for this controlled baseline.
+
+The candidate run produced no completed answers. Its first rereader provider
+request returned HTTP 429; the persistent halt latch then rejected the fallback
+request. All failed-attempt records remain preserved. On November 15, a separate
+synthetic transport check succeeded (28 reported tokens, no tool calls). A
+read-only comparison confirmed all 10,398 stored memory/source records retained
+the original normalized content, revisions, embeddings and search state; only
+excluded operational bookkeeping differed. Daily evaluation budgets were available.
+
+The attempted evaluation restart was blocked by automatic approval review before
+execution because explicit approval for transmitting the evaluation conversations
+to the external model destination was required. No restarted candidate answers or
+new accuracy result are available. No accuracy gain or 90% attainment is claimed.
+The remaining work is authorized data transfer, candidate evaluation with the
+unchanged questions/grader, failure analysis, and CI/review before merge. No
+production deployment occurred.
