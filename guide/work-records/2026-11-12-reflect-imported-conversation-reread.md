@@ -75,3 +75,26 @@ new accuracy result are available. No accuracy gain or 90% attainment is claimed
 The remaining work is authorized data transfer, candidate evaluation with the
 unchanged questions/grader, failure analysis, and CI/review before merge. No
 production deployment occurred.
+
+## Filtered candidate starvation — 2026-11-15
+
+Task: OPEN-DOMAIN-QUALITY. Further review found that reread query lookup omitted
+Reflect request filters until after the bounded source lane was selected. With
+24 matching sources from excluded authors ahead of the wanted author's source,
+the correct source was never considered even though all final permission checks
+were intact. `TestReflectRereadImportedFilterBeforeCandidateLimit` reproduced
+that loss before the fix (eligible-source assertion failed).
+
+The query lookup now uses the same `reflectSearch` filter conversion as passage
+lookup and passes those filters to the repository before candidate limiting.
+Final source authorization and transfer checks remain in place. The regression
+uses synthetic text and verifies both recovery of the requested author's source
+and exclusion of the other authors' text. No external model request is involved.
+This fixes filtered candidate coverage; it does not claim to resolve general
+unfiltered name-match ranking or establish a measured accuracy improvement.
+
+After the filter fix, `go test -race ./internal/memory -run
+'^TestReflectReread' -count=1` passed (2.317 seconds), including the new
+previously failing candidate-coverage regression. The broad memory race run
+was started before this fix and is tracked separately; it is not evidence for
+this final change. `git diff --check` passed.

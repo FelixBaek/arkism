@@ -157,3 +157,30 @@ func TestReflectRereadQueryBeforeImportedSessionFallbacks(t *testing.T) {
 		t.Fatal("query-matched evidence crowded out by imported session fallbacks")
 	}
 }
+
+// Ineligible authors must not consume the query lane before turnLines filters
+// their text. Otherwise a readable matching source after the lane limit is lost.
+func TestReflectRereadImportedFilterBeforeCandidateLimit(t *testing.T) {
+	f, _ := reflectFixture(t)
+	for i := range 24 {
+		reflectConversationBatch(f, "Rowan: workshop irrelevant.", fmt.Sprintf("other-session-%02d", i), i, func(r *Record) {
+			r.ID = fmt.Sprintf("a-other-%02d", i)
+			r.CreatedBy = "other"
+			r.Keywords = []string{"workshop"}
+		})
+	}
+	line := "Mira: workshop registration closes Thursday."
+	reflectConversationBatch(f, line, "wanted-session", 0, func(r *Record) {
+		r.ID = "z-wanted"
+		r.CreatedBy = "wanted"
+		r.Keywords = []string{"workshop"}
+	})
+	run := &reflectRun{in: ReflectInput{Scope: scopeA, Query: "workshop", CreatedBy: []string{"wanted"}}}
+	prompt, allowed := f.svc.rereadTranscripts(testCtx, f.human, run)
+	if !allowed[line] || !strings.Contains(prompt, line) {
+		t.Fatal("eligible source lost behind filtered authors")
+	}
+	if strings.Contains(prompt, "irrelevant") {
+		t.Fatal("filtered source entered reread prompt")
+	}
+}

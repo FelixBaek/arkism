@@ -110,7 +110,8 @@ func (s *Service) rereadRefs(ctx context.Context, run *reflectRun) []string {
 			}
 		}
 	}
-	rows, _ := s.sideLane(ctx, "sources", SearchInput{Scope: run.in.Scope, Query: run.in.Query, space: run.in.space}, SearchCriteria{Kinds: []string{conversationSourceKind}})
+	in := reflectSearch(run.in, run.in.Query)
+	rows, _ := s.sideLane(ctx, "sources", in, SearchCriteria{Kinds: []string{conversationSourceKind}, Filters: in.Filters})
 	for _, row := range rows[:min(len(rows), conversationLaneHits)] {
 		if r, err := s.Repo.Get(ctx, "sources", run.in.Scope, row.ID); err == nil && strings.TrimSpace(r.SourceRef) != "" {
 			refs = appendMissing(refs, []string{r.SourceRef})
