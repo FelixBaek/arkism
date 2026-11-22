@@ -2,6 +2,9 @@
 // i18n.test.js checks it has every key with the same placeholders; keep it in step with node tools/i18n_sync.mjs.
 (window.ArkismI18nDicts ||= {})["zh-CN"] = {
  "strings": {
+ "이 PC의 기억 저장소": "这台电脑上的记忆库",
+ "이 PC의 기억 저장소를 열지 못했어요. 잠시 뒤 다시 시도하세요.": "无法打开这台电脑上的记忆库。请稍后重试。",
+ "기존 기억과 스킬이 있는 저장소를 여는 중이에요.": "正在打开存有现有记忆和技能的记忆库。",
  "승인과 버리기는 사람만 할 수 있어요.": "只有人工才能批准或丢弃。",
  "오래 갈 내용": "长期有效的内容",
  "잠깐 맞는 내용": "暂时有效的内容",

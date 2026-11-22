@@ -4,6 +4,9 @@
 // Every other language has the same keys in its own i18n-<code>.js (i18n.test.js checks they all cover the UI).
 window.ArkismI18nEN = (window.ArkismI18nDicts ||= {}).en = {
  "strings": {
+  "이 PC의 기억 저장소": "Memory store on this PC",
+  "이 PC의 기억 저장소를 열지 못했어요. 잠시 뒤 다시 시도하세요.": "Could not open this PC’s memory store. Try again shortly.",
+  "기존 기억과 스킬이 있는 저장소를 여는 중이에요.": "Opening the store with your existing memories and skills.",
  "승인과 버리기는 사람만 할 수 있어요.": "Only a person can approve or discard.",
  "오래 갈 내용": "Lasting",
  "잠깐 맞는 내용": "True for now",

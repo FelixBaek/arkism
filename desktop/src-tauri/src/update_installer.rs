@@ -1711,7 +1711,12 @@ mod windows {
             }
             for argument in arguments {
                 command.push(32);
-                quoted(argument, &mut command)?;
+                // NSIS only recognizes the silent flag without quotes.
+                if argument == "/S" {
+                    command.extend("/S".encode_utf16());
+                } else {
+                    quoted(argument, &mut command)?;
+                }
             }
             if command.len() >= 32767 {
                 return Err(Error::fixed("command_too_long"));

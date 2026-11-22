@@ -139,6 +139,19 @@ test("a server reached by address shows why it cannot be updated from the app", 
   assert.equal(line.querySelector("button").disabled, true);
 });
 
+test("a managed memory service shows its local version independently of desktop updates", async () => {
+  const t = await setup({ health: { status: "ok", version: "0.1.6", api_level: 1 }, mode: "managed" });
+  await t.banner.check();
+  assert.equal(t.box().hidden, true);
+  assert.equal(t.banner.lacks("forget_both"), true);
+  const line = t.line();
+  assert.match(line.textContent, /이 PC의 기억 저장소.*v0\.1\.6/);
+  assert.doesNotMatch(line.textContent, /업데이트|서버 주소|최신/);
+  assert.equal(line.querySelector("button"), null);
+  await t.banner.update();
+  assert.deepEqual(t.calls, ["/healthz"]);
+});
+
 test("serverNeeded keeps the control visible but off, with the reason", async () => {
   const { serverNeeded } = await mod;
   const h = house(createDocument());

@@ -79,6 +79,13 @@ VIAddVersionKey "LegalCopyright" "Arkism contributors"
   !insertmacro MUI_PAGE_FINISH
   !insertmacro MUI_LANGUAGE "Korean"
 
+Function .onInit
+  ; Existing desktop updaters pass the entire silent flag in quotes.
+  ${GetParameters} $0
+  StrCmp $0 '$\"/S$\"' 0 +2
+  SetSilent silent
+FunctionEnd
+
 Section "Install"
   ; Extract the entire authenticated bundle without changing the old install.
   InitPluginsDir

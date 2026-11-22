@@ -101,7 +101,7 @@ export function createServerBanner(deps) {
     const box = deps.$("#server-banner");
     if (!box) return;
     const info = deps.state.serverInfo, app = deps.appVersion();
-    box.hidden = !busy && !serverOlder(info, app);
+    box.hidden = !busy && (deps.state.mode === "managed" || !serverOlder(info, app));
     if (box.hidden) return;
     const b = deps.el("button", "btn", "업데이트 보기");
     b.type = "button";
@@ -112,22 +112,26 @@ export function createServerBanner(deps) {
   // 설정 › 정보: "서버 v0.1.5 (10월 26일 판 · abc1234) · 업데이트 있음" with its button or the reason it has none.
   function row() {
     const { el, state } = deps, info = state.serverInfo, app = deps.appVersion();
-    const status = serverStatus(info, app);
+    const managed = state.mode === "managed";
+    const status = serverStatus(info, managed ? "" : app);
     const where = state.mode === "local" ? "이 PC" : state.mode === "remote" && state.ssh ? state.ssh.host : "서버 주소";
     const r = el("div", "v4-version server-version");
     const left = el("div", "v4-version-text");
     const top = el("div", "v4-version-top");
-    top.append(el("span", "", `서버 · ${where}`), el("span", `tag${status === "current" ? "" : " warn"}`, STATUS_TEXT[status]));
+    top.append(el("span", "", managed ? "이 PC의 기억 저장소" : `서버 · ${where}`));
+    if (!managed || status !== "current") {
+      top.append(el("span", `tag${status === "current" ? "" : " warn"}`, STATUS_TEXT[status]));
+    }
     const ver = el("div", "v4-version-num");
     ver.append(el("strong", info?.version === "dev" ? "" : "mono", info?.version === "dev" ? "개발 빌드" : info?.version ? `v${info.version}` : info ? "이전 버전" : "—"));
     const build = buildText(info);
     if (build) ver.append(el("small", "", build));
     left.append(top, ver);
-    const blocked = updateBlocked(state);
+    const blocked = managed ? "" : updateBlocked(state);
     const note = busy ? progress : failure || (status !== "current" && status !== "unknown" ? blocked : "");
     if (note) left.append(el("small", "server-version-note", note));
     const acts = el("div", "v4-version-actions");
-    if (deps.tauri && status !== "current" && status !== "unknown") {
+    if (!managed && deps.tauri && status !== "current" && status !== "unknown") {
       // A built-in server comes inside the app installer: restarting it brings the matching one.
       const b = el("button", "btn primary", blocked ? (state.mode === "local" ? "다시 연결" : "업데이트할 수 없음") : "서버 업데이트");
       b.type = "button";
@@ -141,7 +145,7 @@ export function createServerBanner(deps) {
 
   async function update() {
     const app = deps.appVersion();
-    if (busy || !app) return;
+    if (deps.state.mode === "managed" || busy || !app) return;
     if (!await deps.ask(`서버를 v${app}로 업데이트할까요?\n\n지금 서버 프로그램을 백업하고 바꾼 뒤 다시 시작해요. 새 서버가 정상으로 뜨지 않으면 자동으로 되돌려요.`, "업데이트")) return;
     busy = true; failure = ""; progress = STEP_TEXT.download;
     draw();

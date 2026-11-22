@@ -367,6 +367,7 @@ export function createAppConnection(deps) {
   function unlockMode() {
     // 처음 실행(choose): 이 PC / SSH 두 카드. 이 PC를 고르면 카드 아래에 저장 위치가 펼쳐진다.
     // 내장 Arkism을 켜는 중이거나 켜지 못했을 때는 연결 칸 대신 진행 상태만 보여 준다.
+    const managed = deps.state.mode === "managed";
     const choose = deps.state.mode === "choose", builtIn = deps.state.mode === "local";
     const failed = builtIn && !!deps.state.localError;
     if (choose) firstRun = true;
@@ -379,6 +380,15 @@ export function createAppConnection(deps) {
     if (!failed) deps.$("#local-doctor-result").hidden = true;
     deps.$("#local-code").textContent = failed ? deps.state.localError : "";
     deps.$("#local-link").hidden = builtIn || choose || !deps.state.defaults.local;
+    if (managed) {
+      deps.$("#unlock-title").textContent = "이 PC의 기억 저장소";
+      deps.$("#unlock-intro").textContent = deps.state.localError
+        ? "이 PC의 기억 저장소를 열지 못했어요. 잠시 뒤 다시 시도하세요."
+        : "기존 기억과 스킬이 있는 저장소를 여는 중이에요.";
+      for (const id of ["#ssh-form", "#ssh-actions", "#ssh-hint", "#ssh-test-result", "#local-link"]) deps.$(id).hidden = true;
+      deps.$("#local-retry").hidden = !deps.state.localError;
+      return;
+    }
     if (web()) {
       deps.$("#ssh-test").hidden = true;
       deps.$("#ssh-hint").hidden = true;
@@ -413,6 +423,26 @@ export function createAppConnection(deps) {
     }
   }
 
+  async function startManaged() {
+    deps.state.mode = "managed";
+    deps.state.ssh = null;
+    deps.state.localError = "";
+    unlocked(false);
+    unlockMode();
+    try {
+      const connection = await deps.tauri.invoke("managed_local_connect");
+      deps.state.server = connection.server;
+      deps.state.scope = { ...deps.defaults, ...connection.scope };
+      deps.state.token = "arkism-managed-local";
+      await open();
+    } catch (error) {
+      deps.state.token = "";
+      deps.state.localError = String(error?.message || error);
+      unlocked(false);
+      unlockMode();
+    }
+  }
+
   function useServer() {
     deps.state.mode = "remote";
     lock();
@@ -441,11 +471,14 @@ export function createAppConnection(deps) {
     try {
       if (deps.state.mode === "remote" && deps.tauri && deps.state.ssh) await sshConnect({ ...deps.state.ssh, password: sshPassword || null });
       else if (deps.state.mode === "local" && deps.tauri) await startLocal();
+      else if (deps.state.mode === "managed" && deps.tauri) await startManaged();
       else await deps.loadAll();
     } catch (e) { deps.notice(e.message); } finally { if (b?.isConnected) b.disabled = false; }
   }
 
-  deps.$("#local-retry").addEventListener("click", startLocal);
+  deps.$("#local-retry").addEventListener("click", () => {
+    void (deps.state.mode === "managed" ? startManaged() : startLocal());
+  });
 
   // 시작 실패 화면의 점검: arkism doctor --fix. 결과는 고친 것과 남은 문제를 한 줄씩.
   deps.$("#local-doctor").addEventListener("click", async (e) => {
@@ -619,6 +652,7 @@ export function createAppConnection(deps) {
     get sshLabel() { return sshLabel; },
     get sshTest() { return sshTest; },
     get startLocal() { return startLocal; },
+    get startManaged() { return startManaged; },
     get storageRow() { return storageRow; },
     get unlockConnect() { return unlockConnect; },
     get unlockSSH() { return unlockSSH; },
