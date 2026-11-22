@@ -24,7 +24,7 @@
     const top = [...document.querySelectorAll("dialog[open]")].filter((d) => d.matches(":modal")).pop();
     const r = top?.getBoundingClientRect();
     const host = r && r.top <= 0 && r.right >= innerWidth - 1 ? top : document.body;
-    if (bar.parentNode !== host) host.prepend(bar);
+    if (![...host.children].includes(bar)) host.prepend(bar);
     // any other modal makes the strip inert (a click would only hit its backdrop), so it is hidden until it closes
     bar.classList.toggle("under-modal", !!top && host === document.body);
   };
