@@ -75,6 +75,25 @@ class WindowsReleaseTests(unittest.TestCase):
                 path.write_bytes(original)
         self.verify()
 
+    def test_signing_rejects_linked_outputs_without_touching_the_target(self):
+        outside = self.root / "outside.txt"
+        outside.write_text("keep original bytes", encoding="ascii")
+        for name in (self.exe.name + ".minisig", self.exe.name + ".sha256", "latest.json"):
+            with self.subTest(name=name):
+                linked = self.dist / name
+                try:
+                    linked.symlink_to(outside)
+                except OSError as exc:
+                    if os.name != "nt" or exc.winerror != 1314:
+                        raise
+                    self.skipTest(f"symbolic links unavailable: {exc}")
+                try:
+                    with self.assertRaisesRegex(release.ReleaseError, "unsafe release output"):
+                        self.sign()
+                    self.assertEqual(outside.read_text(encoding="ascii"), "keep original bytes")
+                finally:
+                    linked.unlink()
+
     def test_server_bundles_are_signed_for_their_own_name_and_checked_for_contents(self):
         self.sign()
         amd64, arm64 = (self.dist / n for n in release.server_bundles("1.2.3"))

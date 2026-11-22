@@ -95,6 +95,25 @@ def require_file(path):
         raise ReleaseError(f"missing, empty or linked release input: {path.name}")
 
 
+def release_output(directory, name):
+    if name in (".", "..") or not re.fullmatch(r"[A-Za-z0-9._-]+", name):
+        raise ReleaseError("unsafe release output filename")
+    path = directory / name
+    if path.resolve().parent != directory or path.is_symlink() or (path.exists() and not path.is_file()):
+        raise ReleaseError(f"unsafe release output: {name}")
+    return path
+
+
+def write_release_text(directory, name, value, encoding):
+    target = release_output(directory, name)
+    # Replace the directory entry rather than opening an existing output that
+    # could point to a file outside the release directory.
+    with tempfile.TemporaryDirectory(prefix=".arkism-output-", dir=directory) as tmp:
+        staged = Path(tmp) / "content"
+        staged.write_text(value, encoding=encoding)
+        staged.replace(target)
+
+
 def verify_signature(path, signature, key, version=None):
     lines = signature.read_text(encoding="ascii").splitlines()
     if len(lines) != 4 or not lines[0].startswith("untrusted comment:") or not lines[2].startswith("trusted comment:"):
@@ -110,12 +129,15 @@ def verify_signature(path, signature, key, version=None):
 
 
 def sign_file(path, key, version, public):
-    signature = path.with_name(path.name + SIG)
+    signature = release_output(path.parent, path.name + SIG)
     # Modern Tauri recognizes the authenticated `version:` comment field.
     comment = f"file:{path.name}\tversion:{version}"
-    run_minisign(["-S", "-s", key, "-m", path, "-x", signature, "-t", comment],
-                 os.environ.get("ARKISM_UPDATE_SIGNING_PASSWORD"))
-    verify_signature(path, signature, public, version)
+    with tempfile.TemporaryDirectory(prefix=".arkism-signature-", dir=path.parent) as tmp:
+        staged = Path(tmp) / "signature"
+        run_minisign(["-S", "-s", key, "-m", path, "-x", staged, "-t", comment],
+                     os.environ.get("ARKISM_UPDATE_SIGNING_PASSWORD"))
+        verify_signature(path, staged, public, version)
+        staged.replace(signature)
     return signature
 
 
@@ -131,9 +153,10 @@ def check_sbom(path):
 
 def sign(directory, version, feed, channel, key):
     validate(version, feed, channel)
+    directory = directory.resolve(strict=True)
     installer, manifest, sbom = names(version, channel)
     key = Path(key).resolve(strict=True)
-    if key.is_relative_to(directory.resolve()):
+    if key.is_relative_to(directory):
         raise ReleaseError("private signing key must be outside the release directory")
     if os.name != "nt" and key.stat().st_mode & 0o077:
         raise ReleaseError("private signing key must have mode 0600")
@@ -146,16 +169,16 @@ def sign(directory, version, feed, channel, key):
         public.write_bytes(public_key())
         signature = sign_file(directory / installer, key, version, public)
         wrapped = base64.b64encode(signature.read_bytes()).decode("ascii")
-        (directory / (installer + ".sig")).write_text(wrapped + "\n", encoding="ascii")
+        write_release_text(directory, installer + ".sig", wrapped + "\n", "ascii")
         checksum = digest(directory / installer)
-        (directory / (installer + ".sha256")).write_text(f"{checksum}  {installer}\n", encoding="ascii")
+        write_release_text(directory, installer + ".sha256", f"{checksum}  {installer}\n", "ascii")
         document = {"version": version, "file": installer, "sha256": checksum, "channel": channel, "signature": wrapped}
-        (directory / manifest).write_text(json.dumps(document, separators=(",", ":")) + "\n", encoding="utf-8")
+        write_release_text(directory, manifest, json.dumps(document, separators=(",", ":")) + "\n", "utf-8")
         # The same installer and .sig work with tauri-plugin-updater. Its static
         # manifest has a different layout, provided explicitly for migration.
         tauri = {"version": version, "platforms": {"windows-x86_64": {
             "url": f"{feed}/{installer}", "signature": wrapped}}}
-        (directory / TAURI_MANIFEST).write_text(json.dumps(tauri, separators=(",", ":")) + "\n", encoding="utf-8")
+        write_release_text(directory, TAURI_MANIFEST, json.dumps(tauri, separators=(",", ":")) + "\n", "utf-8")
         for name in (manifest, TAURI_MANIFEST, sbom, *server_bundles(version)):
             sign_file(directory / name, key, version, public)
         files = sorted(p for p in directory.iterdir() if p.name not in (SUMS, SUMS_SIG))
@@ -163,7 +186,7 @@ def sign(directory, version, feed, channel, key):
             require_file(path)
             if not re.fullmatch(r"[A-Za-z0-9._-]+", path.name):
                 raise ReleaseError("unsafe release filename")
-        (directory / SUMS).write_text("".join(f"{digest(p)}  {p.name}\n" for p in files), encoding="ascii")
+        write_release_text(directory, SUMS, "".join(f"{digest(p)}  {p.name}\n" for p in files), "ascii")
         sign_file(directory / SUMS, key, version, public)
     verify(directory, version, feed, channel)
 
