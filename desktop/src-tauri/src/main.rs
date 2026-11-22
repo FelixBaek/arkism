@@ -18,6 +18,7 @@ mod agent_backends;
 mod gateway_token;
 mod general;
 mod lifecycle;
+mod managed_local;
 #[cfg(windows)]
 mod windows_process;
 #[cfg_attr(not(windows), allow(dead_code))] // Windows-only paths; other builds compile them for the unit tests
@@ -74,13 +75,23 @@ struct Defaults {
     updates: bool,
     /// This build carries the built-in Arkism (Postgres and server) and can run without a server.
     local: bool,
+    managed_local: bool,
     workspace: &'static str,
     project: &'static str,
 }
 
 #[tauri::command]
-fn app_defaults(rt: tauri::State<Arc<runtime::Runtime>>) -> Defaults {
-    Defaults { server: DEFAULT_SERVER, ssh_host: SSH_HOST, updates: FEED.is_some(), local: rt.available(), workspace: DEFAULT_WORKSPACE, project: DEFAULT_PROJECT }
+fn app_defaults(app: tauri::AppHandle, rt: tauri::State<Arc<runtime::Runtime>>) -> Defaults {
+    let managed_local = app.path().app_local_data_dir().ok()
+        .is_some_and(|dir| managed_local::profile_path(&dir).symlink_metadata().is_ok());
+    Defaults { server: DEFAULT_SERVER, ssh_host: SSH_HOST, updates: FEED.is_some(), local: rt.available(), managed_local, workspace: DEFAULT_WORKSPACE, project: DEFAULT_PROJECT }
+}
+
+#[tauri::command]
+async fn managed_local_connect(app: tauri::AppHandle) -> Result<managed_local::Connected, String> {
+    let dir = app.path().app_local_data_dir().map_err(|_| "managed_local_profile_invalid")?;
+    tauri::async_runtime::spawn_blocking(move || managed_local::Connection::read_from(&dir)?.check())
+        .await.map_err(|_| "managed_local_server_unavailable".to_string())?
 }
 
 /// 저장 위치: the folder the built-in Arkism uses now, the one the next start uses (they differ
@@ -669,23 +680,42 @@ struct ApiCall {
 }
 
 #[tauri::command]
-async fn api(rt: tauri::State<'_, Arc<runtime::Runtime>>, request: tauri::ipc::Request<'_>) -> Result<Reply, String> {
+async fn api(app: tauri::AppHandle, rt: tauri::State<'_, Arc<runtime::Runtime>>, request: tauri::ipc::Request<'_>) -> Result<Reply, String> {
     let tauri::ipc::InvokeBody::Json(args) = request.body() else {
         return Err("api_args_invalid".into());
     };
-    let call = <ApiCall as serde::Deserialize>::deserialize(args).map_err(|e| format!("api_args_invalid: {e}"))?;
-    api_with_gate(rt.gate(), call).await
+    let mut call = <ApiCall as serde::Deserialize>::deserialize(args).map_err(|e| format!("api_args_invalid: {e}"))?;
+    let (token, managed) = connection_token(&app, &call.base, call.token).await?;
+    let agent = if managed { managed_local::agent() } else { api_agent() };
+    call.token = token;
+    api_with_agent(rt.gate(), agent, call).await
+}
+
+async fn connection_token(app: &tauri::AppHandle, base: &str, token: String) -> Result<(String, bool), String> {
+    if token != managed_local::SESSION {
+        return Ok((token, false));
+    }
+    let dir = app.path().app_local_data_dir().map_err(|_| "managed_local_profile_invalid")?;
+    let base = base.to_owned();
+    let token = tauri::async_runtime::spawn_blocking(move || managed_local::Connection::read_from(&dir)?.into_token(&base))
+        .await.map_err(|_| "managed_local_server_unavailable".to_string())??;
+    Ok((token, true))
 }
 
 /// A file the UI saves (a kept original, the wiki archive) comes back base64 up to this size.
 const API_BINARY_MAX: u64 = 64 << 20;
 
+#[cfg(test)]
 async fn api_with_gate(gate: Arc<lifecycle::Gate>, call: ApiCall) -> Result<Reply, String> {
+    api_with_agent(gate, api_agent(), call).await
+}
+
+async fn api_with_agent(gate: Arc<lifecycle::Gate>, agent: &'static ureq::Agent, call: ApiCall) -> Result<Reply, String> {
     if !allowed(&call.method, &call.path) {
         return Err("path_not_allowed".into());
     }
     let out = Outgoing { method: call.method, path: call.path, body: call.body.map(String::into_bytes), content_type: "application/json".into(), binary: call.binary.unwrap_or(false), lang: call.lang };
-    send(gate, api_agent(), call.base, call.token, out).await
+    send(gate, agent, call.base, call.token, out).await
 }
 
 /// 기억 후보 만들기 › 파일 goes to this one route as a multipart body the WebView builds.
@@ -700,20 +730,28 @@ fn upload_agent() -> &'static ureq::Agent {
 /// Sends a file upload: the multipart bytes are the raw invoke body (no base64 JSON), and the
 /// server address, token and content type ride in the invoke headers.
 #[tauri::command]
-async fn api_upload(rt: tauri::State<'_, Arc<runtime::Runtime>>, request: tauri::ipc::Request<'_>) -> Result<Reply, String> {
+async fn api_upload(app: tauri::AppHandle, rt: tauri::State<'_, Arc<runtime::Runtime>>, request: tauri::ipc::Request<'_>) -> Result<Reply, String> {
     let tauri::ipc::InvokeBody::Raw(body) = request.body() else {
         return Err("upload_body_invalid".into());
     };
     let header = |k: &str| request.headers().get(k).and_then(|v| v.to_str().ok()).map(str::to_string).unwrap_or_default();
-    upload_with_gate(rt.gate(), header("x-arkism-base"), header("x-arkism-token"), header("x-arkism-content-type"), body.clone()).await
+    let base = header("x-arkism-base");
+    let (token, managed) = connection_token(&app, &base, header("x-arkism-token")).await?;
+    let agent = if managed { managed_local::upload_agent() } else { upload_agent() };
+    upload_with_agent(rt.gate(), agent, base, token, header("x-arkism-content-type"), body.clone()).await
 }
 
+#[cfg(test)]
 async fn upload_with_gate(gate: Arc<lifecycle::Gate>, base: String, token: String, content_type: String, body: Vec<u8>) -> Result<Reply, String> {
+    upload_with_agent(gate, upload_agent(), base, token, content_type, body).await
+}
+
+async fn upload_with_agent(gate: Arc<lifecycle::Gate>, agent: &'static ureq::Agent, base: String, token: String, content_type: String, body: Vec<u8>) -> Result<Reply, String> {
     if !content_type.starts_with("multipart/form-data; boundary=") || content_type.contains(['\r', '\n']) {
         return Err("upload_body_invalid".into());
     }
     let out = Outgoing { method: "POST".into(), path: UPLOAD_PATH.into(), body: Some(body), content_type, binary: false, lang: None };
-    send(gate, upload_agent(), base, token, out).await
+    send(gate, agent, base, token, out).await
 }
 
 /// The app's language tag as the request's Accept-Language (the server reads numeric dates and
@@ -1175,6 +1213,7 @@ fn main() {
                 }
             }
             let app_dir = app.path().app_local_data_dir()?;
+            let managed_local = managed_local::profile_path(&app_dir).symlink_metadata().is_ok();
             // The default folder keeps what is about the app, not the data: agents.json (the agents
             // look for it there) and the autostart marker. The rest follows the chosen 저장 위치.
             let default = app_dir.join("runtime");
@@ -1207,7 +1246,7 @@ fn main() {
                 let _ = std::fs::write(&autostart_marker, "on");
             }
             let version = app.package_info().version.to_string();
-            if std::fs::read_to_string(rt.data_dir().join("agents-connected")).ok().as_deref() != Some(version.as_str()) {
+            if !managed_local && std::fs::read_to_string(rt.data_dir().join("agents-connected")).ok().as_deref() != Some(version.as_str()) {
                 let rt = Arc::clone(&rt);
                 std::thread::spawn(move || {
                     let Ok(_activity) = rt.activity() else { return };
@@ -1261,7 +1300,7 @@ fn main() {
                 let _ = window.hide();
             }
         })
-        .invoke_handler(tauri::generate_handler![api, api_upload, app_defaults, local_location, local_location_set, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, open_logs, model_roles, set_model_roles, gateway_info, agent_link_set, doctor, import_agent_memories, agents_setup, agents_setup_retry, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_connect_done, ssh_test, ssh_host_key_check, ssh_host_key_approve, ssh_host_key_cancel, ssh_disconnect, ssh_keys, ssh_hosts, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate, general::general_get, general::general_set, general::notify, agent_backends, popout::popout_destroy, server_update, agent_login, agents_install])
+        .invoke_handler(tauri::generate_handler![api, api_upload, app_defaults, managed_local_connect, local_location, local_location_set, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, open_logs, model_roles, set_model_roles, gateway_info, agent_link_set, doctor, import_agent_memories, agents_setup, agents_setup_retry, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_connect_done, ssh_test, ssh_host_key_check, ssh_host_key_approve, ssh_host_key_cancel, ssh_disconnect, ssh_keys, ssh_hosts, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate, general::general_get, general::general_set, general::notify, agent_backends, popout::popout_destroy, server_update, agent_login, agents_install])
         .build(tauri::generate_context!())
         .expect("Arkism failed to start");
     app.run(|app, event| {
