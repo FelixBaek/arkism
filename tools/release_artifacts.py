@@ -108,10 +108,14 @@ def write_release_text(directory, name, value, encoding):
     target = release_output(directory, name)
     # Replace the directory entry rather than opening an existing output that
     # could point to a file outside the release directory.
-    with tempfile.TemporaryDirectory(prefix=".arkism-output-", dir=directory) as tmp:
-        staged = Path(tmp) / "content"
-        staged.write_text(value, encoding=encoding)
+    fd, temporary = tempfile.mkstemp(prefix=".arkism-output-", dir=directory)
+    staged = Path(temporary)
+    try:
+        with os.fdopen(fd, "w", encoding=encoding) as content:
+            content.write(value)
         staged.replace(target)
+    finally:
+        staged.unlink(missing_ok=True)
 
 
 def verify_signature(path, signature, key, version=None):
