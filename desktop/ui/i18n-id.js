@@ -44,6 +44,8 @@
  "본문 포함": "Isi disertakan",
  "바이트 · SHA-256": " bita · SHA-256",
  "목록에 없음": "Tidak tercantum",
+  "전송 다시 시도": "Coba kirim lagi",
+  "전송을 다시 대기열에 넣었어요.": "Pengiriman telah dimasukkan kembali ke antrean.",
  "이 PC의 기억 저장소": "Penyimpanan memori di PC ini",
  "이 PC의 기억 저장소를 열지 못했어요. 잠시 뒤 다시 시도하세요.": "Penyimpanan memori di PC ini tidak dapat dibuka. Coba lagi sebentar lagi.",
  "기존 기억과 스킬이 있는 저장소를 여는 중이에요.": "Membuka penyimpanan yang berisi memori dan keterampilan Anda.",

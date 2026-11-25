@@ -1722,6 +1722,10 @@ class ArkismClient(BaseClient):
         """GET /v1/webhooks/{id}/deliveries — Webhooks: delivery log"""
         return self.request("GET", f"/v1/webhooks/{urllib.parse.quote(id, safe='')}/deliveries", query, None)
 
+    def retry_webhook_delivery(self, id, delivery, body=None):
+        """POST /v1/webhooks/{id}/deliveries/{delivery}/retry — Requeue a failed webhook delivery"""
+        return self.request("POST", f"/v1/webhooks/{urllib.parse.quote(id, safe='')}/deliveries/{urllib.parse.quote(delivery, safe='')}/retry", None, body)
+
     def post_v1_webhooks_id_test(self, id, body=None):
         """POST /v1/webhooks/{id}/test — Webhooks: send test event"""
         return self.request("POST", f"/v1/webhooks/{urllib.parse.quote(id, safe='')}/test", None, body)

@@ -111,6 +111,35 @@ test("webhook card: add, test, log with retry, turn off, delete only after confi
   assert.ok(s.calls.some(([p, m]) => p.startsWith("/v1/webhooks/h1?") && m === "DELETE"));
 });
 
+test("webhook log requeues only the failed delivery still subscribed to and updates the row", async () => {
+  const delivery = { event: "memory.approved", error: "http_500" };
+  const queued = { id: "d1", status: "pending", attempts: 0, delivery };
+  const s = setup({
+    ...base,
+    "/v1/webhooks": { items: [hook] },
+    "/v1/webhooks/h1/deliveries": { items: [
+      { id: "d1", status: "failed", attempts: 5, delivery },
+      { id: "d2", status: "retry", attempts: 1, delivery },
+      { id: "d3", status: "failed", attempts: 5, delivery: { event: "memory.deleted" } },
+      { id: "d4", status: "done", attempts: 1, delivery },
+    ] },
+    "/v1/webhooks/h1/deliveries/d1/retry": queued,
+  });
+  s.view(); await flush();
+  btn(s.view(), "보낸 기록").click(); await flush();
+  let view = s.view();
+  assert.equal(all(view, "button").filter((node) => node.textContent === "전송 다시 시도").length, 1);
+  btn(view, "전송 다시 시도").click(); await flush();
+  const post = s.calls.filter(([, method]) => method === "POST");
+  assert.equal(post.length, 1);
+  assert.equal(post[0][0], "/v1/webhooks/h1/deliveries/d1/retry");
+  assert.ok(post[0][2].scope);
+  view = s.view();
+  assert.equal(all(view, "button").filter((node) => node.textContent === "전송 다시 시도").length, 0);
+  assert.ok(has(view, "보낼 차례 기다림"));
+  assert.equal(s.notices.at(-1), "전송을 다시 대기열에 넣었어요.");
+});
+
 test("webhook card: unsupported and denied servers explain themselves", async () => {
   const gone = new Error("not_found");
   let s = setup({ ...base, "/v1/webhooks": () => { throw gone; } });

@@ -618,6 +618,51 @@ func (s *Service) ListWebhookDeliveries(ctx context.Context, token string, scope
 	return out, nil
 }
 
+// RetryWebhookDelivery resets an exhausted delivery. The worker still uses the
+// current subscription and outbound policy and signs the original event ID.
+func (s *Service) RetryWebhookDelivery(ctx context.Context, token string, scope Scope, webhookID, deliveryID string) (WebhookDeliveryView, error) {
+	if !validRunLabel(webhookID, 256) || !validRunLabel(deliveryID, 64) {
+		return WebhookDeliveryView{}, ErrInvalid
+	}
+	d, err := s.humanWebhooks(ctx, token, scope, webhookID)
+	if err != nil {
+		return WebhookDeliveryView{}, err
+	}
+	var out WebhookDeliveryView
+	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		hook, err := tx.Get(ctx, colWebhooks, scope, webhookID)
+		if err != nil {
+			return err
+		}
+		job, err := tx.Get(ctx, colJobs, scope, deliveryID)
+		if err != nil {
+			return err
+		}
+		if hook.Webhook == nil || job.Kind != webhookDeliveryKind || job.WebhookDelivery == nil || job.WebhookDelivery.WebhookID != webhookID {
+			return ErrNotFound
+		}
+		if job.Status != JobStatusFailed || !hook.Webhook.accepts(job.WebhookDelivery.Event) {
+			return ErrConflict
+		}
+		previous := job.Revision
+		requeueJob(&job, time.Now().UTC())
+		job.Revision++
+		if err := tx.Replace(ctx, colJobs, job, previous); err != nil {
+			return err
+		}
+		if err := audit(ctx, tx, scope, d.PrincipalID, "retry:webhook_delivery", job.ID); err != nil {
+			return err
+		}
+		out = webhookDeliveryView(job)
+		return nil
+	})
+	return out, err
+}
+
+func (w *Webhook) accepts(event string) bool {
+	return w != nil && (event == eventWebhookTest || w.Active && slices.Contains(w.Events, event))
+}
+
 // TestWebhook queues a "webhook.test" delivery (even for an inactive webhook).
 func (s *Service) TestWebhook(ctx context.Context, token string, scope Scope, id string) (WebhookDeliveryView, error) {
 	if _, err := s.GetWebhook(ctx, token, scope, id); err != nil {
@@ -746,7 +791,7 @@ func (s *Service) deliverWebhook(ctx context.Context, job *Record) (bool, error)
 	}
 	d := *job.WebhookDelivery
 	h, err := s.Repo.Get(ctx, colWebhooks, job.Scope, d.WebhookID)
-	if errors.Is(err, ErrNotFound) || err == nil && (h.Webhook == nil || !h.Webhook.Active && d.Event != eventWebhookTest) {
+	if errors.Is(err, ErrNotFound) || err == nil && !h.Webhook.accepts(d.Event) {
 		d.Error = "webhook_gone"
 		return false, s.recordWebhookAttempt(ctx, job, d)
 	}

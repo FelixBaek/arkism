@@ -2427,6 +2427,10 @@ export class ArkismClient {
   get_v1_webhooks_id_deliveries(id: string, query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "before"?: string; "limit"?: number }): Promise<WebhookDeliveryPage> {
     return this.request("GET", `/v1/webhooks/${encodeURIComponent(id)}/deliveries`, query, undefined);
   }
+  /** POST /v1/webhooks/{id}/deliveries/{delivery}/retry — Requeue a failed webhook delivery */
+  retry_webhook_delivery(id: string, delivery: string, body: { "scope": Scope }): Promise<WebhookDelivery> {
+    return this.request("POST", `/v1/webhooks/${encodeURIComponent(id)}/deliveries/${encodeURIComponent(delivery)}/retry`, undefined, body);
+  }
   /** POST /v1/webhooks/{id}/test — Webhooks: send test event */
   post_v1_webhooks_id_test(id: string, body: (ScopeOnly)): Promise<WebhookDelivery> {
     return this.request("POST", `/v1/webhooks/${encodeURIComponent(id)}/test`, undefined, body);
