@@ -4,14 +4,15 @@ go 1.27.4
 
 require (
 	github.com/bwmarrin/discordgo v0.29.0
-	github.com/gorilla/websocket v1.5.3
+	github.com/gorilla/websocket v1.5.4-0.20240701034025-d67f41855da4
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/ncruces/go-sqlite3 v0.35.6
 	github.com/tiktoken-go/tokenizer v0.8.1
 	github.com/zalando/go-keyring v0.2.8
-	golang.org/x/crypto v0.57.0
+	golang.org/x/crypto v0.58.0
 	golang.org/x/sync v0.24.0
 	golang.org/x/sys v0.49.0
+	golang.org/x/text v0.43.0
 	golang.org/x/tools v0.52.0
 )
 
@@ -25,5 +26,5 @@ require (
 	github.com/ncruces/go-sqlite3-wasm/v6 v6.3.35304 // indirect
 	github.com/ncruces/julianday v1.0.0 // indirect
 	golang.org/x/mod v0.42.0 // indirect
-	golang.org/x/text v0.42.0 // indirect
+	golang.org/x/net v0.61.0 // indirect
 )
