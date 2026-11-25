@@ -139,7 +139,7 @@ func checkAutomaticSkillPromotion(ctx context.Context, tx Tx, r Record, in Chang
 	if e = checkTrialEvidenceSet(ctx, reader.SkillTrialSourceIDs, r.Scope, in.TrialID, policy, evidence); e != nil {
 		return e
 	}
-	seen := map[string]bool{}
+	seen := newTrialExecutions()
 	for _, item := range evidence {
 		if e = checkTrialEvidenceItem(ctx, tx, r, in, trial, evaluation, item, seen); e != nil {
 			return e
@@ -181,7 +181,7 @@ func checkTrialEvidenceSet(ctx context.Context, sourceIDs func(context.Context, 
 	return nil
 }
 
-func checkTrialEvidenceItem(ctx context.Context, tx Tx, r Record, in ChangeInput, trial, evaluation Record, item ScopedTrialEvidence, seen map[string]bool) error {
+func checkTrialEvidenceItem(ctx context.Context, tx Tx, r Record, in ChangeInput, trial, evaluation Record, item ScopedTrialEvidence, seen *trialExecutions) error {
 	ref := item.Source
 	if ref.Collection != "sources" || ref.Revision < 1 {
 		return ErrInvalid
@@ -190,18 +190,17 @@ func checkTrialEvidenceItem(ctx context.Context, tx Tx, r Record, in ChangeInput
 	if e != nil {
 		return e
 	}
-	traceKey := structuredText(item.Scope) + "/" + source.TraceID
-	if source.Revision != ref.Revision || !live(source) || source.ContentErased || source.PrivacyQuarantined || source.TraceID == "" || seen[traceKey] {
+	if source.Revision != ref.Revision || !live(source) || source.ContentErased || source.PrivacyQuarantined || source.TraceID == "" {
 		return ErrConflict
 	}
-	seen[traceKey] = true
 	if e = checkTrialEvidenceEvaluation(ctx, tx, r, trial, evaluation, item, source); e != nil {
 		return e
 	}
 	if e = checkTrialEvidenceFailures(ctx, tx, r, trial, item, source); e != nil {
 		return e
 	}
-	if !successfulTrialUsage(source.Text, r, in, trial) {
+	var usage SkillUsage
+	if json.Unmarshal([]byte(source.Text), &usage) != nil || !successfulTrialUsage(usage, r, in, trial) {
 		return ErrDenied
 	}
 	trace, e := tx.Get(ctx, "execution_traces", item.Scope, source.TraceID)
@@ -209,6 +208,13 @@ func checkTrialEvidenceItem(ctx context.Context, tx Tx, r Record, in ChangeInput
 		return e
 	}
 	if !live(trace) || trace.ContentErased || trace.PrivacyQuarantined {
+		return ErrConflict
+	}
+	unique, err := seen.observe(ctx, tx, item.Scope, trace, usage)
+	if err != nil {
+		return err
+	}
+	if !unique {
 		return ErrConflict
 	}
 	return nil
@@ -261,9 +267,8 @@ func checkTrialEvidenceFailures(ctx context.Context, tx Tx, r, trial Record, ite
 	return nil
 }
 
-func successfulTrialUsage(text string, r Record, in ChangeInput, trial Record) bool {
-	var usage SkillUsage
-	return json.Unmarshal([]byte(text), &usage) == nil && usage.TrialID == in.TrialID && usage.VersionID == r.ID && usage.SkillID == r.SkillID && r.Analysis != nil && usage.ContentHash == r.Analysis.ContentHash && usage.Runtime == trial.SkillTrial.Runtime && usage.Status == "success" && usage.ToolFailures == 0 && usage.RuntimeErrors == 0 && !usage.OfflineCache && !usage.StartedAt.Before(trial.CreatedAt) && usage.StartedAt.Before(trial.SkillTrial.EndsAt) && !usage.CompletedAt.Before(usage.StartedAt) && !usage.CompletedAt.After(time.Now())
+func successfulTrialUsage(usage SkillUsage, r Record, in ChangeInput, trial Record) bool {
+	return usage.TrialID == in.TrialID && usage.VersionID == r.ID && usage.SkillID == r.SkillID && r.Analysis != nil && usage.ContentHash == r.Analysis.ContentHash && usage.Runtime == trial.SkillTrial.Runtime && usage.Status == "success" && usage.ToolFailures == 0 && usage.RuntimeErrors == 0 && !usage.OfflineCache && !usage.StartedAt.Before(trial.CreatedAt) && usage.StartedAt.Before(trial.SkillTrial.EndsAt) && !usage.CompletedAt.Before(usage.StartedAt) && !usage.CompletedAt.After(time.Now())
 }
 
 func skillTrialEvidenceScopes(scope Scope, policy SkillAutomationPolicy) []Scope {

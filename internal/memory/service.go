@@ -969,6 +969,9 @@ func (s *Service) prepareToolCall(ctx context.Context, token string, r *Record, 
 }
 
 func (s *Service) prepareEvaluation(ctx context.Context, token string, r *Record, in CreateInput, d Decision) error {
+	if r.Kind == baselineQualificationKind {
+		return ErrDenied
+	}
 	if r.Target == nil || !knownCollection(r.Target.Collection) || r.Target.Collection == "jobs" || r.Target.Collection == "audit_events" || !validRunLabel(r.Target.ID, 256) || r.Target.Revision < 1 || !validEvaluation(r.Evaluation) {
 		return ErrInvalid
 	}
@@ -1684,6 +1687,9 @@ func applySkillVersionTx(ctx context.Context, tx Tx, d Decision, automation Skil
 		return Record{}, ErrConflict
 	}
 	if skill.ActiveVersion == in.VersionID {
+		if !rollback && d.Role == roleHuman && in.ValidationID != "" && in.VersionID != "" {
+			return revalidateImportedBaseline(ctx, tx, d, skill, target, in.ValidationID)
+		}
 		return Record{}, ErrConflict
 	}
 	if in.VersionID != "" {
@@ -1934,4 +1940,50 @@ func recordContent(r Record) string {
 		return structuredText(r.Analysis)
 	}
 	return fmt.Sprintf("%s\n%s", r.Text, r.Summary)
+}
+
+func revalidateImportedBaseline(ctx context.Context, tx Tx, d Decision, skill, target Record, evaluationID string) (Record, error) {
+	r, err := tx.Get(ctx, colSkillVersions, skill.Scope, skill.ActiveVersion)
+	if err != nil {
+		return Record{}, err
+	}
+	if !live(skill) || !live(r) || r.Revision != target.Revision || r.Kind != importedSkillBaselineKind ||
+		r.CreatedByType != roleHuman || r.ApprovedBy == "" || r.ValidationID != "" || r.ComparisonPlan != nil ||
+		unavailableSkillVersion(r, skill.ID) || !validAnalysis(r.Analysis) {
+		return Record{}, ErrConflict
+	}
+	source, err := tx.Get(ctx, "sources", skill.Scope, r.Sources[0].SourceID)
+	if err != nil {
+		return Record{}, err
+	}
+	if staleSkillSource(source, r) || mismatchedSkillBundle(source, r) {
+		return Record{}, ErrConflict
+	}
+	if r.Revision == 1 {
+		ev, e := tx.Get(ctx, "evaluations", r.Scope, evaluationID)
+		if e != nil {
+			return Record{}, e
+		}
+		if ev.Kind != baselineQualificationKind {
+			return Record{}, ErrDenied
+		}
+	}
+	if err = validation(ctx, tx, r, evaluationID, true); err != nil {
+		return Record{}, err
+	}
+	r.ValidationID = evaluationID
+	r.Revision++
+	r.UpdatedAt = time.Now().UTC()
+	if err = tx.Replace(ctx, colSkillVersions, r, target.Revision); err != nil {
+		return Record{}, err
+	}
+	skill.Revision++
+	skill.UpdatedAt = r.UpdatedAt
+	if err = tx.Replace(ctx, colSkills, skill, skill.Revision-1); err != nil {
+		return Record{}, err
+	}
+	if err = checkActiveSkill(ctx, tx, r); err != nil {
+		return Record{}, err
+	}
+	return skill, audit(ctx, tx, skill.Scope, d.PrincipalID, "revalidate:skills", skill.ID)
 }

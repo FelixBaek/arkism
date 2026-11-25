@@ -55420,6 +55420,9 @@
             "type": "string",
             "maxLength": 128,
             "description": "Optional active trial bound to this exact approved candidate. Omitted retains candidate-only comparison."
+          },
+          "qualify_baseline": {
+            "type": "boolean"
           }
         }
       },
@@ -55450,6 +55453,9 @@
           "authority": {
             "type": "string",
             "const": "data_only_untrusted"
+          },
+          "baseline_qualification": {
+            "$ref": "#/components/schemas/Ref"
           }
         }
       },
@@ -57447,6 +57453,9 @@
           },
           "holdout": {
             "$ref": "#/components/schemas/SkillHoldoutPlan"
+          },
+          "rollback_qualification": {
+            "$ref": "#/components/schemas/SkillRollbackQualificationPlan"
           }
         }
       },
@@ -62304,6 +62313,9 @@
           },
           "holdout": {
             "$ref": "#/components/schemas/WireResponseSkillHoldoutPlan"
+          },
+          "rollback_qualification": {
+            "$ref": "#/components/schemas/WireResponseSkillRollbackQualificationPlan"
           }
         },
         "additionalProperties": false,
@@ -74671,6 +74683,16 @@
                 "type": "null"
               }
             ]
+          },
+          "rollback_qualification": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WireRequestSkillRollbackQualificationPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -81011,6 +81033,137 @@
         "x-go-type": "memory.DeferredCall",
         "x-go-source": "internal/memory/ops_deferred.go",
         "description": "DeferredCall is retained only to decode and scrub legacy rows."
+      },
+      "SkillRollbackQualificationPlan": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "dataset_sha256",
+          "environment_sha256",
+          "max_cost",
+          "max_duration_ms",
+          "tasks"
+        ],
+        "properties": {
+          "dataset_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "environment_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "max_cost": {
+            "type": "number",
+            "minimum": 0
+          },
+          "max_duration_ms": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "tasks": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 64,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "case_sha256",
+                "category"
+              ],
+              "properties": {
+                "case_sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "category": {
+                  "enum": [
+                    "quality",
+                    "regression",
+                    "safety"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "WireResponseSkillRollbackQualificationPlan": {
+        "type": "object",
+        "properties": {
+          "dataset_sha256": {
+            "type": "string"
+          },
+          "environment_sha256": {
+            "type": "string"
+          },
+          "max_cost": {
+            "type": "number"
+          },
+          "max_duration_ms": {
+            "type": "integer"
+          },
+          "tasks": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireResponseSkillHoldoutTask"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "dataset_sha256",
+          "environment_sha256",
+          "max_cost",
+          "max_duration_ms",
+          "tasks"
+        ],
+        "x-go-type": "memory.SkillRollbackQualificationPlan",
+        "x-go-source": "internal/memory/skill_rollback_qualification.go",
+        "description": "The owner can review a distinct qualification contract together with the\nproposed improvement. The immutable parent comparison hash covers both."
+      },
+      "WireRequestSkillRollbackQualificationPlan": {
+        "type": "object",
+        "properties": {
+          "dataset_sha256": {
+            "type": "string"
+          },
+          "environment_sha256": {
+            "type": "string"
+          },
+          "max_cost": {
+            "type": "number"
+          },
+          "max_duration_ms": {
+            "type": "integer"
+          },
+          "tasks": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireRequestSkillHoldoutTask"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SkillRollbackQualificationPlan",
+        "x-go-source": "internal/memory/skill_rollback_qualification.go",
+        "description": "The owner can review a distinct qualification contract together with the\nproposed improvement. The immutable parent comparison hash covers both."
       }
     },
     "headers": {

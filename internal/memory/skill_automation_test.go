@@ -30,6 +30,11 @@ func skillAutomationFixture(t *testing.T, supplied ...*fixture) (*fixture, Recor
 		f = supplied[0]
 	}
 	comparison, proposal := comparisonRecordFixture(t, f)
+	return skillAutomationFromComparison(t, f, comparison, proposal)
+}
+
+func skillAutomationFromComparison(t *testing.T, f *fixture, comparison RecordSkillComparisonInput, proposal ImportSkillResult, prepareTrace ...func(int, *TraceIngestInput)) (*fixture, Record, Record, ChangeInput) {
+	t.Helper()
 	recorded, e := f.svc.RecordSkillComparison(testCtx, "comparison-service", comparison)
 	if e != nil {
 		t.Fatal(e)
@@ -47,6 +52,8 @@ func skillAutomationFixture(t *testing.T, supplied ...*fixture) (*fixture, Recor
 	in := ChangeInput{Scope: scopeA, VersionID: approved.ID, ExpectedRevision: proposal.Skill.Revision, TrialID: trial.ID}
 	sources := []SourceRef{}
 	for i := 0; i < 2; i++ {
+		// These are two independently timed executions, including on coarse Windows clocks.
+		time.Sleep(2 * time.Millisecond)
 		now := time.Now()
 		u := SkillUsage{TrialID: trial.ID, SkillID: proposal.Skill.ID, VersionID: approved.ID, Version: proposal.Version, Runtime: "codex", ContentHash: approved.Analysis.ContentHash, Status: "success", StartedAt: now, CompletedAt: now}
 		raw, _ := json.Marshal(u)
@@ -61,7 +68,11 @@ func skillAutomationFixture(t *testing.T, supplied ...*fixture) (*fixture, Recor
 			u.StartedAt = start
 			u.CompletedAt = end
 			raw, _ = json.Marshal(u)
-			_, e = f.svc.IngestCompletedTrace(testCtx, f.agent, TraceIngestInput{Scope: runtimeScope, TraceID: source.TraceID, ThreadID: "trial", AgentRun: CompletedAgentRunInput{ID: fmt.Sprint("trial-run-", i), TaskType: "trial", Outcome: "success", StartedAt: start, FinishedAt: end, Text: "Bounded trial execution"}, Events: []TraceEventInput{{ID: source.ID, Kind: skillUsageEventKind, OccurredAt: end, Payload: raw}}})
+			input := TraceIngestInput{Scope: runtimeScope, TraceID: source.TraceID, ThreadID: "trial", AgentRun: CompletedAgentRunInput{ID: fmt.Sprint("trial-run-", i), TaskType: "trial", Outcome: "success", StartedAt: start, FinishedAt: end, Text: "Bounded trial execution"}, Events: []TraceEventInput{{ID: source.ID, Kind: skillUsageEventKind, OccurredAt: end, Payload: raw}}}
+			if len(prepareTrace) > 0 {
+				prepareTrace[0](i, &input)
+			}
+			_, e = f.svc.IngestCompletedTrace(testCtx, f.agent, input)
 			if e != nil {
 				t.Fatal("trial execution ingest", e)
 			}

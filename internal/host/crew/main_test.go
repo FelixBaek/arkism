@@ -136,7 +136,9 @@ func init() {
 	// Leaves a descendant that writes a marker late; the runner must stop it.
 	helperModes["adapter-spawn"] = func(args []string) int {
 		self, _ := os.Executable()
-		_ = exec.Command(self, "late-write", args[0]).Start()
+		if err := exec.Command(self, "late-write", args[0]).Start(); err != nil {
+			return 1
+		}
 		fmt.Println(`{"output":1,"cost":0}`)
 		return 0
 	}
