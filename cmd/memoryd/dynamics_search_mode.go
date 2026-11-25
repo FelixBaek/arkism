@@ -18,6 +18,7 @@ import (
 type daemonSearchMode struct {
 	Protocol       string `json:"protocol"`
 	Mode           string `json:"mode"`
+	CandidateOnly  bool   `json:"candidate_only,omitempty"`
 	RegistryPath   string `json:"registry_path"`
 	RegistrySHA256 string `json:"registry_sha256"`
 	Policy         string `json:"policy"`
@@ -34,6 +35,9 @@ type daemonSearchFastSlow struct {
 	SlowDynamics dyn.DynamicsConfigV2 `json:"slow_dynamics"`
 	FastWeight   float64              `json:"fast_weight"`
 }
+
+// The read-only diagnostic accepts the reviewed B1 registry as published.
+const candidateShadowRegistrySHA256 = "78e30b4b53616920ff38ba30bf9584bb89c4fbdc799990c16ec813d5deb4a2c4"
 
 // loadDaemonSearchMode returns nil for no file or mode off. A search mode file
 // belongs to the HTTP API only, never to a worker or repair run.
@@ -64,6 +68,9 @@ func loadDaemonSearchMode(path string, background bool) (*memory.NativeSearchSha
 	default:
 		return nil, memory.ErrInvalid
 	}
+	if m.CandidateOnly && (m.Mode != "shadow" || m.Policy != "B1" || m.FastSlow != nil || m.RegistrySHA256 != candidateShadowRegistrySHA256) {
+		return nil, memory.ErrInvalid
+	}
 	// Join would clean away "..", so the path must be local before it is joined.
 	if !filepath.IsLocal(m.RegistryPath) {
 		return nil, memory.ErrInvalid
@@ -83,5 +90,6 @@ func loadDaemonSearchMode(path string, background bool) (*memory.NativeSearchSha
 	if _, err = memory.NewNativeSearchShadowRuntime(cfg); err != nil || m.NativeVersion == "" || m.Dimension == "" {
 		return nil, memory.ErrInvalid
 	}
+	cfg.CandidateOnly = m.CandidateOnly
 	return &cfg, nil
 }

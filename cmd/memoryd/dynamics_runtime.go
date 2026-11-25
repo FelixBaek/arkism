@@ -50,6 +50,17 @@ func prepareDaemonDynamics(cfg daemonOptions) (daemonOptions, error) {
 	if cfg.dynamicsSearch, err = loadDaemonSearchMode(cfg.DynamicsSearchConfig, cfg.Worker || cfg.DynamicsRepair); err != nil {
 		return cfg, err
 	}
+	if cfg.dynamicsSearch != nil {
+		cfg.dynamicsSearch.Scopes = plan.config.Scopes
+		if cfg.dynamicsSearch.CandidateOnly {
+			if len(plan.config.Scopes) != 1 || plan.config.Scopes[0].UserID == "" {
+				return cfg, memory.ErrInvalid
+			}
+			// The plan validated the load and scope. Do not start its state worker or refresher.
+			cfg.dynamicsPlan = nil
+			return cfg, nil
+		}
+	}
 	if cfg.Worker || cfg.DynamicsRepair {
 		if strings.TrimSpace(os.Getenv("MEMORY_WORKER_TOKEN")) == "" {
 			return cfg, memory.ErrInvalid
@@ -64,6 +75,13 @@ func prepareDaemonDynamics(cfg daemonOptions) (daemonOptions, error) {
 }
 
 func configureDaemonDynamics(ctx context.Context, svc *memory.Service, cfg daemonOptions) error {
+	if cfg.dynamicsSearch != nil && cfg.dynamicsSearch.CandidateOnly {
+		shadow, err := memory.NewNativeSearchShadowRuntime(*cfg.dynamicsSearch)
+		if err == nil {
+			svc.NativeSearchShadow = shadow
+		}
+		return err
+	}
 	if cfg.dynamicsPlan == nil {
 		return nil
 	}

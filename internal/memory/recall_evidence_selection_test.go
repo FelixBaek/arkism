@@ -314,6 +314,21 @@ func TestEvidenceSelectionUnsupportedBoundaries(t *testing.T) {
 		{"native", "unsupported_native", func(s *Service, _ *SearchInput, _ *string) {
 			s.NativeSearchShadow = &NativeSearchShadowRuntime{config: NativeSearchShadowConfig{Mode: "shadow"}}
 		}},
+		{"candidate-only-shadow", "ready", func(s *Service, in *SearchInput, _ *string) {
+			in.Scope = Scope{WorkspaceID: "fixture", ProjectID: "project", UserID: "qa"}
+			s.NativeSearchShadow = &NativeSearchShadowRuntime{config: NativeSearchShadowConfig{
+				Mode: "shadow", Policy: "B1", CandidateOnly: true, Scopes: []Scope{in.Scope},
+			}}
+		}},
+		{"native-other-user", "ready", func(s *Service, in *SearchInput, _ *string) {
+			in.Scope = Scope{WorkspaceID: "fixture", ProjectID: "project", UserID: "other"}
+			s.NativeSearchShadow = &NativeSearchShadowRuntime{config: NativeSearchShadowConfig{
+				Mode: "shadow", Scopes: []Scope{{WorkspaceID: "fixture", ProjectID: "project", UserID: "qa"}},
+			}}
+			if s.beginNativeSearchShadow(context.Background(), *in, colMemories, nil, nil) != nil {
+				t.Fatal("shadow ran outside its configured user")
+			}
+		}},
 		{"cross-encoder", "unsupported_reranker", func(s *Service, _ *SearchInput, _ *string) { s.Reranker = NewLocalReranker() }},
 		{"model-rerank", "unsupported_reranker", func(_ *Service, in *SearchInput, _ *string) { in.Rerank = rerankModel }},
 		{"decision-prune", "unsupported_reranker", func(_ *Service, in *SearchInput, _ *string) { in.RerankOptions = &RerankOptions{Prune: true} }},
