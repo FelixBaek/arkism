@@ -198,7 +198,11 @@ func verifyHTTPReclassification(t *testing.T, admin *Postgres, svc *Service, sco
 }
 
 func TestClassifierWriteRefusalIsNotStorageOutage(t *testing.T) {
-	if !errors.Is(classifierWriteRefusal{}, ErrDenied) || denialAuditFailed(classifierWriteRefusal{}) || !denialAuditFailed(ErrUnavailable) || !denialAuditFailed(ErrDenied) {
+	refusal := classifierWriteRefusal{}
+	if refusal.Error() != ErrDenied.Error() {
+		t.Fatalf("public classifier refusal = %q, want %q", refusal.Error(), ErrDenied.Error())
+	}
+	if !errors.Is(refusal, ErrDenied) || denialAuditFailed(refusal) || !denialAuditFailed(ErrUnavailable) || !denialAuditFailed(ErrDenied) {
 		t.Fatal("classifier guard, unspecified denial, or storage outage incorrectly mapped")
 	}
 }

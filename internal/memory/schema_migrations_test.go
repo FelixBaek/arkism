@@ -343,8 +343,11 @@ func TestSchemaMigrationsApplicationCannotChangeHistory(t *testing.T) {
 	GRANT USAGE ON SCHEMA arkism,extensions TO arkism_app;
 	ALTER DEFAULT PRIVILEGES FOR ROLE arkism_init IN SCHEMA arkism GRANT SELECT,INSERT,UPDATE,DELETE ON TABLES TO arkism_app;`)
 	database := pgx.Identifier{p.pool.Config().ConnConfig.Database}.Sanitize()
-	schemaExec(t, p, "GRANT CREATE ON DATABASE "+database+" TO arkism_init")
 	initializer := schemaRolePostgres(t, p, "arkism_init")
+	if err := initializer.migrateSchema(ctx, schemaMigrations()); !errors.Is(err, ErrUnavailable) || !strings.Contains(err.Error(), "history unavailable (SQLSTATE 42501)") {
+		t.Fatalf("bootstrap without database CREATE = %v", err)
+	}
+	schemaExec(t, p, "GRANT CREATE ON DATABASE "+database+" TO arkism_init")
 	historicalSchema(t, initializer, 5)
 	schemaExec(t, p, "REVOKE CREATE ON DATABASE "+database+" FROM arkism_init")
 	var canCreate bool
