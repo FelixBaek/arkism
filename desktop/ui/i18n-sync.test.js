@@ -4,7 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
-const tool = import(path.join(__dirname, "..", "..", "tools", "i18n_sync.mjs"));
+const tool = import("../../tools/i18n_sync.mjs");
 
 const fake = () => ({
   en: { strings: { "저장": "Save", "새 문구": "New text" }, patterns: { "{0}개": "{0} items" } },
