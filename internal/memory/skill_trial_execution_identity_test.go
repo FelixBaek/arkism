@@ -39,26 +39,7 @@ func TestPostgresIndependentTrialExecutions(t *testing.T) {
 			f := newFixture(t)
 			f.svc.Repo = isolatedPostgres(t)
 			comparison, proposal := comparisonRecordFixture(t, f)
-			var first TraceIngestInput
-			adjust := func(i int, in *TraceIngestInput) {
-				if kind == "same_upstream" {
-					in.LangSmithRunID = "origin-one"
-				}
-				if kind == "independent_upstream" {
-					in.LangSmithRunID = fmt.Sprint("origin-", i)
-				}
-				if i == 0 {
-					first = *in
-					return
-				}
-				if kind == "copied_legacy" || kind == "independent_upstream" {
-					in.AgentRun.StartedAt = first.AgentRun.StartedAt
-					in.AgentRun.FinishedAt = first.AgentRun.FinishedAt
-					in.Events[0].OccurredAt = first.Events[0].OccurredAt
-					in.Events[0].Payload = first.Events[0].Payload
-				}
-			}
-			_, candidate, trial, apply := skillAutomationFromComparison(t, f, comparison, proposal, adjust)
+			_, candidate, trial, apply := skillAutomationFromComparison(t, f, comparison, proposal, trialIdentityFixture(kind))
 			token := testPrincipalToken("learner")
 			observe, e := f.svc.ObserveSkillTrial(testCtx, token, trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID})
 			rejected := kind == "same_upstream" || kind == "copied_legacy"
@@ -70,5 +51,27 @@ func TestPostgresIndependentTrialExecutions(t *testing.T) {
 				t.Fatalf("apply %s: %v", kind, e)
 			}
 		})
+	}
+}
+
+func trialIdentityFixture(kind string) func(int, *TraceIngestInput) {
+	var first TraceIngestInput
+	return func(i int, in *TraceIngestInput) {
+		if kind == "same_upstream" {
+			in.LangSmithRunID = "origin-one"
+		}
+		if kind == "independent_upstream" {
+			in.LangSmithRunID = fmt.Sprint("origin-", i)
+		}
+		if i == 0 {
+			first = *in
+			return
+		}
+		if kind == "copied_legacy" || kind == "independent_upstream" {
+			in.AgentRun.StartedAt = first.AgentRun.StartedAt
+			in.AgentRun.FinishedAt = first.AgentRun.FinishedAt
+			in.Events[0].OccurredAt = first.Events[0].OccurredAt
+			in.Events[0].Payload = first.Events[0].Payload
+		}
 	}
 }

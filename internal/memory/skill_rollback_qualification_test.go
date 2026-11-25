@@ -115,22 +115,27 @@ func TestPostgresIndependentRollbackQualificationLifecycle(t *testing.T) {
 	if e != nil || hdr.ActiveVersion != approved.ID {
 		t.Fatal("promotion", e)
 	}
+	checkRegressionRestoresBaseline(t, f, approved, trial, candidate.Version, base.Record.ID)
+}
+
+func checkRegressionRestoresBaseline(t *testing.T, f *fixture, approved, trial Record, version int, baseID string) {
+	t.Helper()
 	scope := scopeA
 	scope.AgentID = "codex-runtime"
 	time.Sleep(3 * time.Millisecond)
 	end := time.Now().UTC().Truncate(time.Millisecond)
-	u := SkillUsage{SkillID: initial.SkillID, VersionID: approved.ID, Version: candidate.Version, Runtime: "codex", ContentHash: approved.Analysis.ContentHash, Status: "failure", StartedAt: end, CompletedAt: end}
+	u := SkillUsage{SkillID: approved.SkillID, VersionID: approved.ID, Version: version, Runtime: "codex", ContentHash: approved.Analysis.ContentHash, Status: "failure", StartedAt: end, CompletedAt: end}
 	raw, _ := json.Marshal(u)
-	_, e = f.svc.IngestCompletedTrace(testCtx, f.agent, TraceIngestInput{Scope: scope, TraceID: "post-promotion-regression", ThreadID: "after-promotion", AgentRun: CompletedAgentRunInput{ID: "regression-run", TaskType: "run", Outcome: "failed", StartedAt: end, FinishedAt: end, Text: "Synthetic regression after promotion"}, Events: []TraceEventInput{{ID: "regression-usage", Kind: skillUsageEventKind, OccurredAt: end, Payload: raw}}})
+	_, e := f.svc.IngestCompletedTrace(testCtx, f.agent, TraceIngestInput{Scope: scope, TraceID: "post-promotion-regression", ThreadID: "after-promotion", AgentRun: CompletedAgentRunInput{ID: "regression-run", TaskType: "run", Outcome: "failed", StartedAt: end, FinishedAt: end, Text: "Synthetic regression after promotion"}, Events: []TraceEventInput{{ID: "regression-usage", Kind: skillUsageEventKind, OccurredAt: end, Payload: raw}}})
 	if e != nil {
 		t.Fatal("regression ingest", e)
 	}
-	got, e := f.svc.MonitorSkillTrial(testCtx, testPrincipalToken("learner"), trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: initial.SkillID})
+	got, e := f.svc.MonitorSkillTrial(testCtx, testPrincipalToken("learner"), trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: approved.SkillID})
 	if e != nil || got.State != "rolled_back" {
 		t.Fatal("regression monitor", got.State, e)
 	}
-	hdr, e = f.svc.Get(testCtx, f.human, colSkills, scopeA, initial.SkillID)
-	if e != nil || hdr.ActiveVersion != base.Record.ID {
+	hdr, e := f.svc.Get(testCtx, f.human, colSkills, scopeA, approved.SkillID)
+	if e != nil || hdr.ActiveVersion != baseID {
 		t.Fatal("not restored", e)
 	}
 }
