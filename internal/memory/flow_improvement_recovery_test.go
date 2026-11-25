@@ -1,8 +1,11 @@
 package memory
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -183,4 +186,59 @@ func TestFlowImprovementObservationRecoveryKeepsCanonicalPromotion(t *testing.T)
 	if state.Stage != "monitoring" || state.ObservationState != "promoted" {
 		t.Fatal("canonical promotion reset to trial", state)
 	}
+}
+
+func TestFlowImprovementRecoveryMissingReceiptPreservesClaim(t *testing.T) {
+	f, h, start, _ := improvementFixture(t, false)
+	var modelCalls atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { modelCalls.Add(1); w.WriteHeader(503) }))
+	t.Cleanup(server.Close)
+	f.svc.Drafter = &ChatSkillDrafter{Config: LLMConfig{Endpoint: server.URL, APIKey: "test", Model: "test"}}
+	view, err := f.svc.StartFlowImprovement(testCtx, f.agent, start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := FlowImprovementAdvance{Scope: scopeA, ExpectedRevision: view.Revision, Action: "generate", ActionID: "live-generation"}
+	row, err := f.svc.readFlowImprovement(testCtx, f.agent, view.ID, scopeA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor, err := f.svc.improvementActionActor(testCtx, f.agent, row, in.Action)
+	if err != nil {
+		t.Fatal(err)
+	}
+	row, _, err = f.svc.claimImprovement(testCtx, f.agent, row, in, actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertPreserved := func(t *testing.T, row Record, wantState string) {
+		t.Helper()
+		in.Recover = true
+		in.ExpectedRevision = row.Revision
+		_, err := f.svc.AdvanceFlowImprovement(testCtx, f.agent, view.ID, in)
+		code, status := errorResponse(err)
+		if !errors.Is(err, errGenerationReceiptMissing) || code != "generation_receipt_missing" || status != 409 {
+			t.Fatal(err, code, status)
+		}
+		body := h.call("POST", "/v1/flow/improvements/"+view.ID+"/advance", f.agent, in, http.StatusConflict, nil)
+		if !bytes.Contains(body, []byte("generation_receipt_missing")) || modelCalls.Load() != 0 {
+			t.Fatal("HTTP status body or generation count", modelCalls.Load())
+		}
+		observed, err := f.svc.GetFlowImprovement(testCtx, f.agent, view.ID, scopeA)
+		if err != nil || observed.Revision != row.Revision || observed.Improvement.Pending == nil || observed.Improvement.Pending.State != wantState || len(observed.Improvement.Receipts) != 0 {
+			t.Fatal(wantState, observed, err)
+		}
+		competing := in
+		competing.Recover = false
+		competing.ActionID = "other-generation"
+		if _, err = f.svc.AdvanceFlowImprovement(testCtx, f.agent, view.ID, competing); !errors.Is(err, ErrConflict) {
+			t.Fatal("competing generation", err)
+		}
+	}
+	t.Run("running", func(t *testing.T) { assertPreserved(t, row, "running") })
+	row, err = f.svc.finishImprovement(testCtx, row, cloneImprovement(row.FlowImprovement), ErrUnavailable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Run("unknown", func(t *testing.T) { assertPreserved(t, row, "unknown") })
 }
