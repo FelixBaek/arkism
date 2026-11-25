@@ -115,7 +115,7 @@ func (s *Service) ObserveSkillTrial(ctx context.Context, token, id string, in Sk
 			if itemFailed {
 				failed = true
 			}
-			if item.Outcome == "success" && item.IndependentlyVerified {
+			if item.verifiedSuccess() {
 				verified++
 			}
 			out.Items = append(out.Items, item)
@@ -326,4 +326,8 @@ func stopSkillTrialForRegression(ctx context.Context, tx Tx, trial Record, actor
 		return trial, e
 	}
 	return trial, nil
+}
+
+func (item SkillTrialObservation) verifiedSuccess() bool {
+	return item.Outcome == "success" && item.IndependentlyVerified
 }

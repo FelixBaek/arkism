@@ -266,26 +266,8 @@ func (s *Service) RecordSkillComparison(ctx context.Context, token string, in Re
 			return out, err
 		}
 	}
-	eventID := in.EventID
-	if in.QualifyBaseline {
-		eventID = "baseline-qualification:" + in.EventID
-	}
-	prefix := "comparison-" + ContentHash(structuredText(in.Scope)+"\n"+actor.PrincipalID+"\n"+actor.Role+"\n"+eventID)
-	out = RecordSkillComparisonResult{SourceID: prefix + "-source", Runs: []Ref{{Collection: "agent_runs", ID: prefix + "-baseline", Revision: 1}, {Collection: "agent_runs", ID: prefix + "-candidate", Revision: 1}}, Evaluation: Ref{Collection: "evaluations", ID: prefix + "-evaluation", Revision: 1}, Authority: AuthorityDataOnly}
-	if in.QualifyBaseline {
-		if baseline.ID == candidate.ID || baseline.Kind != importedSkillBaselineKind || baseline.CreatedBy == actor.PrincipalID || baseline.ApprovedBy == actor.PrincipalID {
-			return RecordSkillComparisonResult{}, ErrDenied
-		}
-		ref := Ref{Collection: "evaluations", ID: prefix + "-baseline-qualification", Revision: 1}
-		out.BaselineQualification = &ref
-		if err = auth("read:evaluations", ref.ID, ""); err != nil {
-			return RecordSkillComparisonResult{}, err
-		}
-		if err = auth("write:evaluations", ref.ID, body); err != nil {
-			return RecordSkillComparisonResult{}, err
-		}
-	}
-	if err = authorizeComparisonWrites(auth, out, body); err != nil {
+	out, prefix, err := comparisonWriteTargets(auth, actor, in, candidate, baseline, body)
+	if err != nil {
 		return RecordSkillComparisonResult{}, err
 	}
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
@@ -294,26 +276,13 @@ func (s *Service) RecordSkillComparison(ctx context.Context, token string, in Re
 			if err := checkRecordedSkillComparison(ctx, tx, in.Scope, out, old, body, actor.PrincipalID, candidate.ID); err != nil {
 				return err
 			}
-			if out.BaselineQualification != nil {
-				q, err := tx.Get(ctx, "evaluations", in.Scope, out.BaselineQualification.ID)
-				if err != nil {
-					return err
-				}
-				if q.Kind != baselineQualificationKind || !live(q) || q.ContentErased || q.PrivacyQuarantined || q.Target == nil || q.Target.ID != baseline.ID || q.Target.Revision != in.Result.BaselineRevision || q.CreatedBy != actor.PrincipalID {
-					return ErrConflict
-				}
-				return checkEvaluationEvidence(ctx, tx, q)
-			}
-			return nil
+			return checkRecordedBaselineQualification(ctx, tx, in, out.BaselineQualification, baseline.ID, actor.PrincipalID)
 		}
 		if !errors.Is(e, ErrNotFound) {
 			return e
 		}
-		if _, e = sourceDeletion(ctx, tx, in.Scope, out.SourceID); !errors.Is(e, ErrNotFound) {
-			if e != nil {
-				return e
-			}
-			return ErrConflict
+		if e = requireAvailableComparisonSource(ctx, tx, in.Scope, out.SourceID); e != nil {
+			return e
 		}
 		current, e := comparisonCandidate(ctx, tx, in, candidate.ID, actor.PrincipalID)
 		if e != nil {
@@ -353,18 +322,8 @@ func (s *Service) RecordSkillComparison(ctx context.Context, token string, in Re
 			}
 		}
 		evaluation := Record{ID: out.Evaluation.ID, Scope: in.Scope, Kind: "skill_comparison", Status: statusActive, Revision: 1, Text: "Measured fixed skill comparison", Sources: source.Sources, Relations: out.Runs, Target: &in.Result.Candidate, Evaluation: &Evaluation{EvalType: "automated_check", Passed: &in.Result.Passed, ComparisonReport: &measured}, Passed: in.Result.Passed, Sensitivity: level, CreatedAt: now, UpdatedAt: now, CreatedBy: actor.PrincipalID, CreatedByType: actor.Role}
-		holdoutPassed, holdoutErr := skillHoldoutPasses(plan.Holdout, in.Result.Cases)
-		if holdoutErr != nil {
-			return holdoutErr
-		}
-		candidatePass := comparisonPasses(current, evaluation) && holdoutPassed
-		if in.QualifyBaseline && current.ComparisonPlan.RollbackQualification != nil {
-			// Qualification measurements never certify a candidate for approval.
-			candidatePass = false
-			evaluation.Kind = "rollback_qualification_comparison"
-		}
-		if candidatePass != in.Result.Passed {
-			return ErrInvalid
+		if e = checkComparisonPass(in, current, plan, &evaluation); e != nil {
+			return e
 		}
 		if e = insertSourceRecord(ctx, tx, "evaluations", evaluation); e != nil {
 			return e
@@ -532,4 +491,72 @@ func fenceComparisonSources(ctx context.Context, tx Tx, scope Scope, refs []Sour
 		}
 	}
 	return nil
+}
+
+func comparisonWriteTargets(auth func(string, string, string) error, actor Decision, in RecordSkillComparisonInput, candidate, baseline Record, body string) (RecordSkillComparisonResult, string, error) {
+	eventID := in.EventID
+	if in.QualifyBaseline {
+		eventID = "baseline-qualification:" + in.EventID
+	}
+	prefix := "comparison-" + ContentHash(structuredText(in.Scope)+"\n"+actor.PrincipalID+"\n"+actor.Role+"\n"+eventID)
+	out := RecordSkillComparisonResult{SourceID: prefix + "-source", Runs: []Ref{{Collection: "agent_runs", ID: prefix + "-baseline", Revision: 1}, {Collection: "agent_runs", ID: prefix + "-candidate", Revision: 1}}, Evaluation: Ref{Collection: "evaluations", ID: prefix + "-evaluation", Revision: 1}, Authority: AuthorityDataOnly}
+	if in.QualifyBaseline {
+		if baseline.ID == candidate.ID || baseline.Kind != importedSkillBaselineKind || baseline.CreatedBy == actor.PrincipalID || baseline.ApprovedBy == actor.PrincipalID {
+			return RecordSkillComparisonResult{}, "", ErrDenied
+		}
+		ref := Ref{Collection: "evaluations", ID: prefix + "-baseline-qualification", Revision: 1}
+		out.BaselineQualification = &ref
+		if err := auth("read:evaluations", ref.ID, ""); err != nil {
+			return RecordSkillComparisonResult{}, "", err
+		}
+		if err := auth("write:evaluations", ref.ID, body); err != nil {
+			return RecordSkillComparisonResult{}, "", err
+		}
+	}
+	if err := authorizeComparisonWrites(auth, out, body); err != nil {
+		return RecordSkillComparisonResult{}, "", err
+	}
+	return out, prefix, nil
+}
+
+func checkRecordedBaselineQualification(ctx context.Context, tx Tx, in RecordSkillComparisonInput, ref *Ref, baselineID, actorID string) error {
+	if ref == nil {
+		return nil
+	}
+	q, err := tx.Get(ctx, "evaluations", in.Scope, ref.ID)
+	if err != nil {
+		return err
+	}
+	if q.Kind != baselineQualificationKind || !live(q) || q.ContentErased || q.PrivacyQuarantined || q.Target == nil || q.Target.ID != baselineID || q.Target.Revision != in.Result.BaselineRevision || q.CreatedBy != actorID {
+		return ErrConflict
+	}
+	return checkEvaluationEvidence(ctx, tx, q)
+}
+
+func checkComparisonPass(in RecordSkillComparisonInput, current Record, plan *SkillComparisonPlan, evaluation *Record) error {
+	holdoutPassed, holdoutErr := skillHoldoutPasses(plan.Holdout, in.Result.Cases)
+	if holdoutErr != nil {
+		return holdoutErr
+	}
+	candidatePass := comparisonPasses(current, *evaluation) && holdoutPassed
+	if in.QualifyBaseline && current.ComparisonPlan.RollbackQualification != nil {
+		// Qualification measurements never certify a candidate for approval.
+		candidatePass = false
+		evaluation.Kind = "rollback_qualification_comparison"
+	}
+	if candidatePass != in.Result.Passed {
+		return ErrInvalid
+	}
+	return nil
+}
+
+func requireAvailableComparisonSource(ctx context.Context, tx Tx, scope Scope, id string) error {
+	_, err := sourceDeletion(ctx, tx, scope, id)
+	if errors.Is(err, ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return ErrConflict
 }

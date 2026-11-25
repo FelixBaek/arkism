@@ -1948,9 +1948,7 @@ func revalidateImportedBaseline(ctx context.Context, tx Tx, d Decision, skill, t
 	if err != nil {
 		return Record{}, err
 	}
-	if !live(skill) || !live(r) || r.Revision != target.Revision || r.Kind != importedSkillBaselineKind ||
-		r.CreatedByType != roleHuman || r.ApprovedBy == "" || r.ValidationID != "" || r.ComparisonPlan != nil ||
-		unavailableSkillVersion(r, skill.ID) || !validAnalysis(r.Analysis) {
+	if !eligibleImportedBaseline(skill, r, target) {
 		return Record{}, ErrConflict
 	}
 	source, err := tx.Get(ctx, "sources", skill.Scope, r.Sources[0].SourceID)
@@ -1987,4 +1985,10 @@ func revalidateImportedBaseline(ctx context.Context, tx Tx, d Decision, skill, t
 		return Record{}, err
 	}
 	return skill, audit(ctx, tx, skill.Scope, d.PrincipalID, "revalidate:skills", skill.ID)
+}
+
+func eligibleImportedBaseline(skill, r, target Record) bool {
+	return live(skill) && live(r) && r.Revision == target.Revision && r.Kind == importedSkillBaselineKind &&
+		r.CreatedByType == roleHuman && r.ApprovedBy != "" && r.ValidationID == "" && r.ComparisonPlan == nil &&
+		!unavailableSkillVersion(r, skill.ID) && validAnalysis(r.Analysis)
 }
