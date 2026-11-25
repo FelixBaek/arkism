@@ -865,7 +865,10 @@ window.ArkismPages = (ctx) => {
     ver.append(el("span", "", "Arkism"), el("strong", "mono", shown || "—"));
     left.append(el("small", "", update.text), ver);
     const acts = el("div", "v4-version-actions");
-    const again = button(update.info?.newer ? "다시 확인" : update.label, update.info?.newer ? "" : "primary", null, () => checkUpdate(false));
+    const again = button(update.info?.newer ? "다시 확인" : update.label, update.info?.newer ? "" : "primary", null, () => {
+      if (state.mode === "managed") void ctx.serverBanner?.check();
+      return checkUpdate(false);
+    });
     again.disabled = update.busy;
     acts.append(again);
     if (update.info?.newer) { const now = button("지금 업데이트", "primary", null, installUpdate); now.disabled = update.busy; acts.append(now); }
