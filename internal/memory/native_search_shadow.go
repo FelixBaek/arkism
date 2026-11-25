@@ -73,8 +73,7 @@ type NativeSearchShadowRuntime struct {
 }
 
 func NewNativeSearchShadowRuntime(cfg NativeSearchShadowConfig) (*NativeSearchShadowRuntime, error) {
-	if cfg.CandidateOnly && (cfg.Mode != "shadow" || cfg.Policy != "B1" || cfg.FastSlow != nil ||
-		len(cfg.Scopes) != 1 || !validScope(cfg.Scopes[0]) || cfg.Scopes[0].UserID == "") {
+	if !cfg.validCandidateOnly() {
 		return nil, ErrInvalid
 	}
 	if cfg.Mode == "off" {
@@ -98,6 +97,11 @@ func NewNativeSearchShadowRuntime(cfg NativeSearchShadowConfig) (*NativeSearchSh
 		return nil, e
 	}
 	return &NativeSearchShadowRuntime{config: copyCfg, records: []NativeSearchShadowObservation{}}, nil
+}
+
+func (cfg NativeSearchShadowConfig) validCandidateOnly() bool {
+	return !cfg.CandidateOnly || (cfg.Mode == "shadow" && cfg.Policy == "B1" && cfg.FastSlow == nil &&
+		len(cfg.Scopes) == 1 && validScope(cfg.Scopes[0]) && cfg.Scopes[0].UserID != "")
 }
 func nativeSearchPolicy(cfg NativeSearchShadowConfig) (dyn.PolicyEntry, bool) {
 	for _, entry := range cfg.Registry.Entries {
