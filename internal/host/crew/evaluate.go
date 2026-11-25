@@ -234,9 +234,9 @@ func executeAdapter(env map[string]any, payload map[string]any, files map[string
 		cmd.Env = append(cmd.Env, k+"="+obj(env["env"])[k].(string))
 	}
 	cmd.Dir, cmd.Stdin, cmd.Stdout = cwd, strings.NewReader(mustCanonical(payload)), stdout
-	newSession(cmd)
 	began := time.Now()
-	if err = cmd.Start(); err != nil {
+	stopTree, err := startComparisonAdapter(cmd)
+	if err != nil {
 		return
 	}
 	activeAdapter.Store(int64(cmd.Process.Pid))
@@ -246,7 +246,7 @@ func executeAdapter(env map[string]any, payload map[string]any, files map[string
 	func() {
 		defer func() {
 			activeAdapter.Store(0)
-			killGroup(cmd.Process.Pid, sigKill)
+			stopTree()
 			if !waited {
 				<-done
 			}
@@ -699,7 +699,18 @@ func publish(api comparisonAPI, prepared, result map[string]any) (any, error) {
 	if trialID, _ := prepared["trial_id"].(string); trialID != "" {
 		payload["event_id"], payload["trial_id"] = digest([]byte(mustCanonical([]any{trialID, result}))), trialID
 	}
-	return api.request("/v1/skills/comparisons/record", payload)
+	if prepared["qualify_baseline"] == true {
+		payload["qualify_baseline"] = true
+		payload["event_id"] = digest([]byte("baseline qualification:" + mustStr(payload["event_id"])))
+	}
+	receipt, err := api.request("/v1/skills/comparisons/record", payload)
+	if err == nil && prepared["qualify_baseline"] == true {
+		ref := obj(obj(receipt)["baseline_qualification"])
+		if ref["collection"] != "evaluations" || !truthy(ref["id"]) || !truthy(ref["revision"]) {
+			return nil, cmpErr("baseline_qualification_receipt_missing")
+		}
+	}
+	return receipt, err
 }
 
 // saveJSON publishes atomically through a hard link, so another writer's file is never overwritten
@@ -768,11 +779,11 @@ func readJSONArg(path string) (any, error) {
 	return strictJSON(raw)
 }
 
-const evaluateUsage = "[-h] --proposal PROPOSAL --token-file TOKEN_FILE [--dataset DATASET] [--environment ENVIRONMENT] [--resume-result RESUME_RESULT] [--url URL] [--execute] [--publish] [--output OUTPUT]"
+const evaluateUsage = "[-h] --proposal PROPOSAL --token-file TOKEN_FILE [--trial-id TRIAL_ID] [--qualify-baseline] [--dataset DATASET] [--environment ENVIRONMENT] [--resume-result RESUME_RESULT] [--url URL] [--execute] [--publish] [--output OUTPUT]"
 
 func evaluateMain(argv []string, stdin io.Reader, stdout, stderr io.Writer) (code int) {
 	const prog = "evaluate-skill-candidate"
-	a, err := parseArgs(argv, []string{"proposal", "token-file", "dataset", "environment", "resume-result", "url", "output"}, []string{"execute", "publish"}, nil)
+	a, err := parseArgs(argv, []string{"proposal", "token-file", "dataset", "environment", "resume-result", "url", "output", "trial-id"}, []string{"execute", "publish", "qualify-baseline"}, nil)
 	if err == nil && len(a.pos) > 0 {
 		err = fmt.Errorf("unrecognized arguments: %s", strings.Join(a.pos, " "))
 	}
@@ -810,6 +821,12 @@ func checkEvaluateArgs(a *args) error {
 	if !a.has("proposal") || !a.has("token-file") {
 		return errors.New("the following arguments are required: --proposal, --token-file")
 	}
+	if a.flags["qualify-baseline"] && (!a.flags["execute"] || !a.flags["publish"] || a.has("resume-result")) {
+		return errors.New("--qualify-baseline requires fresh execution and publication")
+	}
+	if a.has("trial-id") && (a.vals["trial-id"] == "" || a.has("resume-result")) {
+		return errors.New("--trial-id requires a fresh comparison")
+	}
 	if a.has("resume-result") {
 		if a.flags["execute"] || a.has("output") || !a.flags["publish"] {
 			return errors.New("--resume-result requires --publish and excludes --execute/--output")
@@ -818,6 +835,27 @@ func checkEvaluateArgs(a *args) error {
 		return errors.New("dataset/environment required; execution requires --output; publication requires --execute")
 	}
 	return nil
+}
+
+// prepareEvaluation refuses expired or mismatched trial pins before paying for evaluation.
+func prepareEvaluation(api comparisonAPI, proposal map[string]any, trial string) (map[string]any, error) {
+	if trial == "" {
+		return prepare(api, proposal)
+	}
+	record := obj(proposal["record"])
+	if record == nil {
+		return nil, cmpErr("candidate_changed")
+	}
+	view, err := api.request("/v1/skill-trials/"+pyQuote(trial, "")+"/inspect", map[string]any{"scope": record["scope"], "skill_id": record["skill_id"]})
+	if err != nil {
+		return nil, err
+	}
+	v := obj(view)
+	pin := obj(obj(obj(v["record"])["skill_trial"])["candidate"])
+	if v["status"] != "active" || !same(pin["id"], record["id"]) || !same(pin["revision"], record["revision"]) {
+		return nil, cmpErr("trial_candidate_changed")
+	}
+	return prepareTrial(api, proposal, trial)
 }
 
 func runEvaluate(a *args, apiURL string) (map[string]any, error) {
@@ -840,7 +878,7 @@ func runEvaluate(a *args, apiURL string) (map[string]any, error) {
 	if path, ok := a.vals["resume-result"]; ok {
 		return resumeEvaluation(api, proposal, path)
 	}
-	prepared, err := prepare(api, proposal)
+	prepared, err := prepareEvaluation(api, proposal, a.vals["trial-id"])
 	if err != nil {
 		return nil, err
 	}
@@ -852,11 +890,14 @@ func runEvaluate(a *args, apiURL string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	plan := obj(prepared["plan"])
+	plan := measurementPlan(prepared, a.flags["qualify-baseline"])
 	if plan == nil {
 		return nil, errValue
 	}
 	dataset, env, err := validateInputs(datasetRaw, environmentRaw, plan, api.token)
+	if err == nil && a.flags["qualify-baseline"] && obj(plan["rollback_qualification"]) != nil {
+		err = validateRollbackTasks(dataset, obj(plan["rollback_qualification"]))
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -890,16 +931,70 @@ func resumeEvaluation(api *evalAPI, proposal map[string]any, path string) (map[s
 	return map[string]any{"published": true, "resumed": true, "evaluation": at(receipt, "evaluation")}, nil
 }
 
+func validateRollbackTasks(dataset, contract map[string]any) error {
+	tasks, ok := contract["tasks"].([]any)
+	if !ok || len(tasks) != len(list(dataset["cases"])) {
+		return cmpErr("rollback_task_manifest_mismatch")
+	}
+	declared := map[string]string{}
+	for _, v := range tasks {
+		t := obj(v)
+		hash, hashOK := t["case_sha256"].(string)
+		category, catOK := t["category"].(string)
+		if !hashOK || !catOK || !sha256Re.MatchString(hash) || category == "" || declared[hash] != "" {
+			return cmpErr("rollback_task_manifest_mismatch")
+		}
+		declared[hash] = category
+	}
+	for _, v := range list(dataset["cases"]) {
+		c := obj(v)
+		hash := digest([]byte(mustCanonical(c)))
+		if declared[hash] != c["category"] {
+			return cmpErr("rollback_task_manifest_mismatch")
+		}
+		delete(declared, hash)
+	}
+	if len(declared) != 0 {
+		return cmpErr("rollback_task_manifest_mismatch")
+	}
+	return nil
+}
+
+func measurementPlan(prepared map[string]any, qualify bool) map[string]any {
+	plan := obj(prepared["plan"])
+	contract := obj(plan["rollback_qualification"])
+	if !qualify || contract == nil {
+		return plan
+	}
+	fixed := make(map[string]any, len(plan))
+	for k, v := range plan {
+		fixed[k] = v
+	}
+	for _, k := range []string{"dataset_sha256", "environment_sha256", "max_cost", "max_duration_ms"} {
+		fixed[k] = contract[k]
+	}
+	delete(fixed, "holdout")
+	return fixed
+}
+
 func executeEvaluation(a *args, api *evalAPI, proposal, prepared, dataset, env map[string]any) (map[string]any, error) {
 	output := a.vals["output"]
 	if exists(output) || exists(output+".receipt") {
 		return nil, cmpErr("output_already_exists")
 	}
-	result, err := evaluate(prepared, dataset, env)
+	execution := make(map[string]any, len(prepared))
+	for k, v := range prepared {
+		execution[k] = v
+	}
+	execution["plan"] = measurementPlan(prepared, a.flags["qualify-baseline"])
+	result, err := evaluate(execution, dataset, env)
+	if err == nil && a.flags["qualify-baseline"] && obj(obj(prepared["plan"])["rollback_qualification"]) != nil {
+		result["passed"] = false
+	}
 	if err != nil {
 		return nil, err
 	}
-	again, err := prepare(api, proposal)
+	again, err := prepareEvaluation(api, proposal, a.vals["trial-id"])
 	if err != nil {
 		return nil, err
 	}
@@ -910,6 +1005,9 @@ func executeEvaluation(a *args, api *evalAPI, proposal, prepared, dataset, env m
 		return nil, err
 	}
 	if a.flags["publish"] {
+		if a.flags["qualify-baseline"] {
+			prepared["qualify_baseline"] = true
+		}
 		receipt, err := publish(api, prepared, result)
 		if err != nil {
 			return nil, err

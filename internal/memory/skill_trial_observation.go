@@ -106,7 +106,7 @@ func (s *Service) ObserveSkillTrial(ctx context.Context, token, id string, in Sk
 			return e
 		}
 		failed, verified := false, 0
-		seen := map[string]bool{}
+		seen := newTrialExecutions()
 		for _, saved := range records {
 			item, itemFailed, e := observeSkillTrialSource(ctx, tx, id, saved, candidate, trial, seen)
 			if e != nil {
@@ -119,6 +119,10 @@ func (s *Service) ObserveSkillTrial(ctx context.Context, token, id string, in Sk
 				verified++
 			}
 			out.Items = append(out.Items, item)
+		}
+		// Process every independent negative judgment even when another execution was replayed.
+		if seen.repeated && !failed && verified >= policy.MinTrialRuns {
+			return ErrConflict
 		}
 		out.State = skillTrialObservationState(len(records), verified, policy.MinTrialRuns)
 		if failed {
@@ -217,7 +221,7 @@ func checkSkillTrialSnapshots(ctx context.Context, tx Tx, id string, snapshots [
 	return nil
 }
 
-func observeSkillTrialSource(ctx context.Context, tx Tx, id string, saved observedSkillTrialSource, candidate, trial Record, seen map[string]bool) (SkillTrialObservation, bool, error) {
+func observeSkillTrialSource(ctx context.Context, tx Tx, id string, saved observedSkillTrialSource, candidate, trial Record, seen *trialExecutions) (SkillTrialObservation, bool, error) {
 	var item SkillTrialObservation
 	source, e := tx.Get(ctx, "sources", saved.scope, saved.source.ID)
 	if e != nil {
@@ -233,14 +237,12 @@ func observeSkillTrialSource(ctx context.Context, tx Tx, id string, saved observ
 	if !live(trace) || trace.ContentErased || trace.PrivacyQuarantined {
 		return item, false, ErrConflict
 	}
-	key := structuredText(saved.scope) + "/" + source.TraceID
-	if seen[key] {
-		return item, false, ErrConflict
-	}
-	seen[key] = true
 	var usage SkillUsage
 	if invalidSkillTrialUsage(source.Text, &usage, id, candidate, trial) {
 		return item, false, ErrConflict
+	}
+	if _, err := seen.observe(ctx, tx, saved.scope, trace, usage); err != nil {
+		return item, false, err
 	}
 	item = SkillTrialObservation{Scope: saved.scope, Source: Ref{Collection: "sources", ID: source.ID, Revision: source.Revision}, Outcome: "unobserved"}
 	failed := false

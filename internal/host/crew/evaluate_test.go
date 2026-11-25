@@ -317,9 +317,6 @@ func TestPrepareBindsEachVersionBundle(t *testing.T) {
 }
 
 func TestDescendantsAreStoppedAfterAdapterReturns(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows has no process groups: killGroup (proc_other.go) stops only the adapter itself; stopping its descendants would need a Job Object")
-	}
 	f := newEvalFixture(t, "adapter-spawn")
 	marker := filepath.Join(f.dir, "descendant")
 	f.env["argv"] = append(list(f.env["argv"]), marker)
