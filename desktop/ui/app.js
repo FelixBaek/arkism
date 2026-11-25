@@ -1242,6 +1242,7 @@ export function startApp() {
     try { renderNow(resetDetail); restoreFocus(); } finally { window.ArkismPerf?.note(`render.${state.view}`, performance.now() - t0, $("#table").childElementCount); }
   }
   function renderNow(resetDetail) {
+    appConnection.serverBanner.viewChanged();
     virtualList.clear();
     if (state.view !== "todo") state.start = 0; // 시작 2·3단계 lives on 홈 only
     if (state.view !== "routing") routing.leave();

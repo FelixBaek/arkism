@@ -36,8 +36,7 @@ export function createAppConnection(deps) {
     deps.generation++;
     deps.state.token = "";
     deps.state.caps = null;
-    deps.state.serverInfo = null;
-    deps.state.serverLacks = new Set();
+    serverBanner.reset();
     serverBanner.draw();
     deps.store("arkism.token", null);
     deps.store("arkism.email", null);

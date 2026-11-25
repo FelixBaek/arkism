@@ -2,17 +2,26 @@
 // with the desktop shell replaced by the same stand-in the preview screenshots use (preview/shot.mjs).
 "use strict";
 const path = require("path");
+const { pathToFileURL } = require("url");
 const net = require("net");
 const { spawn } = require("child_process");
 const realTimers = require("timers");
 const dom = require("./dom.js");
 
 const UI = path.join(__dirname, "..");
+// The browser entry imports these two .js files as modules. An enclosing
+// CommonJS package on a developer PC can otherwise override Node's detection.
+const browserModules = new Set(["app.js", "crew.js"].map((name) => pathToFileURL(path.join(UI, name)).href));
+require("node:module").registerHooks?.({
+  load(url, context, next) {
+    return next(url, browserModules.has(url) ? { ...context, format: "module" } : context);
+  }
+});
 const realFetch = globalThis.fetch;
 const sleep = (ms) => new Promise((r) => realTimers.setTimeout(r, ms));
 async function startPreview() {
   const port = await new Promise((r) => { const s = net.createServer().listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => r(p)); }); });
-  const proc = spawn("python3", ["-I", path.join(__dirname, "preview", "serve.py"), String(port)], { stdio: "ignore" });
+  const proc = spawn(process.env.ARKISM_TEST_PYTHON || "python3", ["-I", path.join(__dirname, "preview", "serve.py"), String(port)], { stdio: "ignore", windowsHide: true });
   process.on("exit", () => proc.kill()); // a crashed test must not leave the server running
   const origin = `http://127.0.0.1:${port}`;
   for (let i = 0; i < 200; i++) { try { if ((await realFetch(origin + "/readyz")).ok) return { origin, stop: () => proc.kill() }; } catch { /* not up yet */ } await sleep(25); }
@@ -75,7 +84,7 @@ async function boot(opts = {}) {
     }
     require(path.join(UI, "look.js"));
     if (opts.beforeEntry) await opts.beforeEntry(env);
-    await import(path.join(UI, "entry.mjs"));
+    await import(pathToFileURL(path.join(UI, "entry.mjs")).href);
     await settle(100);
     const $ = (s) => env.document.querySelector(s), $$ = (s) => env.document.querySelectorAll(s);
     const click = async (s, ms = 0) => { const n = typeof s === "string" ? $(s) : s; if (!n) throw new Error("no element " + s); n.click(); await settle(ms); return n; };

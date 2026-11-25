@@ -59,7 +59,7 @@ function setup({ health, mode = "remote", ssh = mode === "remote" ? { host: "me@
   return import("./modules/serverVersion.mjs").then(({ createServerBanner }) => {
     const banner = createServerBanner({
       ...h, state,
-      request: async (path) => { calls.push(path); if (health instanceof Error) throw health; return health; },
+      request: async (path) => { calls.push(path); if (health instanceof Error) throw health; return typeof health === "function" ? health() : health; },
       tauri: { invoke: async (cmd, args) => { calls.push([cmd, args]); if (listener) { listener({ payload: "verify" }); steps.push(doc.querySelector("#server-banner").textContent); } return invoke(cmd, args); } },
       listen: async (name, fn) => { listener = fn; return () => { listener = null; }; },
       notice: (t) => notices.push(t),
@@ -150,6 +150,36 @@ test("a managed memory service shows its local version independently of desktop 
   assert.equal(line.querySelector("button"), null);
   await t.banner.update();
   assert.deepEqual(t.calls, ["/healthz"]);
+});
+
+test("managed info rereads on each visit, clears stale values, and ignores superseded connections", async () => {
+  const pending = [];
+  const t = await setup({ mode: "managed", health: () => new Promise((resolve, reject) => pending.push({ resolve, reject })) });
+  const health = (version) => ({ status: "ok", version, api_level: 1 });
+  Object.assign(t.state, { token: "managed", view: "home" });
+  const initial = t.banner.check();
+  pending.shift().resolve(health("0.1.9"));
+  await initial;
+  t.state.view = "settings"; t.state.settingsTab = "info";
+  t.banner.viewChanged(); t.banner.viewChanged();
+  assert.equal(pending.length, 1);
+  assert.doesNotMatch(t.line().textContent, /0\.1\.9/);
+  pending.shift().resolve(health("0.1.11")); await flush();
+  assert.match(t.line().textContent, /v0\.1\.11/);
+  t.banner.viewChanged(); assert.equal(pending.length, 0);
+  t.state.settingsTab = "general"; t.banner.viewChanged();
+  t.state.settingsTab = "info"; t.banner.viewChanged();
+  pending.shift().reject(new Error("offline")); await flush();
+  assert.match(t.line().textContent, /확인 못 함/);
+  assert.doesNotMatch(t.line().textContent, /0\.1\.11|최신/);
+  const losing = t.banner.check(), old = pending.shift();
+  t.banner.reset();
+  const winning = t.banner.check(); pending.shift().resolve(health("0.1.12"));
+  await winning; old.resolve(health("0.1.9")); await losing;
+  assert.match(t.line().textContent, /v0\.1\.12/);
+  const locked = t.banner.check(); t.banner.reset();
+  pending.shift().resolve(health("0.1.9")); await locked;
+  assert.equal(t.state.serverInfo, null);
 });
 
 test("serverNeeded keeps the control visible but off, with the reason", async () => {
