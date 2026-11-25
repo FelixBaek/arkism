@@ -22,6 +22,10 @@ var nativeSearchDynamicContract []byte
 // NativeSearchShadowConfig is enabled only by explicit daemon configuration.
 // An absent daemon search-mode file keeps native serving off.
 type NativeSearchShadowConfig struct {
+	// Scopes binds the daemon search policy to its configured dynamics spaces.
+	Scopes []Scope
+	// CandidateOnly compares the baseline candidates without opening native state.
+	CandidateOnly            bool
 	Mode                     string
 	Registry                 dyn.PolicyRegistryV2
 	Policy                   dyn.PolicyID
@@ -69,6 +73,10 @@ type NativeSearchShadowRuntime struct {
 }
 
 func NewNativeSearchShadowRuntime(cfg NativeSearchShadowConfig) (*NativeSearchShadowRuntime, error) {
+	if cfg.CandidateOnly && (cfg.Mode != "shadow" || cfg.Policy != "B1" || cfg.FastSlow != nil ||
+		len(cfg.Scopes) != 1 || !validScope(cfg.Scopes[0]) || cfg.Scopes[0].UserID == "") {
+		return nil, ErrInvalid
+	}
 	if cfg.Mode == "off" {
 		return &NativeSearchShadowRuntime{config: cfg}, nil
 	}
@@ -126,6 +134,31 @@ func (r *NativeSearchShadowRuntime) Observations() []NativeSearchShadowObservati
 	}
 	return out
 }
+
+// recentMetrics summarizes the bounded observation ring for exactly one scope.
+// Counts are recent observations, not lifetime counters, and contain no identities.
+func (r *NativeSearchShadowRuntime) recentMetrics(scope Scope) map[string]any {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	completed, fallback, served := 0, 0, 0
+	hash := nativeSearchHash("Scope", scope)
+	for _, record := range r.records {
+		if record.ScopeSHA != hash {
+			continue
+		}
+		if record.Status == "selected" {
+			completed++
+		}
+		if record.Status == "fallback" {
+			fallback++
+		}
+		if record.Served {
+			served++
+		}
+	}
+	return map[string]any{"mode": r.config.Mode, "recent_completed": completed, "recent_fallback": fallback, "recent_served": served}
+}
+
 func (r *NativeSearchShadowRuntime) remember(v NativeSearchShadowObservation, stage NativeSearchShadowStages) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -148,9 +181,16 @@ type nativeSearchAttempt struct {
 	stages   NativeSearchShadowStages
 }
 
+func (r *NativeSearchShadowRuntime) enabledFor(scope Scope) bool {
+	if r == nil || (r.config.Scopes != nil && !slices.Contains(r.config.Scopes, scope)) {
+		return false
+	}
+	return r.config.Mode == "shadow" || r.config.Mode == "dynamic" || r.config.Mode == "on"
+}
+
 func (s *Service) beginNativeSearchShadow(ctx context.Context, in SearchInput, collection string, lanes [][]Hit, history map[string]Record) *nativeSearchAttempt {
 	runtime := s.NativeSearchShadow
-	if runtime == nil || (runtime.config.Mode != "shadow" && runtime.config.Mode != "on" && runtime.config.Mode != "dynamic") {
+	if !runtime.enabledFor(in.Scope) {
 		return nil
 	}
 	a := &nativeSearchAttempt{runtime: runtime, record: NativeSearchShadowObservation{Protocol: "sys-native-service-shadow-v1", ContractSHA: ContentHash(string(nativeSearchShadowContract)), ScopeSHA: nativeSearchHash("Scope", in.Scope), Status: "fallback", Reason: "not_computed", SelectedRefs: []string{}, FastSlow: runtime.config.FastSlow != nil}}

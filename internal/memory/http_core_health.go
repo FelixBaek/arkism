@@ -44,6 +44,9 @@ func registerHealthCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetric
 		ready := s.Repo.SearchReady(ctx) == nil
 		deletion := DeletionWorkflowMetrics{Available: true, Coverage: "tracked_jobs_only"}
 		body := map[string]any{"store": store, "requests": stats.snapshot(), "requests_scope": "process", "latency_bounds_seconds": latencyBounds, "indexes_ready": ready, "cost": store.Cost, "deletion_workflow": deletion}
+		if s.NativeSearchShadow.enabledFor(scope) {
+			body["native_search"] = s.NativeSearchShadow.recentMetrics(scope)
+		}
 		if s.Reranker != nil {
 			body["rerank"] = s.Reranker.Metrics()
 			body["rerank_stages"] = s.Reranker.StageMetrics()

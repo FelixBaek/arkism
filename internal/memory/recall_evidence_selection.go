@@ -29,7 +29,7 @@ func (s *Service) evidenceSelectionStatus(in SearchInput, collection string) str
 	if status := evidenceSelectionInputStatus(in, collection); status != "" {
 		return status
 	}
-	if s.NativeSearchShadow != nil && s.NativeSearchShadow.config.Mode != "off" {
+	if s.NativeSearchShadow.enabledFor(in.Scope) && !s.NativeSearchShadow.config.CandidateOnly {
 		return "unsupported_native"
 	}
 	if s.partialRecallEvaluationOn(in) {
