@@ -292,7 +292,12 @@ func appendTo(o *host.Obj, key string, r map[string]any) {
 
 // importPayload is the shared SKILL.md importer; runtimes differ only in labels.
 func importPayload(runtime string, row map[string]any, analysis any, scope map[string]any, repository, commit string) (map[string]any, error) {
-	if runtime != "codex" && runtime != "claude_code" {
+	compatibility := map[string]any{"codex": "supported", "claude_code": "supported"}
+	switch runtime {
+	case "hermes":
+		compatibility = map[string]any{"hermes": "supported"}
+	case "codex", "claude_code":
+	default:
 		runtime = "generic"
 	}
 	raw, err := os.ReadFile(str(row["path"]))
@@ -329,7 +334,7 @@ func importPayload(runtime string, row map[string]any, analysis any, scope map[s
 	}
 	return map[string]any{"bundle": bundle, "scope": scope, "skill_id": row["skill_id"], "path": row["path"], "content": content,
 		"analysis": analysis, "redact_secrets": true, "origin": origin,
-		"compatibility": map[string]any{"codex": "supported", "claude_code": "supported"}}, nil
+		"compatibility": compatibility}, nil
 }
 
 // sameJSON compares two values as their JSON text (Go ints and decoded numbers alike).

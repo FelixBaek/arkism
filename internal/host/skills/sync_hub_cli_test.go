@@ -36,7 +36,11 @@ func newSyncWorld(t *testing.T, body string) *syncWorld {
 			return nil, errors.New("wrong token")
 		}
 		if strings.HasSuffix(path, "/resolve") {
-			return map[string]any{"items": []any{map[string]any{"ref": "tidy@latest-approved", "error": "skill_not_found"}}}, nil
+			var items []any
+			for _, ref := range payload.(map[string]any)["refs"].([]any) {
+				items = append(items, map[string]any{"ref": ref, "error": "skill_not_found"})
+			}
+			return map[string]any{"items": items}, nil
 		}
 		if w.importErr != nil {
 			return nil, w.importErr
@@ -48,6 +52,37 @@ func newSyncWorld(t *testing.T, body string) *syncWorld {
 }
 
 var syncTestScope = map[string]any{"workspace_id": "w", "project_id": "p", "user_id": "u", "agent_id": ""}
+
+func TestSyncHermesSkillRecordsNativeRuntime(t *testing.T) {
+	w := newSyncWorld(t, "---\nname: tidy\ndescription: Organize synthetic notes\n---\n")
+	syncRoots = func() []skillRoot { return []skillRoot{{"hermes", w.root, "hermes"}} }
+	llmURL = ""
+	w.run(t, true)
+	if len(w.imports) != 1 {
+		t.Fatalf("got %d imports", len(w.imports))
+	}
+	in := w.imports[0]
+	if in["skill_id"] != "hermes/tidy" || asMap(in["origin"])["original_runtime"] != "hermes" ||
+		canon(t, in["compatibility"]) != `{"hermes":"supported"}` {
+		t.Fatal(in["skill_id"], in["origin"], in["compatibility"])
+	}
+}
+
+func TestInstalledDirectorySyncDoesNotImportOtherSkills(t *testing.T) {
+	w := newSyncWorld(t, "---\nname: tidy\ndescription: Organize notes\n---\n")
+	write(t, filepath.Join(w.root, "unrelated", "SKILL.md"), "---\nname: unrelated\ndescription: Other work\n---\n")
+	llmURL = ""
+	run := func(dir string) (host.Obj, error) {
+		return syncRun("http://hub", w.token, syncTestScope, 50, true, dir)
+	}
+	if _, err := run(t.TempDir()); err == nil || len(w.imports) != 0 {
+		t.Fatal("an unknown directory should fail before import", err)
+	}
+	got, err := run(filepath.Dir(w.skill))
+	if err != nil || canon(t, objGet(got, "scanned")) != "1" || len(w.imports) != 1 || w.imports[0]["skill_id"] != "tidy" {
+		t.Fatal(got, w.imports, err)
+	}
+}
 
 func (w *syncWorld) run(t *testing.T, execute bool) host.Obj {
 	t.Helper()
@@ -327,6 +362,14 @@ func TestRecordSkillUsageSendsOnlyIDsAndOutcome(t *testing.T) {
 	}
 	if _, err := recordSkillUsage("code-review@1", "success", "", "user_stopped"); err == nil {
 		t.Fatal("an error code on success was accepted")
+	}
+	routerRuntime = "hermes"
+	if _, err := recordSkillUsage("code-review@1", "success", "review", ""); err != nil {
+		t.Fatal(err)
+	}
+	event = asMap(asMap(asList(body["events"])[0])["payload"])
+	if event["runtime"] != "hermes" || event["version_id"] != "skill-v1" || event["status"] != "success" {
+		t.Fatal("incorrect Hermes usage", event)
 	}
 }
 

@@ -584,6 +584,7 @@ func syncMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	user := p.str("--user", "management:owner")
 	limit := p.int("--limit", 50)
 	execute := p.flag("--execute")
+	installed := p.list("--installed-dir")
 	if !p.parse(args, 0, 0) {
 		return 2
 	}
@@ -603,7 +604,7 @@ func syncMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return host.DoJSON(http.DefaultClient, req)
 	}, scope, "skill_summary")
 	summaryBasic, summaryModel, summaryVia = pick == "basic", host.CLIRoleModel(pick, ""), via
-	summary, err := syncRun(*url, *tokenFile, scope, *limit, *execute)
+	summary, err := syncRun(*url, *tokenFile, scope, *limit, *execute, *installed...)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		if host.HTTPCode(err) == http.StatusForbidden {
@@ -613,10 +614,12 @@ func syncMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	// The agent kit's MCP servers and hooks (agentkit.go); its skills went to the hub above.
 	kitFailed := false
-	if kit := kitRun(*execute); kit != nil {
-		summary.Set("kit", kit)
-		for _, r := range kit {
-			kitFailed = kitFailed || strings.HasPrefix(str(objGet(r.(host.Obj), "state")), "failed")
+	if len(*installed) == 0 {
+		if kit := kitRun(*execute); kit != nil {
+			summary.Set("kit", kit)
+			for _, r := range kit {
+				kitFailed = kitFailed || strings.HasPrefix(str(objGet(r.(host.Obj), "state")), "failed")
+			}
 		}
 	}
 	_, _ = io.WriteString(stdout, host.MustDumps(summary, host.DumpOpts{NoASCII: true})+"\n")
@@ -626,26 +629,16 @@ func syncMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	return 0
 }
 
-func syncRun(url, tokenFile string, scope map[string]any, limit int, execute bool) (host.Obj, error) {
+func syncRun(url, tokenFile string, scope map[string]any, limit int, execute bool, installed ...string) (host.Obj, error) {
 	token, err := readToken(tokenFile)
 	if err != nil {
 		return nil, err
 	}
-	rows, order, noFrontmatter, err := syncRunDiscover()
+	rows, order, noFrontmatter, err := syncDiscoverInstalled(installed)
 	if err != nil {
 		return nil, err
 	}
-	failed := host.Obj{}
-	for _, sid := range order {
-		row := rows[sid]
-		bundle, err := captureBundle(str(row["path"]), str(row["inventory_root"]), str(row["content_hash"]))
-		if err != nil {
-			failed = append(failed, host.KV{Key: sid, Value: "bundle_capture_failed"})
-			delete(rows, sid)
-			continue
-		}
-		row["bundle"] = bundle
-	}
+	failed := captureSyncBundles(rows, order)
 	captureFailed := len(failed)
 	ids := sortedKeys(rows)
 	current, err := syncRunResolve(url, token, scope, ids)
@@ -674,11 +667,7 @@ func syncRun(url, tokenFile string, scope map[string]any, limit int, execute boo
 		row := rows[sid]
 		isNew := current[sid]["error"] == "skill_not_found"
 		if !execute {
-			if isNew {
-				counts["new"]++
-			} else {
-				counts["changed_candidates"]++
-			}
+			counts[syncChangeKey(isNew)]++
 			continue
 		}
 		result, fp, generated, err := syncOne(sid, row, current[sid], known, reviewed, scope, url, token, &updated)
@@ -691,22 +680,14 @@ func syncRun(url, tokenFile string, scope map[string]any, limit int, execute boo
 			continue
 		}
 		state[sid] = fp
-		switch {
-		case truthy(result["reused"]):
+		if truthy(result["reused"]) {
 			counts["reused"]++
-		case isNew:
-			counts["new"]++
-		default:
-			counts["changed_candidates"]++
+		} else {
+			counts[syncChangeKey(isNew)]++
 		}
 	}
-	if execute {
-		if err := os.MkdirAll(filepath.Dir(syncState), 0o777); err != nil {
-			return nil, err
-		}
-		if err := os.WriteFile(syncState, []byte(host.MustDumps(state, host.DumpOpts{SortKeys: true})), 0o666); err != nil {
-			return nil, err
-		}
+	if err := saveExecutedSyncState(execute, state); err != nil {
+		return nil, err
 	}
 	return host.Obj{{Key: "scanned", Value: len(ids) + captureFailed},
 		{Key: "up_to_date", Value: len(ids) - len(pending) - len(reverted)}, {Key: "new", Value: counts["new"]},
@@ -937,4 +918,68 @@ func syncOneGenerate(sid string, row, current map[string]any, reviewed host.Obj,
 		analysis[kv.Key] = kv.Value
 	}
 	return analysis, nil
+}
+
+func syncDiscoverInstalled(installed []string) (map[string]map[string]any, []string, int, error) {
+	rows, order, noFrontmatter, err := syncRunDiscover()
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	if len(installed) > 0 {
+		selected := map[string]map[string]any{}
+		for _, dir := range installed {
+			info, err := os.Stat(expand(dir))
+			if err != nil {
+				return nil, nil, 0, err
+			}
+			found := false
+			for sid, row := range rows {
+				dirInfo, err := os.Stat(filepath.Dir(str(row["path"])))
+				if err == nil && os.SameFile(info, dirInfo) {
+					selected[sid] = row
+					found = true
+				}
+			}
+			if !found {
+				return nil, nil, 0, fmt.Errorf("installed skill not found in active skill folders: %s", dir)
+			}
+		}
+		rows = selected
+		order = sortedKeys(rows)
+	}
+	return rows, order, noFrontmatter, nil
+}
+
+func captureSyncBundles(rows map[string]map[string]any, order []string) host.Obj {
+	failed := host.Obj{}
+	for _, sid := range order {
+		row := rows[sid]
+		bundle, err := captureBundle(str(row["path"]), str(row["inventory_root"]), str(row["content_hash"]))
+		if err != nil {
+			failed = append(failed, host.KV{Key: sid, Value: "bundle_capture_failed"})
+			delete(rows, sid)
+			continue
+		}
+		row["bundle"] = bundle
+	}
+	return failed
+}
+
+func saveExecutedSyncState(execute bool, state map[string]any) error {
+	if execute {
+		if err := os.MkdirAll(filepath.Dir(syncState), 0o777); err != nil {
+			return err
+		}
+		if err := os.WriteFile(syncState, []byte(host.MustDumps(state, host.DumpOpts{SortKeys: true})), 0o666); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func syncChangeKey(isNew bool) string {
+	if isNew {
+		return "new"
+	}
+	return "changed_candidates"
 }
