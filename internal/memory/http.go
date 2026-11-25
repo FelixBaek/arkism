@@ -310,15 +310,23 @@ func respond(w http.ResponseWriter, v any, e error) {
 	}
 	writeJSON(w, status, body)
 }
-func errorResponse(e error) (string, int) {
+func flowErrorResponse(e error) (string, int) {
 	var flowLimit flowLimitError
 	if errors.As(e, &flowLimit) {
 		return flowLimit.Error(), 409
 	}
+	if errors.Is(e, errGenerationReceiptMissing) {
+		return "generation_receipt_missing", http.StatusConflict
+	}
+	return "", 0
+}
+
+func errorResponse(e error) (string, int) {
+	if code, status := flowErrorResponse(e); status != 0 {
+		return code, status
+	}
 	code, status := "dependency_unavailable", 503
 	switch {
-	case errors.Is(e, errGenerationReceiptMissing):
-		code, status = "generation_receipt_missing", http.StatusConflict
 	case errors.Is(e, errBlobTooLarge):
 		code, status = "payload_too_large", 413
 	case errors.Is(e, errBlobDigestMismatch):
