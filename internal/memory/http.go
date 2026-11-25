@@ -317,6 +317,8 @@ func errorResponse(e error) (string, int) {
 	}
 	code, status := "dependency_unavailable", 503
 	switch {
+	case errors.Is(e, errGenerationReceiptMissing):
+		code, status = "generation_receipt_missing", http.StatusConflict
 	case errors.Is(e, errBlobTooLarge):
 		code, status = "payload_too_large", 413
 	case errors.Is(e, errBlobDigestMismatch):

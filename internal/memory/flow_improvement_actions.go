@@ -2,7 +2,10 @@ package memory
 
 import (
 	"context"
+	"errors"
 )
+
+var errGenerationReceiptMissing = errors.New("generation completion receipt not found")
 
 func recordRef(col string, r Record) Ref { return Ref{Collection: col, ID: r.ID, Revision: r.Revision} }
 
@@ -172,6 +175,9 @@ func (s *Service) recoverImprovementAction(ctx context.Context, token string, r 
 	case "generate":
 		id := "skill-generation-" + ContentHash(structuredText(r.Scope)+"\n"+p.PrincipalID+"\n"+p.Role+"\n"+event)
 		receipt, e := s.Repo.Get(ctx, colJobs, r.Scope, id)
+		if errors.Is(e, ErrNotFound) {
+			return errGenerationReceiptMissing
+		}
 		if e != nil {
 			return ErrUnavailable
 		}

@@ -104,6 +104,11 @@ func (s *Service) AdvanceFlowImprovement(ctx context.Context, token, id string, 
 			e = errors.Join(ErrUnavailable, authErr)
 		}
 	}
+	// Reconciliation only reads evidence. A missing or mismatched child cannot
+	// establish the outcome of the original action, which may still be running.
+	if in.Recover && e != nil {
+		return improvementView(claimed), e
+	}
 	saved, saveErr := s.finishImprovement(ctx, claimed, state, e)
 	if saveErr != nil {
 		return FlowImprovementView{}, saveErr
