@@ -88,9 +88,35 @@ function updateBlocked(state) {
 // deps: $, el, state, request, tauri, listen, notice, reconnect, ask, sshForm(), appVersion(), openInfo(), changed().
 export function createServerBanner(deps) {
   let busy = false, progress = "", failure = "";
+  let checkId = 0, managedInfoVisible = false, checking = false;
+
+  function reset() {
+    ++checkId;
+    managedInfoVisible = false;
+    checking = false;
+    deps.state.serverInfo = null;
+    deps.state.serverLacks = new Set();
+  }
+
+  const onManagedInfo = () => deps.state.mode === "managed" && !!deps.state.token &&
+    deps.state.view === "settings" && deps.state.settingsTab === "info";
+
+  function viewChanged() {
+    const visible = onManagedInfo();
+    if (visible === managedInfoVisible) return;
+    managedInfoVisible = visible;
+    if (visible) void check();
+  }
 
   async function check() {
-    deps.state.serverInfo = readServerInfo(await deps.request("/healthz").catch(() => null));
+    const id = ++checkId;
+    managedInfoVisible = onManagedInfo();
+    checking = true;
+    deps.state.serverInfo = null;
+    const result = await deps.request("/healthz", { cache: "no-store" }).catch(() => null);
+    if (id !== checkId) return;
+    checking = false;
+    deps.state.serverInfo = result?.status === "ok" ? readServerInfo(result) : null;
     deps.state.serverLacks = missingFeatures(deps.state.serverInfo);
     draw();
   }
@@ -120,7 +146,7 @@ export function createServerBanner(deps) {
     const top = el("div", "v4-version-top");
     top.append(el("span", "", managed ? "이 PC의 기억 저장소" : `서버 · ${where}`));
     if (!managed || status !== "current") {
-      top.append(el("span", `tag${status === "current" ? "" : " warn"}`, STATUS_TEXT[status]));
+      top.append(el("span", `tag${status === "current" ? "" : " warn"}`, managed && checking ? "확인 중" : STATUS_TEXT[status]));
     }
     const ver = el("div", "v4-version-num");
     ver.append(el("strong", info?.version === "dev" ? "" : "mono", info?.version === "dev" ? "개발 빌드" : info?.version ? `v${info.version}` : info ? "이전 버전" : "—"));
@@ -165,7 +191,7 @@ export function createServerBanner(deps) {
     }
   }
 
-  return { check, draw, row, update, lacks: (feature) => !!deps.state.serverLacks?.has(feature) };
+  return { check, reset, viewChanged, draw, row, update, lacks: (feature) => !!deps.state.serverLacks?.has(feature) };
 }
 
 // A control for a feature this server lacks: kept visible, turned off, with the reason on hover and for screen readers.
