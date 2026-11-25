@@ -39,6 +39,7 @@ type daemonOptions struct {
 	SpaceFrom             string
 	SpaceTo               string
 	Reindex               bool
+	ReindexMemory         string
 	TrainReview           string
 	TrainReviewExclude    string
 	RecallBaseline        string
@@ -71,6 +72,13 @@ func daemonFlags() daemonOptions {
 	flag.StringVar(&cfg.SpaceRename, "space-rename", "", "offline administrator, server stopped: preview|execute moving one space (-from workspace/project) to a new project id (-to workspace/project) in one transaction; then exit")
 	flag.StringVar(&cfg.SpaceFrom, "from", "", "workspace/project for -space-rename")
 	flag.StringVar(&cfg.SpaceTo, "to", "", "new workspace/project for -space-rename")
+	flag.Func("reindex-memory", "queue only workspace/project/user/agent/memory-id, then exit", func(target string) error {
+		if target == "" {
+			return memory.ErrInvalid
+		}
+		cfg.ReindexMemory = target
+		return nil
+	})
 	flag.BoolVar(&cfg.Reindex, "reindex", false, "queue embedding jobs for Postgres records not in the configured embedder's space, then exit")
 	flag.StringVar(&cfg.TrainReview, "train-review-classifier", "", "offline: train a scope-bound review advice model and write it to this path")
 	flag.StringVar(&cfg.TrainReviewExclude, "train-review-exclude", "arkism-memory-reviewer", "comma-separated reviewer principals excluded from training")
@@ -84,6 +92,9 @@ func daemonFlags() daemonOptions {
 	flag.StringVar(&cfg.DynamicsSearchConfig, "dynamics-search-config", "", "explicit HTTP API search mode config (off|shadow|dynamic|on); default off; requires both dynamics configs; legacy on requires fast_slow")
 	flag.BoolVar(&cfg.DynamicsRepair, "dynamics-repair", false, "verify and release a withheld dynamics publication in every configured scope, then exit; requires both dynamics configs")
 	flag.Parse()
+	if cfg.ReindexMemory != "" {
+		cfg.Reindex = true
+	}
 	return cfg
 }
 

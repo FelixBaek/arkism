@@ -1065,8 +1065,11 @@ func (s *Service) embedJob(ctx context.Context, workerToken string, job *Record)
 	if e != nil {
 		return false, e
 	}
-	if !embeddingEligible(job.Target.Collection, r) || r.Revision != job.Target.Revision {
+	if !embeddingEligible(job.Target.Collection, r) {
 		return true, nil
+	}
+	if r.Revision != job.Target.Revision {
+		return s.repairStaleEmbedding(ctx, job, r)
 	}
 	if e = embedSourcesLive(ctx, s.Repo, job.Target.Collection, r); e != nil {
 		return true, e
@@ -1184,4 +1187,20 @@ func embedSourcesLive(ctx context.Context, tx Tx, col string, r Record) error {
 		return nil
 	}
 	return checkSources(ctx, tx, r)
+}
+
+func (s *Service) repairStaleEmbedding(ctx context.Context, job *Record, r Record) (bool, error) {
+	// A metadata revision can win the race with the original approval job.
+	// Do not embed stale text; queue the currently eligible memory separately.
+	if job.Target.Collection == colMemories && r.Revision > job.Target.Revision && s.Embedder != nil && !embeddingCurrent(s.Embedder, r, recordContent(r)) {
+		if repair, ok := s.Repo.(interface {
+			EnqueueMemoryReindex(context.Context, string, Scope, string) (int, error)
+		}); ok {
+			_, err := repair.EnqueueMemoryReindex(ctx, s.Embedder.Space(), r.Scope, r.ID)
+			if err != nil && !errors.Is(err, ErrDenied) && !errors.Is(err, ErrNotFound) && !errors.Is(err, ErrInvalid) {
+				return false, err
+			}
+		}
+	}
+	return true, nil
 }

@@ -90,7 +90,7 @@ func run() error {
 	}
 	defer stopSidecar()
 	if cfg.Reindex {
-		return runDaemonReindex(ctx, pg, embed)
+		return runDaemonReindex(ctx, pg, embed, cfg.ReindexMemory)
 	}
 	defer closeDaemonExtensions()
 	svc, err := newDaemonService(ctx, pg, cfg, store, standalone, synthetic, auth, embed)
@@ -149,11 +149,22 @@ func checkDaemonReadiness(ctx context.Context, pg *memory.Postgres) error {
 	}
 	return nil
 }
-func runDaemonReindex(ctx context.Context, pg *memory.Postgres, embed memory.Embedder) error {
+func runDaemonReindex(ctx context.Context, pg *memory.Postgres, embed memory.Embedder, target string) error {
 	if embed == nil {
 		return memory.ErrInvalid
 	}
-	queued, err := pg.EnqueueReindex(ctx, embed.Space())
+	var queued int
+	var err error
+	if target == "" {
+		queued, err = pg.EnqueueReindex(ctx, embed.Space())
+	} else {
+		fields := strings.Split(target, "/")
+		if len(fields) != 5 || fields[4] == "" {
+			return memory.ErrInvalid
+		}
+		scope := memory.Scope{WorkspaceID: fields[0], ProjectID: fields[1], UserID: fields[2], AgentID: fields[3]}
+		queued, err = pg.EnqueueMemoryReindex(ctx, embed.Space(), scope, fields[4])
+	}
 	if err != nil {
 		return err
 	}

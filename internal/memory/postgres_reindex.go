@@ -2,7 +2,11 @@ package memory
 
 import (
 	"context"
+	"errors"
+	"strconv"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // EnqueueReindex queues one embedding job per record in an embeddable
@@ -104,6 +108,64 @@ FROM memory_records WHERE collection='jobs' AND kind='embedding' AND status IN (
 		if err != nil {
 			return queued, err
 		}
+	}
+	return queued, nil
+}
+
+// EnqueueMemoryReindex repairs a single active memory without changing the record
+// or replaying approval. The normal worker rechecks evidence and transfer policy.
+func (p *Postgres) EnqueueMemoryReindex(ctx context.Context, space string, scope Scope, id string) (int, error) {
+	if space == "" || checkScope(scope) != nil || id == "" {
+		return 0, ErrInvalid
+	}
+	queued := 0
+	err := p.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		queued = 0
+		db := tx.(*Postgres)
+		r, err := db.row(ctx, colMemories, scope, id, true)
+		if err != nil {
+			return err
+		}
+		content := recordContent(r)
+		if !embeddingEligible(colMemories, r) || r.Sensitivity == "restricted" || !safeTransfer(content) {
+			return ErrDenied
+		}
+		if err = embedSourcesLive(ctx, tx, colMemories, r); err != nil {
+			return err
+		}
+		if v := r.Embedding; v != nil && v.Space == space && v.Dimension == VectorDimension && len(v.Vector) == VectorDimension && v.ContentHash == ContentHash(content) {
+			return nil
+		}
+		var jobID, status string
+		err = db.q().QueryRow(ctx, `SELECT id,status FROM memory_records WHERE collection='jobs' AND kind='embedding'
+   AND workspace_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4
+   AND doc->'target'->>'collection'='memories' AND doc->'target'->>'id'=$5 AND doc->'target'->>'revision'=$6
+   AND status IN ('pending','retry','running','failed') ORDER BY (status='failed'),id LIMIT 1 FOR UPDATE`,
+			scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, id, strconv.FormatInt(r.Revision, 10)).Scan(&jobID, &status)
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			err = enqueueEmbedding(ctx, tx, colMemories, r)
+		case err != nil:
+			return pgErr(err)
+		case status == JobStatusFailed:
+			j, e := tx.Get(ctx, colJobs, scope, jobID)
+			if e != nil {
+				return e
+			}
+			prev := j.Revision
+			requeueJob(&j, time.Now().UTC())
+			j.Revision++
+			err = tx.Replace(ctx, colJobs, j, prev)
+		default:
+			return nil
+		}
+		if err == nil {
+			queued = 1
+		}
+		return err
+	})
+	if err != nil {
+		return 0, err
 	}
 	return queued, nil
 }

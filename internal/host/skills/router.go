@@ -39,7 +39,9 @@ var (
 	agentTokenFile = host.Env("ARKISM_AGENT_TOKEN_FILE", host.TokenFile)
 	routerRuntime  = os.Getenv("ARKISM_RUNTIME") // set per MCP config
 	routerRuntimes = []string{"codex", "claude_code", "zcode", "gemini", "grok", "deepseek"}
-	receiveOnly    = os.Getenv("ARKISM_SKILLS_RECEIVE_ONLY") == "1"
+	// Hermes reports ordinary usage for a loaded skill; trial resolution has its own runtime contract.
+	usageRuntimes = slices.Concat(routerRuntimes, []string{"hermes"})
+	receiveOnly   = os.Getenv("ARKISM_SKILLS_RECEIVE_ONLY") == "1"
 	// 스킬 화면의 PC 아이콘: Windows 설치기가 MCP를 띄울 때만 ARKISM_CLIENT=pc 를 붙인다.
 	// SSH로 들어왔다는 사실만으로는 PC가 아니다.
 	fromPC = pcClient()
@@ -642,8 +644,8 @@ func recordSkillUsage(ref, status, taskType, errorCode string) (host.Obj, error)
 	if !ok {
 		return nil, errors.New("load_skill this ref first (use the ref it returned)")
 	}
-	if !containsStr(routerRuntimes, runtime) {
-		return nil, errors.New("runtime must be one of " + strings.Join(routerRuntimes, ", "))
+	if !containsStr(usageRuntimes, runtime) {
+		return nil, errors.New("runtime must be one of " + strings.Join(usageRuntimes, ", "))
 	}
 	finished := time.Now().UTC()
 	event, err := usageEvent(randHex(16), loaded.item, runtime, status, isoMillis(loaded.started), isoMillis(finished), usageOpts{errorCode: errorCode})

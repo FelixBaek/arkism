@@ -145,6 +145,20 @@ func instReadHermes(userRoot, client string) (string, bool, error) {
 	if err != nil {
 		return "", false, err
 	}
+	// A working, explicitly selected Arkism executable can serve Hermes independently.
+	// Keep it only for its declared transport. A transport change needs the new installer's client.
+	servers, err := host.YAMLMCPServers(text)
+	if err != nil {
+		return "", false, err
+	}
+	if existing, ok := servers["arkism"]; ok && eq(existing.Def["args"], []any{"windows", "mcp", "hermes"}) {
+		prior, _ := existing.Def["command"].(string)
+		if filepath.IsAbs(prior) && strings.EqualFold(filepath.Base(prior), instClient) {
+			if info, statErr := os.Stat(prior); statErr == nil && info.Mode().IsRegular() {
+				client = prior
+			}
+		}
+	}
 	if text, err = host.YAMLMCPRemove(text, "arkism"); err != nil {
 		return "", false, err
 	}
