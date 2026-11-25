@@ -342,8 +342,15 @@ func TestSchemaMigrationsApplicationCannotChangeHistory(t *testing.T) {
 	GRANT USAGE ON SCHEMA extensions TO arkism_init;
 	GRANT USAGE ON SCHEMA arkism,extensions TO arkism_app;
 	ALTER DEFAULT PRIVILEGES FOR ROLE arkism_init IN SCHEMA arkism GRANT SELECT,INSERT,UPDATE,DELETE ON TABLES TO arkism_app;`)
-	schemaExec(t, p, "GRANT CREATE ON DATABASE "+pgx.Identifier{p.pool.Config().ConnConfig.Database}.Sanitize()+" TO arkism_init")
+	database := pgx.Identifier{p.pool.Config().ConnConfig.Database}.Sanitize()
+	schemaExec(t, p, "GRANT CREATE ON DATABASE "+database+" TO arkism_init")
 	initializer := schemaRolePostgres(t, p, "arkism_init")
+	historicalSchema(t, initializer, 5)
+	schemaExec(t, p, "REVOKE CREATE ON DATABASE "+database+" FROM arkism_init")
+	var canCreate bool
+	if err := initializer.pool.QueryRow(ctx, `SELECT has_database_privilege(current_database(), 'CREATE')`).Scan(&canCreate); err != nil || canCreate {
+		t.Fatalf("expected a schema owner without database CREATE: allowed=%t err=%v", canCreate, err)
+	}
 	if err := initializer.Init(ctx); err != nil {
 		t.Fatal(err)
 	}

@@ -152,6 +152,13 @@ func pgVector(e *Embedding) (any, any, any, error) {
 	}
 	return "[" + strings.Join(parts, ",") + "]", e.Space, dim, nil
 }
+// classifierWriteRefusal identifies the explicit database guard while preserving
+// ErrDenied for ordinary callers of the repository.
+type classifierWriteRefusal struct{}
+
+func (classifierWriteRefusal) Error() string { return ErrDenied.Error() }
+func (classifierWriteRefusal) Unwrap() error { return ErrDenied }
+
 func pgErr(err error) error {
 	if err == nil {
 		return nil
@@ -162,7 +169,7 @@ func pgErr(err error) error {
 			return ErrConflict
 		}
 		if e.Code == "AK403" { // classifier_write_guard
-			return ErrDenied
+			return classifierWriteRefusal{}
 		}
 		// 42501 also covers a missing GRANT; only an RLS refusal is marked, and it stays unavailable.
 		if e.Code == "42501" && strings.Contains(e.Message, "row-level security") {

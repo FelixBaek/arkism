@@ -314,7 +314,8 @@ func (s *Service) authorizeAt(ctx context.Context, token, action string, scope S
 // that refusal confirms the denial, so only other storage failures become 503.
 func denialAuditFailed(err error) bool {
 	var refused rlsRefusal
-	return err != nil && !errors.As(err, &refused)
+	var classifierRefused classifierWriteRefusal
+	return err != nil && !errors.As(err, &refused) && !errors.As(err, &classifierRefused)
 }
 
 func sameRequestActor(ctx context.Context, d Decision) bool {

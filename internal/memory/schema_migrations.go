@@ -49,6 +49,12 @@ var schemaMaintenanceGateSQL string
 //go:embed migrations/0010_job_queue_indexes.sql
 var schemaJobQueueIndexesSQL string
 
+//go:embed migrations/0011_dream_expiry_indexes.sql
+var schemaDreamExpiryIndexesSQL string
+
+//go:embed migrations/0012_classifier_candidate_read_audit.sql
+var schemaClassifierCandidateReadAuditSQL string
+
 type schemaMigration struct {
 	version int
 	name    string
@@ -56,7 +62,7 @@ type schemaMigration struct {
 }
 
 func schemaMigrations() []schemaMigration {
-	return []schemaMigration{{1, "baseline", schemaBaselineSQL}, {2, "memory_context_search", schemaMemoryContextSearchSQL}, {3, "principal_token_lifecycle", schemaPrincipalTokenLifecycleSQL}, {4, "memory_graph_vector_index", schemaMemoryGraphVectorIndexSQL}, {5, "decision_daily_counts", schemaDecisionDailyCountsSQL}, {6, "named_entities", schemaNamedEntitiesSQL}, {7, "conversation_neighbors", schemaConversationNeighborsSQL}, {8, "search_tokens_nfc", schemaSearchTokensNFCSQL}, {9, "maintenance_gate", schemaMaintenanceGateSQL}, {10, "job_queue_indexes", schemaJobQueueIndexesSQL}}
+	return []schemaMigration{{1, "baseline", schemaBaselineSQL}, {2, "memory_context_search", schemaMemoryContextSearchSQL}, {3, "principal_token_lifecycle", schemaPrincipalTokenLifecycleSQL}, {4, "memory_graph_vector_index", schemaMemoryGraphVectorIndexSQL}, {5, "decision_daily_counts", schemaDecisionDailyCountsSQL}, {6, "named_entities", schemaNamedEntitiesSQL}, {7, "conversation_neighbors", schemaConversationNeighborsSQL}, {8, "search_tokens_nfc", schemaSearchTokensNFCSQL}, {9, "maintenance_gate", schemaMaintenanceGateSQL}, {10, "job_queue_indexes", schemaJobQueueIndexesSQL}, {11, "dream_expiry_indexes", schemaDreamExpiryIndexesSQL}, {12, "classifier_candidate_read_audit", schemaClassifierCandidateReadAuditSQL}}
 }
 
 func (m schemaMigration) checksum() string {
@@ -184,12 +190,16 @@ func prepareSchemaHistory(ctx context.Context, tx pgx.Tx, migrations []schemaMig
 	if err := tx.QueryRow(ctx, `SELECT to_regclass('arkism.schema_migrations') IS NOT NULL`).Scan(&hadHistory); err != nil {
 		return 0, schemaFailure("history unavailable")
 	}
-	if _, err := tx.Exec(ctx, `CREATE SCHEMA IF NOT EXISTS arkism;
+	// An existing history belongs to a provisioned schema. Reissuing CREATE
+	// SCHEMA requires database-level CREATE even when the schema already exists.
+	if !hadHistory {
+		if _, err := tx.Exec(ctx, `CREATE SCHEMA IF NOT EXISTS arkism;
 CREATE TABLE IF NOT EXISTS arkism.schema_migrations (
 version integer PRIMARY KEY CHECK(version>0), name text NOT NULL,
 checksum text NOT NULL CHECK(checksum ~ '^[0-9a-f]{64}$'),
 applied_at timestamptz NOT NULL DEFAULT clock_timestamp())`); err != nil {
-		return 0, schemaFailure("history unavailable")
+			return 0, schemaDatabaseFailure("history unavailable", err)
+		}
 	}
 	if err := checkSchemaHistory(ctx, tx, migrations, false); err != nil {
 		return 0, err
