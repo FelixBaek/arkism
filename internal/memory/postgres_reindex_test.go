@@ -78,3 +78,49 @@ func TestPostgresEnqueueSingleMemoryReindex(t *testing.T) {
 		t.Fatalf("target changed rev=%d err=%v", r.Revision, err)
 	}
 }
+
+func TestPostgresEnqueueSingleMemoryReindexConcurrentRetry(t *testing.T) {
+	pg, scope := openPostgresListsTest(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	src := Record{ID: "synthetic-source", Scope: scope, Status: statusActive, Revision: 1, Text: "Test source", CreatedAt: now, UpdatedAt: now}
+	r := Record{ID: "synthetic-memory", Scope: scope, Status: statusActive, Revision: 2, Text: "Test memory", Sources: []SourceRef{{SourceID: src.ID, Locator: "original"}}, CreatedAt: now, UpdatedAt: now}
+	insertPGRecords(t, pg, "sources", src)
+	insertPGRecords(t, pg, colMemories, r)
+	failed := Record{ID: "failed-embedding", Scope: scope, Kind: "embedding", Status: JobStatusFailed, Revision: 3, Target: &Ref{Collection: colMemories, ID: r.ID, Revision: r.Revision}, Attempts: 3, CreatedAt: now, UpdatedAt: now}
+	insertPGRecords(t, pg, colJobs, failed)
+	type outcome struct {
+		count int
+		err   error
+	}
+	results := make(chan outcome, 4)
+	ready := make(chan struct{})
+	for range cap(results) {
+		go func() {
+			<-ready
+			n, err := pg.EnqueueMemoryReindex(ctx, "test-space", scope, r.ID)
+			results <- outcome{n, err}
+		}()
+	}
+	close(ready)
+	queued := 0
+	for range cap(results) {
+		res := <-results
+		if res.err != nil {
+			t.Fatal(res.err)
+		}
+		queued += res.count
+	}
+	if queued != 1 {
+		t.Fatalf("queued %d repairs for one revision", queued)
+	}
+	job, err := pg.Get(ctx, colJobs, scope, failed.ID)
+	if err != nil || job.Status != JobStatusPending || job.Revision != 4 || job.Attempts != 0 {
+		t.Fatalf("failed job was not reused: status=%s revision=%d attempts=%d err=%v", job.Status, job.Revision, job.Attempts, err)
+	}
+	different := scope
+	different.ProjectID = "unrelated"
+	if n, err := pg.EnqueueMemoryReindex(ctx, "test-space", different, r.ID); n != 0 || err != ErrNotFound {
+		t.Fatalf("cross-scope repair n=%d err=%v", n, err)
+	}
+}
