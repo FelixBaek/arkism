@@ -68,14 +68,22 @@ func loadDaemonSearchMode(path string, background bool) (*memory.NativeSearchSha
 	default:
 		return nil, memory.ErrInvalid
 	}
-	if m.CandidateOnly && (m.Mode != "shadow" || m.Policy != "B1" || m.FastSlow != nil || m.RegistrySHA256 != candidateShadowRegistrySHA256) {
+	if !m.validCandidateOnly() {
 		return nil, memory.ErrInvalid
 	}
+	return m.runtimeConfig(filepath.Dir(path))
+}
+
+func (m daemonSearchMode) validCandidateOnly() bool {
+	return !m.CandidateOnly || (m.Mode == "shadow" && m.Policy == "B1" && m.FastSlow == nil && m.RegistrySHA256 == candidateShadowRegistrySHA256)
+}
+
+func (m daemonSearchMode) runtimeConfig(directory string) (*memory.NativeSearchShadowConfig, error) {
 	// Join would clean away "..", so the path must be local before it is joined.
 	if !filepath.IsLocal(m.RegistryPath) {
 		return nil, memory.ErrInvalid
 	}
-	registryRaw, err := readDaemonDynamicsFile(filepath.Join(filepath.Dir(path), m.RegistryPath))
+	registryRaw, err := readDaemonDynamicsFile(filepath.Join(directory, m.RegistryPath))
 	if err != nil || memory.ContentHash(string(registryRaw)) != m.RegistrySHA256 || !dyn.ValidJSONUnicode(registryRaw) {
 		return nil, memory.ErrInvalid
 	}
