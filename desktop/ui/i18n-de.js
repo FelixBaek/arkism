@@ -44,6 +44,8 @@
  "본문 포함": "Inhalt enthalten",
  "바이트 · SHA-256": " Bytes · SHA-256",
  "목록에 없음": "Nicht aufgeführt",
+  "전송 다시 시도": "Zustellung erneut versuchen",
+  "전송을 다시 대기열에 넣었어요.": "Die Zustellung wurde erneut in die Warteschlange gestellt.",
  "이 PC의 기억 저장소": "Erinnerungsspeicher auf diesem PC",
  "이 PC의 기억 저장소를 열지 못했어요. 잠시 뒤 다시 시도하세요.": "Der Erinnerungsspeicher auf diesem PC konnte nicht geöffnet werden. Versuchen Sie es gleich erneut.",
  "기존 기억과 스킬이 있는 저장소를 여는 중이에요.": "Der Speicher mit Ihren vorhandenen Erinnerungen und Skills wird geöffnet.",

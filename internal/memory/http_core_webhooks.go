@@ -9,16 +9,17 @@ import (
 func init() {
 	human := []string{roleHuman}
 	for pattern, p := range map[string]routePolicy{
-		"GET /v1/webhooks":                 {action: "write:webhooks", scope: routeQuery, roles: human},
-		"POST /v1/webhooks":                {action: "write:webhooks", scope: routeJSON, limit: 64 << 10, roles: human},
-		"GET /v1/webhooks/{id}":            {action: "write:webhooks", scope: routeQuery, roles: human},
-		"PATCH /v1/webhooks/{id}":          {action: "write:webhooks", scope: routeJSON, limit: 64 << 10, roles: human},
-		"DELETE /v1/webhooks/{id}":         {action: "write:webhooks", scope: routeQuery, roles: human},
-		"GET /v1/webhooks/{id}/deliveries": {action: "write:webhooks", scope: routeQuery, roles: human},
-		"POST /v1/webhooks/{id}/test":      {action: "write:webhooks", scope: routeJSON, limit: 16 << 10, roles: human},
-		"GET /v1/llm-requests":             {action: "read:llm_requests", scope: routeQuery, roles: human},
-		"GET /v1/llm-requests/stats":       {action: "read:llm_requests", scope: routeQuery, roles: human},
-		"GET /v1/llm-requests/{id}":        {action: "read:llm_requests", scope: routeQuery, roles: human},
+		"GET /v1/webhooks":                                   {action: "write:webhooks", scope: routeQuery, roles: human},
+		"POST /v1/webhooks":                                  {action: "write:webhooks", scope: routeJSON, limit: 64 << 10, roles: human},
+		"GET /v1/webhooks/{id}":                              {action: "write:webhooks", scope: routeQuery, roles: human},
+		"PATCH /v1/webhooks/{id}":                            {action: "write:webhooks", scope: routeJSON, limit: 64 << 10, roles: human},
+		"DELETE /v1/webhooks/{id}":                           {action: "write:webhooks", scope: routeQuery, roles: human},
+		"GET /v1/webhooks/{id}/deliveries":                   {action: "write:webhooks", scope: routeQuery, roles: human},
+		"POST /v1/webhooks/{id}/deliveries/{delivery}/retry": {action: "write:webhooks", scope: routeJSON, limit: 16 << 10, roles: human},
+		"POST /v1/webhooks/{id}/test":                        {action: "write:webhooks", scope: routeJSON, limit: 16 << 10, roles: human},
+		"GET /v1/llm-requests":                               {action: "read:llm_requests", scope: routeQuery, roles: human},
+		"GET /v1/llm-requests/stats":                         {action: "read:llm_requests", scope: routeQuery, roles: human},
+		"GET /v1/llm-requests/{id}":                          {action: "read:llm_requests", scope: routeQuery, roles: human},
 	} {
 		httpRoutePolicies[pattern] = p
 	}
@@ -70,6 +71,16 @@ func registerWebhooksCoreHTTP(mux routeRegistrar, s *Service, _ *requestMetrics)
 		}
 		out, e := s.ListWebhookDeliveries(r.Context(), bearer(r), scopeQuery(r), r.PathValue("id"), r.URL.Query().Get("before"), limit)
 		respond(w, out, e)
+	})
+	mux.HandleFunc("POST /v1/webhooks/{id}/deliveries/{delivery}/retry", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Scope Scope `json:"scope"`
+		}
+		if !decode(w, r, &in) {
+			return
+		}
+		out, err := s.RetryWebhookDelivery(r.Context(), bearer(r), in.Scope, r.PathValue("id"), r.PathValue("delivery"))
+		respondAccepted(w, out, err)
 	})
 	mux.HandleFunc("POST /v1/webhooks/{id}/test", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {

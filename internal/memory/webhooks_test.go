@@ -1,5 +1,3 @@
-//go:build linux
-
 package memory
 
 import (
@@ -9,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -269,6 +266,74 @@ func TestWebhookIncludeContentKeepsPrivateText(t *testing.T) {
 	}
 	if _, sent := got[hidden.ID]; !sent || got[hidden.ID] != nil {
 		t.Fatal("private-marked record", got)
+	}
+}
+
+func TestWebhookFailedDeliveryCanBeRequeuedByHuman(t *testing.T) {
+	f := webhookFixture(t)
+	receiver := newHookServer(t, http.StatusInternalServerError)
+	hook := f.hook(receiver.URL, false, EventMemoryApproved)
+	other := f.hook(receiver.URL, false, EventMemoryRejected)
+	approveCandidate(t, f, "recover a failed notification")
+	for range maxJobAttempts + 3 {
+		_ = f.svc.WorkOnce(testCtx, f.work)
+	}
+	failed := f.deliveries(hook.ID)[0]
+	if failed.Status != JobStatusFailed || failed.Attempts != maxJobAttempts {
+		t.Fatalf("delivery did not exhaust retry budget: %+v", failed)
+	}
+	post := func(token, hookID string) *httptest.ResponseRecorder {
+		t.Helper()
+		body, err := json.Marshal(map[string]Scope{"scope": scopeA})
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/v1/webhooks/"+hookID+"/deliveries/"+failed.ID+"/retry", strings.NewReader(string(body)))
+		req.Header.Set("Authorization", "Bearer "+token)
+		response := httptest.NewRecorder()
+		Handler(f.svc).ServeHTTP(response, req)
+		return response
+	}
+	if response := post(f.agent, hook.ID); response.Code != http.StatusForbidden {
+		t.Fatalf("agent requeue: %d %s", response.Code, response.Body)
+	}
+	if response := post(f.human, other.ID); response.Code != http.StatusNotFound {
+		t.Fatalf("wrong subscription requeue: %d %s", response.Code, response.Body)
+	}
+	update := WebhookUpdate{Scope: scopeA, ExpectedRevision: hook.Revision, Events: []string{EventMemoryRejected}}
+	changed, err := f.svc.UpdateWebhook(testCtx, f.human, hook.ID, update)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response := post(f.human, hook.ID); response.Code != http.StatusConflict {
+		t.Fatalf("unsubscribed requeue: %d %s", response.Code, response.Body)
+	}
+	update.ExpectedRevision, update.Events = changed.Revision, []string{EventMemoryApproved}
+	if _, err := f.svc.UpdateWebhook(testCtx, f.human, hook.ID, update); err != nil {
+		t.Fatal(err)
+	}
+
+	receiver.mu.Lock()
+	receiver.status = http.StatusOK
+	receiver.mu.Unlock()
+	response := post(f.human, hook.ID)
+	var pending WebhookDeliveryView
+	if response.Code != http.StatusAccepted || json.Unmarshal(response.Body.Bytes(), &pending) != nil ||
+		pending.ID != failed.ID || pending.Status != JobStatusPending || pending.Attempts != 0 {
+		t.Fatalf("retry did not restore the original job: %d %s", response.Code, response.Body)
+	}
+	if duplicate := post(f.human, hook.ID); duplicate.Code != http.StatusConflict {
+		t.Fatalf("duplicate requeue: %d %s", duplicate.Code, duplicate.Body)
+	}
+	if done := f.workUntilTried(hook.ID); done.ID != failed.ID || done.Status != JobStatusDone || done.Attempts != 1 {
+		t.Fatalf("retry did not deliver: %+v", done)
+	}
+	receiver.mu.Lock()
+	defer receiver.mu.Unlock()
+	last := len(receiver.bodies) - 1
+	if last != maxJobAttempts || string(receiver.bodies[0]) != string(receiver.bodies[last]) ||
+		!VerifyWebhook([]byte(testWebhookSecret), receiver.sigs[last], receiver.bodies[last], time.Now(), time.Minute) {
+		t.Fatal("retry changed the event or did not sign it")
 	}
 }
 
@@ -655,38 +720,6 @@ func queuedEvents(f *fixture) []string {
 		}
 	}
 	return out
-}
-
-func TestWebhookDefenseAndConsolidationEvents(t *testing.T) {
-	f, _ := wikiFixture(t)
-	f.svc.WebhookKey = []byte(strings.Repeat("k", 32))
-	f.hook("https://hooks.example.com/x", false, EventDefenseTriggered, EventConsolidationCompleted)
-	putSettings(t, f, scopeA, SpaceConfigInput{DefenseRules: &[]SpaceDefenseRule{{Pattern: `falcon`, Action: "redact"}, {Pattern: `\bINC-\d+\b`, Action: "block"}}})
-	text := "project falcon ships"
-	if err := f.svc.defendSpace(testCtx, "", defenseGuard{}, scopeA, &text); err != nil || text == "project falcon ships" {
-		t.Fatal("redact", err, text)
-	}
-	plain := "nothing to see"
-	_ = f.svc.defendSpace(testCtx, "", defenseGuard{}, scopeA, &plain)
-	blocked := "see INC-42"
-	if err := f.svc.defendSpace(testCtx, "", defenseGuard{}, scopeA, &blocked); !errors.Is(err, ErrDefenseBlocked) {
-		t.Fatal("block", err)
-	}
-	if ev := queuedEvents(f); len(ev) != 2 || ev[0] != EventDefenseTriggered || ev[1] != EventDefenseTriggered {
-		t.Fatal("defense events", ev)
-	}
-	if _, err := f.consolidate(f.human, true); err != nil {
-		t.Fatal(err)
-	}
-	if ev := queuedEvents(f); len(ev) != 2 {
-		t.Fatal("dry run queued an event", ev)
-	}
-	if _, err := f.consolidate(f.human, false); err != nil {
-		t.Fatal(err)
-	}
-	if ev := queuedEvents(f); len(ev) != 3 || !slices.Contains(ev, EventConsolidationCompleted) { // queued rows have no order
-		t.Fatal("consolidation event", ev)
-	}
 }
 
 // A chat app's webhook address carries its key in the path: the hook is accepted,

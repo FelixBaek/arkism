@@ -159,6 +159,13 @@ window.ArkismMessenger = (ctx) => {
     catch (e) { S.logs[h.id] = { items: [], error: errText(e) }; }
     render(false);
   }
+  const retryDelivery = (h, delivery) => hookAct(async () => {
+    const log = S.logs[h.id];
+    const next = await request(hookPath(h, `/deliveries/${encodeURIComponent(delivery.id)}/retry`), { method: "POST", body: body({}) });
+    if (log && S.logs[h.id] === log && next?.id === delivery.id) {
+      log.items = log.items.map((item) => item.id === next.id ? next : item);
+    }
+  }, "전송을 다시 대기열에 넣었어요.");
   function logList(h) {
     const L = S.logs[h.id];
     if (!L) return null;
@@ -171,6 +178,13 @@ window.ArkismMessenger = (ctx) => {
       const small = el("small", st.tone === "warn" ? "warn" : ""); small.append(el("span", "", st.label));
       if (st.detail) small.append(" · ", raw(el("span", "", st.detail)));
       r.append(el("strong", "", EVENTS[d.delivery?.event] || d.delivery?.event || "알림"), small);
+      const event = d.delivery?.event;
+      if (d.id && d.status === "failed" && (event === "webhook.test" || h.active && h.events?.includes(event))) {
+        const actions = el("div", "mg-actions"), retry = button("전송 다시 시도", "small", null, () => retryDelivery(h, d));
+        retry.disabled = S.busy;
+        actions.append(retry);
+        r.append(actions);
+      }
       box.append(r);
     }
     return box;

@@ -46,6 +46,8 @@ window.ArkismI18nEN = (window.ArkismI18nDicts ||= {}).en = {
   "본문 포함": "Body included",
   "바이트 · SHA-256": " bytes · SHA-256",
   "목록에 없음": "Not listed",
+  "전송 다시 시도": "Retry delivery",
+  "전송을 다시 대기열에 넣었어요.": "The delivery was queued again.",
   "이 PC의 기억 저장소": "Memory store on this PC",
   "이 PC의 기억 저장소를 열지 못했어요. 잠시 뒤 다시 시도하세요.": "Could not open this PC’s memory store. Try again shortly.",
   "기존 기억과 스킬이 있는 저장소를 여는 중이에요.": "Opening the store with your existing memories and skills.",

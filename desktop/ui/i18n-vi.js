@@ -44,6 +44,8 @@
  "본문 포함": "Kèm nội dung",
  "바이트 · SHA-256": " byte · SHA-256",
  "목록에 없음": "Không có trong danh sách",
+  "전송 다시 시도": "Thử gửi lại",
+  "전송을 다시 대기열에 넣었어요.": "Lượt gửi đã được đưa lại vào hàng đợi.",
  "이 PC의 기억 저장소": "Kho ký ức trên PC này",
  "이 PC의 기억 저장소를 열지 못했어요. 잠시 뒤 다시 시도하세요.": "Không mở được kho ký ức trên PC này. Hãy thử lại sau ít phút.",
  "기존 기억과 스킬이 있는 저장소를 여는 중이에요.": "Đang mở kho chứa ký ức và kỹ năng hiện có của bạn.",

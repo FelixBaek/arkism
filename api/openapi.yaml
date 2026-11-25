@@ -44245,6 +44245,79 @@
         }
       }
     },
+    "/v1/webhooks/{id}/deliveries/{delivery}/retry": {
+      "post": {
+        "operationId": "retry_webhook_delivery",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Requeue a failed webhook delivery",
+        "description": "Human principals with write:webhooks only. The retry preserves the event and delivery ID and uses the current subscription, signing key and receiver configuration. An active, completed or unsubscribed delivery cannot be requeued.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "delivery",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "scope"
+                ],
+                "properties": {
+                  "scope": {
+                    "$ref": "#/components/schemas/Scope"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Delivery requeued with a fresh attempt budget.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookDelivery"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request."
+          },
+          "401": {
+            "description": "Authentication required."
+          },
+          "403": {
+            "description": "Insufficient privileges."
+          },
+          "404": {
+            "description": "Webhook or delivery not found in this scope."
+          },
+          "409": {
+            "description": "Delivery is not eligible for retry."
+          }
+        }
+      }
+    },
     "/v1/webhooks/{id}/test": {
       "post": {
         "operationId": "post_v1_webhooks_id_test",
