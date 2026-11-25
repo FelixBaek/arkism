@@ -1,3 +1,4 @@
+import { skillSelectionView } from "./modules/skillSelectionView.mjs";
 import { createRemoteCollection } from "./modules/remoteCollection.mjs";
 import { createCatalogQuery } from "./modules/catalogQuery.mjs";
 import { createSkillSimilarity } from "./modules/skillSimilarity.mjs";
@@ -2346,7 +2347,7 @@ export function startApp() {
   const catalog = window.ArkismCatalog({ state, el, button, request: appApi.request, notice, agentLogo, reload: loadAll, pollTools: toolViews.pollTools, shownAgents, findingText: skillViews.findingText });
   const skillExecution = window.ArkismSkillExecution({ state, el, button, tauri });
   const skillTrial = window.ArkismSkillTrial({ state, el, button, request: appApi.request, query: appApi.query });
-  const skillReview = window.ArkismSkillReview({ state, el, button, request: appApi.request, query: appApi.query, reload: loadAll, execution: skillExecution, trial: skillTrial });
+  const skillReview = window.ArkismSkillReview({ selection: (id, version) => skillSelectionView({state, el, request: appApi.request, query: appApi.query}, id, version), state, el, button, request: appApi.request, query: appApi.query, reload: loadAll, execution: skillExecution, trial: skillTrial });
   const relations = window.ArkismIntelligence({ canRefresh: () => !syncVisible.blocked(), state, $, el, icon, button, request: appApi.request, query: appApi.query, detailShell, openDetail, notice }, "relations");
   const traits = window.ArkismIntelligence({ canRefresh: () => !syncVisible.blocked(), state, $, el, icon, button, request: appApi.request, query: appApi.query, detailShell, openDetail, openRecord: openIntelligenceRecord }, "traits");
   const reflections = window.ArkismIntelligence({ canRefresh: () => !syncVisible.blocked(), state, $, el, icon, button, request: appApi.request, query: appApi.query, detailShell, openDetail, openRecord: openIntelligenceRecord });

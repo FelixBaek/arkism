@@ -1,5 +1,5 @@
 // @ts-check
-window.ArkismSkillReview = ({ state, el, button, request, query, reload, execution, trial }) => (sk, mode, side) => {
+window.ArkismSkillReview = ({ state, el, button, request, query, reload, execution, trial, selection }) => (sk, mode, side) => {
   "use strict";
   // mode "" shows everything; the 개선하기 steps show one part each: "compare" (비교 실행), "review" (평가·승인), "trial" (시험 적용).
   // side: the page's right panel ({ box, extra, go, section, facts, table }); 검토·승인 puts its decision there (Figma 198:4070).
@@ -89,6 +89,7 @@ window.ArkismSkillReview = ({ state, el, button, request, query, reload, executi
             const rows = changed(baseline.text, version.text);
             detail.append(rows.length ? side.table([`기존 버전 ${number(baseline.id) || "?"}`, `후보 버전 ${n}`], rows.map(cells => [cells])) : el("p", "meta", "기존 버전과 바뀐 줄이 없어요."));
           }
+          if (selection) detail.append(selection(skill.id, version.id));
           detail.append(passage("버전 원문", version.text));
           if (baseline) detail.append(passage("기존 버전 원문", baseline.text));
           // 평가 결과: one evaluation at a time; the approvable one first.

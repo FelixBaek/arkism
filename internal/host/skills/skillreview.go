@@ -23,6 +23,7 @@ const reviewUsage = `Review candidate skill versions: list, diff, approve (apply
 Approval follows the hub rule: an independent evaluation first, then a
 human approves and applies.
 
+  compare-selected SKILL_ID@N [--file PATH]   compare with the latest approved version
   list                       candidates waiting for review
   diff   SKILL_ID@N          unified diff against the active version
   approve SKILL_ID@N         worker token records an automated_check
@@ -624,6 +625,9 @@ func availability(skillID, status string, unsupported []string, setUnsupported b
 }
 
 func reviewMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "compare-selected" {
+		return compareSelectedMain(args[1:], stdout, stderr)
+	}
 	// --unsupported takes zero or more values, like nargs="*".
 	var unsupported []string
 	setUnsupported := false

@@ -1,3 +1,4 @@
+import { skillSelectionView } from "./skillSelectionView.mjs";
 import { collectionFooter } from "./collectionPaging.mjs";
 // Owns skill lists and details. Dependencies are explicit live ports, never a global scope.
 export function createSkillViews(deps) {
@@ -567,6 +568,7 @@ export function createSkillViews(deps) {
     const checks = link("품질·보안 검사, 에이전트별 사용 기록 ›", () => { more.hidden = !more.hidden; checks.setAttribute("aria-expanded", String(!more.hidden)); });
     checks.setAttribute("aria-expanded", "false");
     rec.append(skFacts([["출처", r ? (r.remote || r.repo) : "", "mono"], ["버전", verCell.childNodes.length ? verCell : ""], ["위치", (sk.source_path || "").replace(/\/SKILL\.md$/, ""), "mono"], ["이력", history], ["검사·사용", checks]]), more);
+    if (sk.status !== "deprecated") rec.append(skillSelectionView(deps, sk.id));
     parts.push(rec);
     const foot = deps.el("div", "v4s-trash");
     if (sk.version_id) foot.append(deps.button("zip으로 내보내기", "ghost", null, () => exportSkillZip(sk)));
