@@ -19,7 +19,8 @@ function Assert-RuntimeTokenEvidence($Result) {
 
 function Assert-RuntimeReleaseVersion($Result, [string]$DesktopVersion, [string]$Version) {
   if ($Version -cnotmatch '\A[0-9]+\.[0-9]+\.[0-9]+\z' -or $desktopVersion -cne $Version -or
-      $Result.engine_version -isnot [string] -or $Result.engine_version -cne $Version) {
-    throw "runtime_release_version_mismatch: release=$Version desktop=$desktopVersion engine=$($Result.engine_version)"
+      $Result.engine_version -isnot [string] -or $Result.engine_version -cne $Version -or
+      $Result.backup_version -isnot [string] -or $Result.backup_version -cne $Version) {
+    throw "runtime_release_version_mismatch: release=$Version desktop=$desktopVersion engine=$($Result.engine_version) backup=$($Result.backup_version)"
   }
 }
