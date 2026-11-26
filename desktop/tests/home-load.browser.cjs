@@ -45,7 +45,8 @@ const text = (page) => page.evaluate(() => document.body.innerText);
 const times = (s, part) => s.split(part).length - 1;
 const shot = (page, name) => process.env.ARKISM_HOME_EVIDENCE && page.screenshot({ path: path.join(process.env.ARKISM_HOME_EVIDENCE, `${name}.png`) });
 async function overview(page) {
-  await page.locator('.nav-item[data-menu="memory"]').click(); // MEMORY opens on 한눈에, with no tab line
+  await page.locator('.nav-item[data-menu="memory"]').click();
+  await page.locator("#controls").getByRole("button", {name:"한눈에", exact:true}).click();
   await page.locator(".ov-host").waitFor();
   return page.locator("#table").innerText();
 }
