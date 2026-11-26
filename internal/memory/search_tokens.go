@@ -143,9 +143,41 @@ var searchQueryScaffolding = map[string]bool{
 	"무엇": true, "뭐": true, "왜": true, "어떻게": true, "어느": true, "무슨": true,
 }
 
+// A final Korean request to give an answer describes the action, not a second
+// fact to retrieve. Keep quoted uses, standalone requests and embedded verbs:
+// their wording can itself be the subject (e.g. a phrase lookup).
+func koreanAnswerTopic(query string) string {
+	words := strings.Fields(query)
+	if len(words) < 2 {
+		return query
+	}
+	last := strings.TrimRight(words[len(words)-1], ".!?。！？")
+	start := len(words) - 1
+	switch last {
+	case "줘", "주세요", "주십시오":
+		if start < 2 {
+			return query
+		}
+		last = words[start-1] + last
+		start--
+	}
+	switch last {
+	case "답해줘", "답해주세요", "답해주십시오",
+		"답변해줘", "답변해주세요", "답변해주십시오",
+		"대답해줘", "대답해주세요", "대답해주십시오",
+		"응답해줘", "응답해주세요", "응답해주십시오":
+		topic := strings.Join(words[:start], " ")
+		if slices.ContainsFunc(SearchTokens(topic), func(t string) bool { return !searchQueryScaffolding[t] }) {
+			return topic
+		}
+	}
+	return query
+}
+
 // searchQueryTerms are the distinct normalized topic tokens of a query, capped
 // at searchQueryMaxTokens concepts so alias spellings do not consume the budget.
 func searchQueryTerms(query string) []string {
+	query = koreanAnswerTopic(query)
 	terms := []string{}
 	for _, t := range SearchTokens(query) {
 		if searchQueryScaffolding[t] {
