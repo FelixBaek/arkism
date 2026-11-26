@@ -122,6 +122,13 @@ def labeled_metrics(labels, runs, ks=(1, 3, 5, 10)):
     labels: rows with id and expected_memory_ids; runs: rows with id and returned (ranked memory ids).
     A label whose run is missing is counted under "unscored", never as a miss. Aggregates only: no query text.
     """
+    for name, rows in (("labels", labels), ("runs", runs)):
+        seen = set()
+        for row in rows:
+            if row["id"] in seen:
+                # Do not include private query identifiers in diagnostics.
+                raise ValueError(f"duplicate question id in {name}")
+            seen.add(row["id"])
     returned = {row["id"]: list(dict.fromkeys(row["returned"])) for row in runs}
     scored = [row for row in labels if row["id"] in returned]
     positives = [row for row in scored if row["expected_memory_ids"]]
@@ -132,6 +139,11 @@ def labeled_metrics(labels, runs, ks=(1, 3, 5, 10)):
         ranks.append(hit[0] if hit else None)
     out = {"labeled": len(labels), "scored": len(scored), "unscored": len(labels) - len(scored), "positives": len(positives), "negatives": len(negatives),
            "mrr": sum(1 / r for r in ranks if r) / len(ranks) if ranks else None, "at_k": {}}
+    depths = [row["requested_k"] for row in runs if "requested_k" in row]
+    if depths:
+        if any(type(depth) is not int or depth < 1 for depth in depths):
+            raise ValueError("invalid requested_k in runs")
+        ks = [k for k in ks if k <= min(depths)]
     for k in ks:
         top = {row["id"]: returned[row["id"]][:k] for row in scored}
         found = [any(m in row["expected_memory_ids"] for m in top[row["id"]]) for row in positives]

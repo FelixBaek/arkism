@@ -162,6 +162,10 @@ jobs:
         run: go test -run '^$' ./cmd/...
       - name: Principal token file protection on Windows
         run: go test -v -count=1 ./cmd/memory-principal
+      - name: Private recall labels, file permissions and isolated rankings on Windows
+        env:
+          PYTHONUTF8: "1"
+        run: python -m unittest discover -s evaluation -p test_recall_quality_v2.py
       - name: Windows catalog, authorization and runtime regressions
         run: >-
           go test -race -count=1
