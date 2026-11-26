@@ -162,6 +162,8 @@ jobs:
         run: go test -run '^$' ./cmd/...
       - name: Principal token file protection on Windows
         run: go test -v -count=1 ./cmd/memory-principal
+      - name: Watch windows and expired erasure leases on Windows
+        run: go test -race -count=3 -run '^Test(SkillWatch|SourceMemoryErasureFailureAndLease)' ./internal/memory
       - name: Windows catalog, authorization and runtime regressions
         run: >-
           go test -race -count=1
