@@ -159,20 +159,20 @@ func archiveLifecycle(t *testing.T, p Repository) {
 		t.Fatal(err)
 	}
 	now = now.Add(SessionArchiveTTL + time.Hour)
-	setHold := func(held bool) {
+	setHold := func(collection, id string, held bool) {
 		t.Helper()
-		header, err := p.Get(testCtx, colSessionArchives, scope, parent)
+		record, err := p.Get(testCtx, collection, scope, id)
 		if err != nil {
 			t.Fatal(err)
 		}
-		previous := header.Revision
-		header.PrivacyQuarantined = held
-		header.Revision++
-		if err := p.Replace(testCtx, colSessionArchives, header, previous); err != nil {
+		previous := record.Revision
+		record.PrivacyQuarantined = held
+		record.Revision++
+		if err := p.Replace(testCtx, collection, record, previous); err != nil {
 			t.Fatal(err)
 		}
 	}
-	setHold(true)
+	setHold(colSessionArchives, parent, true)
 	protected, err := f.svc.ExpireSessionArchives(testCtx, f.human, SessionArchiveExpireInput{Scope: scope, Limit: 100})
 	if err != nil || len(protected.Expired) != 0 || protected.Orphans != 0 {
 		t.Fatalf("held archive sweep: %+v %v", protected, err)
@@ -183,10 +183,20 @@ func archiveLifecycle(t *testing.T, p Repository) {
 			t.Fatalf("lost protected chunk: %v", err)
 		}
 	}
-	setHold(false)
+	setHold(colSessionArchiveChunks, chunk.ID, true)
+	setHold(colSessionArchives, parent, false)
 	expired, err := f.svc.ExpireSessionArchives(testCtx, f.human, SessionArchiveExpireInput{Scope: scope, Limit: 100})
 	if err != nil || len(expired.Expired) != 1 || expired.Orphans != 1 {
 		t.Fatalf("expiry failed: %v", err)
+	}
+	heldChunk, err := p.Get(testCtx, colSessionArchiveChunks, scope, chunk.ID)
+	if err != nil || !heldChunk.PrivacyQuarantined || heldChunk.SessionArchive == nil || heldChunk.SessionArchive.Cipher == "" {
+		t.Fatalf("chunk with independent hold lost after parent expiry: %v", err)
+	}
+	setHold(colSessionArchiveChunks, chunk.ID, false)
+	released, err := f.svc.ExpireSessionArchives(testCtx, f.human, SessionArchiveExpireInput{Scope: scope, Limit: 100})
+	if err != nil || len(released.Expired) != 0 || released.Orphans != 1 {
+		t.Fatalf("released chunk sweep: %+v %v", released, err)
 	}
 	if _, err := p.Get(testCtx, colSessionArchiveChunks, scope, chunk.ID); err != ErrNotFound {
 		t.Fatalf("chunk retained: %v", err)
