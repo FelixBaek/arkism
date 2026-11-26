@@ -1101,6 +1101,12 @@ fn runtime_check(dir: &std::path::Path) -> i32 {
     let started = Instant::now();
     let mut phase = "start";
     let outcome = rt.start().and_then(|s| {
+        phase = "engine_version";
+        let health: serde_json::Value = ureq::get(&format!("{}/healthz", s.server))
+            .call()
+            .and_then(|mut response| response.body_mut().read_json())
+            .map_err(|e| format!("engine health: {e}"))?;
+        let engine_version = health["version"].as_str().ok_or("missing_engine_version")?;
         phase = "capabilities";
         let caps = ureq::get(&format!("{}/v1/capabilities?workspace_id=default&project_id=default&user_id=management%3Aowner", s.server))
             .header("Authorization", &format!("Bearer {}", s.token))
@@ -1132,7 +1138,7 @@ fn runtime_check(dir: &std::path::Path) -> i32 {
             .status()
             .as_u16();
         let mut report = fixture.report()?;
-        let details = serde_json::json!({ "server": s.server, "capabilities": caps, "token_checks":token_checks, "reused": again.server == s.server,
+        let details = serde_json::json!({ "engine_version": engine_version, "server": s.server, "capabilities": caps, "token_checks":token_checks, "reused": again.server == s.server,
             "backup_bytes": backup.bytes, "restored_capabilities": after, "safety_copy": restored.safety_copy.is_some(), "expiry": expiry });
         report.as_object_mut().ok_or("runtime_fixture_report")?.extend(details.as_object().ok_or("runtime_fixture_report")?.clone());
         Ok(report)

@@ -16,3 +16,10 @@ function Assert-RuntimeTokenEvidence($Result) {
     throw 'runtime_fixture_evidence_failed: backup_restore_content'
   }
 }
+
+function Assert-RuntimeReleaseVersion($Result, [string]$DesktopVersion, [string]$Version) {
+  if ($Version -cnotmatch '\A[0-9]+\.[0-9]+\.[0-9]+\z' -or $desktopVersion -cne $Version -or
+      $Result.engine_version -isnot [string] -or $Result.engine_version -cne $Version) {
+    throw "runtime_release_version_mismatch: release=$Version desktop=$desktopVersion engine=$($Result.engine_version)"
+  }
+}

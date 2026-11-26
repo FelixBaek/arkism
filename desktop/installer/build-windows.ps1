@@ -98,6 +98,7 @@ if ($p.ExitCode -ne 0) { throw 'runtime check failed' }
 $runtimeResult = Get-Content -Raw -LiteralPath (Join-Path $check 'check.json') | ConvertFrom-Json
 if ($runtimeResult.ok -isnot [bool] -or -not $runtimeResult.ok -or $runtimeResult.phase -cne 'complete') { throw 'runtime check evidence failed' }
 Assert-RuntimeTokenEvidence $runtimeResult
+Assert-RuntimeReleaseVersion $runtimeResult (Get-Item -LiteralPath (Join-Path $stage 'Arkism.exe')).VersionInfo.ProductVersion $Version
 
 $hash = (Get-FileHash $out -Algorithm SHA256).Hash.ToLower()
 "$hash  $(Split-Path -Leaf $out)" | Set-Content -NoNewline -Encoding ascii "$out.sha256"
