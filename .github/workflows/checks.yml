@@ -165,7 +165,7 @@ jobs:
       - name: Windows catalog, authorization and runtime regressions
         run: >-
           go test -race -count=1
-          -run '^Test(Catalog|UsageSession|Review|Recency|Decay|TrainReview|LoadReview|Daemon|Diagnostics|CandidateSweep|SearchCommit|WorkerPanic|RetryJitter|PassBody|ChatUpstream|GatewaySignal|NotifyRetries|ProcessLock|LoopbackHost|Limiter|HTTP)'
+          -run '^Test(Catalog|UsageSession|Review|Recency|Decay|TrainReview|LoadReview|Daemon|Diagnostics|CandidateSweep|SearchCommit|WorkerPanic|RetryJitter|PassBody|ChatUpstream|GatewaySignal|NotifyRetries|ProcessLock|LoopbackHost|Limiter|HTTP|MeetingDriverAgainstTheServer|FlowCommonAgentRunsPinnedDefinitionThroughActualHandler|FlowCommonTeamWaitsForDurableMeetingConclusion)'
           ./internal/memory ./cmd/memoryd ./internal/httpguard ./internal/processlock
           ./internal/crewrun ./internal/host/gateway
       - name: Local state replacement ownership on Windows
