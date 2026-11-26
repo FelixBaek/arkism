@@ -97,6 +97,7 @@ const ui = path.resolve(process.env.ARKISM_UI_DIRECTORY || path.resolve(__dirnam
     // Candidates and conflicts retain a next-page control when local search hides all rows.
     // MEMORY has no tab line and a selected memory takes the side panel: 한눈에's 확인해 주세요 chip opens the check lists
     await page.locator('[data-menu="memory"]').click();
+    await page.locator("#controls").getByRole("button", {name:"한눈에", exact:true}).click();
     await page.locator("button.ov-chip", { hasText: "확인해 주세요" }).click();
     await page.getByRole("tab", { name: /^새 기억 확인/ }).click();
     await page.getByRole("searchbox", { name: "기억 검색", exact: true }).fill("outside-loaded");

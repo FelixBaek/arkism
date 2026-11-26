@@ -156,7 +156,7 @@ export function createMemoryList(deps) {
     const view = VIEWS.some(([k]) => k === deps.memory.memView) ? deps.memory.memView : "list";
     const seg = deps.segment(VIEWS, view, (k) => { deps.memory.memView = k; deps.store?.("arkism.memView", k); deps.render(false); });
     seg.classList.add("mem-seg", "mem-view-seg"); seg.setAttribute("aria-label", "보기 방식");
-    tools.append(seg);
+    tools.append(seg, deps.button("한눈에", "ghost small", null, () => deps.go("overview")));
     deps.$("#controls").replaceChildren(tools); // what waits for a person is told in the rail (Memory 59) and the side panel (확인할 것)
     // 자세히: 시점 · 저장소 · 정렬 · 에이전트가 받는 기억 · 지운 기억
     const more = [];

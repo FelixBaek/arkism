@@ -14,10 +14,10 @@ window.ArkismShell = (ctx) => {
     home: { label: "HOME", tabs: [
       ["home", "홈", () => go("todo"), () => state.view === "todo", noZero(count("todo"))]
     ] },
-    // No tab line (asked twice): MEMORY opens on 한눈에, and its chips lead to 기억 and 확인해 주세요.
+    // MEMORY opens the active list. Its controls also open the overview.
     memory: { label: "MEMORY", tabs: [
+      ["memories", "기억", () => { state.memView = "list"; go("memories", "active"); }, () => state.view === "memories" && !check().isCheck(state.memTab), noZero(count("memories"))],
       ["overview", "한눈에", () => go("overview"), () => state.view === "overview"],
-      ["memories", "기억", () => go("memories", "active"), () => state.view === "memories" && !check().isCheck(state.memTab), noZero(count("memories"))],
       ["check", "확인해 주세요", () => check().openCheck(), () => state.view === "memories" && check().isCheck(state.memTab), () => { const t = check().checkTotal(); return t.sum ? t.text : ""; }] // nothing known to wait: no 0 / 0+
     ] },
     agent: { label: "FLOW", tabs: [
@@ -74,7 +74,7 @@ window.ArkismShell = (ctx) => {
     if (mem && wait && !out) { out = el("output", "nav-count"); out.setAttribute("data-no-i18n", ""); mem.append(out); }
     if (out) { out.textContent = wait; out.hidden = !wait; }
     const box = $("#area-tabs");
-    // No tab line for a menu of one page (HOME, FLOW 1424:2375) nor for MEMORY, whose 한눈에 chips are the way in
+    // No tab line for a menu of one page (HOME, FLOW 1424:2375) nor for MEMORY, which has its own navigation controls
     const tabs = key === "memory" || MENUS[key].tabs.length < 2 ? [] : MENUS[key].tabs;
     box.parentElement.hidden = !tabs.length;
     box.dataset.active = tabs.find((t) => t[3]())?.[1] || ""; // app.js hides a page title that only repeats this tab

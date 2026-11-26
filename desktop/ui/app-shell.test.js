@@ -22,7 +22,9 @@ test("MEMORY and one-page menus draw no tab line; 한눈에 chips lead to 확인
     assert.equal(app.$("#area-tabs").parentElement.hidden, true, `${menu}: the empty tab line is hidden`);
   }
   await app.click(app.$('.nav-item[data-menu="memory"]'), 50);
-  assert.ok(app.$("#table .ov-chips"), "MEMORY opens on 한눈에");
+  assert.equal(app.dom.text(app.$("#controls .mem-view-seg .tab.active")), "목록");
+  await app.click(app.$$("#controls button").find((b) => app.dom.text(b) === "한눈에"), 50);
+  assert.ok(app.$("#table .ov-chips"));
   const waiting = app.$('.nav-item[data-menu="memory"] .nav-count');
   assert.ok(waiting && !waiting.hidden && /^[1-9]\d*\+?$/.test(app.dom.text(waiting)), "the rail shows what waits beside Memory");
   // the memory list: no 확인해 주세요 banner; the side panel opens with 확인할 것 and one way in
@@ -34,6 +36,7 @@ test("MEMORY and one-page menus draw no tab line; 한눈에 chips lead to 확인
   await app.click([...todo.querySelectorAll("button")].find((b) => app.dom.text(b) === "하나씩 확인하기"), 50);
   assert.equal(app.$(".nav-item.active").dataset.menu, "memory");
   await app.click(app.$('.nav-item[data-menu="memory"]'), 50);
+  await app.click(app.$$("#controls button").find((b) => app.dom.text(b) === "한눈에"), 50);
   const chip = app.$$("#table .ov-chip").find((c) => /확인해 주세요/.test(app.dom.text(c)));
   assert.ok(chip, "the 확인해 주세요 chip");
   await app.click(chip, 50);
@@ -109,8 +112,6 @@ test("the rail folds to icons, says where you are, and stays folded after a relo
 
 test("a 모아보기 page keeps ← 기억 but no title repeating its open tab", async () => {
   await app.click(app.$('.nav-item[data-menu="memory"]'), 50);
-  await app.click(app.$$("#table .ov-chip").find((c) => /확인해 주세요/.test(app.dom.text(c))), 50);
-  await app.click(app.$("#mem-back"), 50); // ← 기억: the main list with its 모아보기 chips
   const past = app.$$("#chips .mem-look button.cat-menu-item").find((c) => app.dom.text(c) === "과거 시점");
   assert.ok(past, "the 과거 시점 item in 모아보기");
   await app.click(past, 50);

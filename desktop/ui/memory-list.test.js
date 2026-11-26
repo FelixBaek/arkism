@@ -134,9 +134,9 @@ test("the main list draws filters, chips, badges, paging and empty state", async
   state.data.candidates = []; deps.digests.mergeCount = () => 0;
   api.openCheck(); assert.equal(opened, 1, "only proposals wait: the review window opens on 정리 제안");
   delete deps.overview; delete deps.openProposals; state.data.candidates = [{ id: "c1" }]; deps.digests.mergeCount = () => 2;
-  // the toolbar holds only the search and 기억 추가; everything else waits under 자세히 and 모아보기 next to the kind tabs
+  // the toolbar keeps search, add, view selection and overview together
   const tools = controls.querySelector(".mem-tools");
-  assert.deepEqual(tools.children.map((n) => n.tagName === "BUTTON" ? n.textContent : n.className), ["panel-search", "기억 추가", "segment mem-seg mem-view-seg"]); // 목록 · 타임라인 at the right end
+  assert.deepEqual(tools.children.map((n) => n.tagName === "BUTTON" ? n.textContent : n.className), ["panel-search", "기억 추가", "segment mem-seg mem-view-seg", "한눈에"]);
   assert.equal(controls.querySelectorAll("select").length, 0);
   const more = h.$("#chips .mem-more-pop");
   assert.equal(more.querySelector("summary").textContent, "자세히");
