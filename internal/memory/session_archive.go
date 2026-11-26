@@ -313,7 +313,7 @@ func sessionArchiveStateOf(r Record, now time.Time) string {
 }
 
 func sessionArchiveDueForExpiry(r Record, now time.Time) bool {
-	return r.Status == statusActive && r.ExpiresAt != nil && !r.ExpiresAt.After(now)
+	return !r.PrivacyQuarantined && !r.ContentErased && r.Status == statusActive && r.ExpiresAt != nil && !r.ExpiresAt.After(now)
 }
 
 func isSessionArchiveHeader(r Record) bool {
@@ -610,6 +610,10 @@ func deleteSessionArchiveChunks(ctx context.Context, tx Tx, scope Scope, headerI
 		}
 		if !isSessionArchiveChunkFor(chunk, headerID) {
 			return ErrConflict
+		}
+		if chunk.PrivacyQuarantined || chunk.ContentErased {
+			// Detached chunks are collected by the orphan sweep once eligible.
+			continue
 		}
 		if err := tx.Delete(ctx, colSessionArchiveChunks, scope, c, chunk.Revision); err != nil {
 			return err
@@ -1017,7 +1021,9 @@ func (s *Service) expireSessionArchiveOrphans(ctx context.Context, token string,
 		if d.PrincipalID != actor.PrincipalID || d.Role != actor.Role {
 			return out, ErrDenied
 		}
+		removed := false
 		err = s.sessionArchiveTransaction(ctx, func(ctx context.Context, tx Tx) error {
+			removed = false
 			chunk, err := tx.Get(ctx, colSessionArchiveChunks, in.Scope, orphan.ID)
 			if errors.Is(err, ErrNotFound) {
 				return nil
@@ -1025,11 +1031,11 @@ func (s *Service) expireSessionArchiveOrphans(ctx context.Context, token string,
 			if err != nil {
 				return err
 			}
-			if chunk.Revision != orphan.Revision {
+			if chunk.Revision != orphan.Revision || chunk.PrivacyQuarantined || chunk.ContentErased || chunk.SessionArchive == nil {
 				return ErrConflict
 			}
 			header, err := tx.Get(ctx, colSessionArchives, in.Scope, chunk.SessionArchive.ParentID)
-			if err == nil && header.SessionArchive != nil && slices.Contains(header.SessionArchive.Chunks, chunk.ID) {
+			if err == nil && (header.PrivacyQuarantined || header.SessionArchive != nil && slices.Contains(header.SessionArchive.Chunks, chunk.ID)) {
 				return nil
 			}
 			if err != nil && !errors.Is(err, ErrNotFound) {
@@ -1038,26 +1044,35 @@ func (s *Service) expireSessionArchiveOrphans(ctx context.Context, token string,
 			if err := tx.Delete(ctx, colSessionArchiveChunks, in.Scope, chunk.ID, chunk.Revision); err != nil {
 				return err
 			}
+			removed = true
 			return audit(ctx, tx, in.Scope, actor.PrincipalID, "expire:session_archive_orphan", chunk.ID)
 		})
 		if err != nil {
 			return out, err
 		}
-		out.Orphans++
+		if removed {
+			out.Orphans++
+		}
 	}
 	return out, nil
 }
+
+// Preserve evidence quarantined by a privacy operation; expiry is independent.
+const sessionArchiveUnrestrictedSQL = `NOT COALESCE((doc->>'privacy_quarantined')::boolean,false)
+AND NOT COALESCE((doc->>'content_erased')::boolean,false)`
+
+const sessionArchiveOrphanSQL = `NOT EXISTS (
+SELECT 1 FROM memory_records h WHERE h.collection='session_archives'
+AND h.workspace_id=memory_records.workspace_id AND h.project_id=memory_records.project_id
+AND h.user_id=memory_records.user_id AND h.agent_id=memory_records.agent_id
+AND h.id=memory_records.doc->'session_archive'->>'parent_id'
+AND (COALESCE((h.doc->>'privacy_quarantined')::boolean,false) OR (h.doc->'session_archive'->'chunks') ? memory_records.id))`
 
 func (p *Postgres) SessionArchiveOrphanRows(ctx context.Context, scope Scope, now time.Time, limit int) ([]Record, error) {
 	if checkScope(scope) != nil || limit < 1 || limit > 100 {
 		return nil, ErrInvalid
 	}
-	w := `(doc->'expires_at'->>'$date')::timestamptz <= $6 AND NOT EXISTS (
-SELECT 1 FROM memory_records h WHERE h.collection='session_archives'
-AND h.workspace_id=memory_records.workspace_id AND h.project_id=memory_records.project_id
-AND h.user_id=memory_records.user_id AND h.agent_id=memory_records.agent_id
-AND h.id=memory_records.doc->'session_archive'->>'parent_id'
-AND (h.doc->'session_archive'->'chunks') ? memory_records.id)`
+	w := sessionArchiveUnrestrictedSQL + ` AND (doc->'expires_at'->>'$date')::timestamptz <= $6 AND ` + sessionArchiveOrphanSQL
 	return p.selectRecords(ctx, colSessionArchiveChunks, scope, w, []any{now}, "id ASC", limit)
 }
 
@@ -1087,7 +1102,7 @@ func (p *Postgres) SessionArchiveExpiredRows(ctx context.Context, scope Scope, n
 	if checkScope(scope) != nil || now.IsZero() || limit < 1 || limit > sessionArchiveMaxLimit {
 		return nil, ErrInvalid
 	}
-	return p.selectRecords(ctx, colSessionArchives, scope, `status='active' AND (doc->'expires_at'->>'$date')::timestamptz <= $6`, []any{now}, "id ASC", limit)
+	return p.selectRecords(ctx, colSessionArchives, scope, sessionArchiveUnrestrictedSQL+` AND status='active' AND (doc->'expires_at'->>'$date')::timestamptz <= $6`, []any{now}, "id ASC", limit)
 }
 
 // sessionArchiveRoutes registers the six POST JSON endpoints. Chunk uploads
