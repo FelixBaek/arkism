@@ -166,6 +166,8 @@ jobs:
         env:
           PYTHONUTF8: "1"
         run: python -m unittest discover -s evaluation -p test_recall_quality_v2.py
+      - name: Watch windows and expired erasure leases on Windows
+        run: go test -race -count=3 -run '^Test(SkillWatch|SourceMemoryErasureFailureAndLease)' ./internal/memory
       - name: Windows catalog, authorization and runtime regressions
         run: >-
           go test -race -count=1

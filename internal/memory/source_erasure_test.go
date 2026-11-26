@@ -114,7 +114,7 @@ func TestSourceMemoryErasureFailureAndLease(t *testing.T) {
 				delete(f.repo.store["jobs"], recKey(scopeA, sourceDeletionID(scopeA, src.ID)))
 			}
 			if name == "expired_lease" {
-				job, e := f.repo.ClaimJob(testCtx, time.Now(), time.Nanosecond)
+				job, e := f.repo.ClaimJob(testCtx, time.Now().Add(-2*time.Minute), time.Minute)
 				if e != nil {
 					t.Fatal(e)
 				}
