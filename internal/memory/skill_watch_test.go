@@ -64,10 +64,14 @@ func failedUses(t *testing.T, f *fixture, v Record, n int) { recordedUses(t, f, 
 // recordedUses stores n use events of the version that ended with status.
 func recordedUses(t *testing.T, f *fixture, v Record, status string, n int) {
 	t.Helper()
-	time.Sleep(2 * time.Millisecond)
+	// Start all synthetic uses at the inclusive beginning of the watch.
+	// The check must observe a later instant for its exclusive upper bound.
+	for !time.Now().After(v.UpdatedAt) {
+		time.Sleep(time.Millisecond)
+	}
 	for i := 0; i < n; i++ {
 		id := fmt.Sprintf("use-%s-%s-%d", v.ID, status, i)
-		recordUse(t, f, v, status, id, id, time.Now().UTC())
+		recordUse(t, f, v, status, id, id, v.UpdatedAt)
 	}
 }
 
@@ -103,7 +107,7 @@ func TestSkillWatchRollsBackOnlyWhenRealUseGetsWorse(t *testing.T) {
 	if _, e := f.svc.CheckSkillWatch(testCtx, "bot", v2.SkillID, SkillWatchInput{Scope: scopeA}); !errors.Is(e, ErrDenied) {
 		t.Fatal("automation ran a person's rollback", e)
 	}
-	u := SkillUsage{SkillID: v2.SkillID, Version: 2, VersionID: v2.ID, ContentHash: v2.Analysis.ContentHash, Runtime: "codex", Status: "failure", StartedAt: time.Now().UTC(), CompletedAt: time.Now().UTC()}
+	u := SkillUsage{SkillID: v2.SkillID, Version: 2, VersionID: v2.ID, ContentHash: v2.Analysis.ContentHash, Runtime: "codex", Status: "failure", StartedAt: v2.UpdatedAt, CompletedAt: v2.UpdatedAt}
 	if e := f.repo.Insert(testCtx, "sources", Record{ID: "use-last", Scope: scopeA, Kind: skillUsageEventKind, Status: "active", Revision: 1, Text: structuredText(u)}); e != nil {
 		t.Fatal(e)
 	}
@@ -130,7 +134,7 @@ func TestSkillWatchRollsBackAVersionWithoutEvaluationOnlyOnAClearRise(t *testing
 	if got, e := f.svc.CheckSkillWatch(testCtx, f.human, v2.SkillID, SkillWatchInput{Scope: scopeA}); e != nil || got.State != "watching" || !got.CanRollback {
 		t.Fatal("rolled back an unevaluated version on too little evidence", got, e)
 	}
-	u := SkillUsage{SkillID: v2.SkillID, Version: 2, VersionID: v2.ID, ContentHash: v2.Analysis.ContentHash, Runtime: "codex", Status: "failure", StartedAt: time.Now().UTC(), CompletedAt: time.Now().UTC()}
+	u := SkillUsage{SkillID: v2.SkillID, Version: 2, VersionID: v2.ID, ContentHash: v2.Analysis.ContentHash, Runtime: "codex", Status: "failure", StartedAt: v2.UpdatedAt, CompletedAt: v2.UpdatedAt}
 	if e := f.repo.Insert(testCtx, "sources", Record{ID: "use-clear", Scope: scopeA, Kind: skillUsageEventKind, Status: "active", Revision: 1, Text: structuredText(u)}); e != nil {
 		t.Fatal(e)
 	}
