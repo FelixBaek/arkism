@@ -11,13 +11,13 @@ const reasonNamedSubject = "named_subject"
 
 // A rare subject name on its own is insufficient evidence. Require both the
 // name and a topic match in records that passed the original search filters.
-func (s *Service) namedSubjectLane(ctx context.Context, token, collection string, in SearchInput, clean func([]Hit) ([]Hit, error)) ([]Hit, error) {
+func (s *Service) appendNamedSubjectLane(ctx context.Context, token, collection string, in SearchInput, lists [][]Hit, clean func([]Hit) ([]Hit, error)) ([][]Hit, error) {
 	if collection != colMemories || len(in.Modes) != 0 || in.IncludeInactive || in.RelatedTo != nil || in.contextView != nil || in.retrievalQuery != "" {
-		return nil, nil
+		return lists, nil
 	}
 	name := mixedQueryName(in.Query)
 	if name == "" {
-		return nil, nil
+		return lists, nil
 	}
 	sub := in
 	sub.Query, sub.Modes, sub.Limit = name, []string{"fts"}, 3
@@ -30,7 +30,7 @@ func (s *Service) namedSubjectLane(ctx context.Context, token, collection string
 		hits = append(hits, lane...)
 	}
 	if len(hits) == 0 || len(hits) > 2 {
-		return nil, nil
+		return lists, nil
 	}
 	hits, err = clean(hits)
 	if err != nil {
@@ -43,7 +43,10 @@ func (s *Service) namedSubjectLane(ctx context.Context, token, collection string
 			named = append(named, h)
 		}
 	}
-	return named, nil
+	if len(named) != 0 {
+		lists = append(lists, named)
+	}
+	return lists, nil
 }
 
 func mixedQueryName(query string) string {

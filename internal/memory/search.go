@@ -409,12 +409,9 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 		filterContextViewLanes(one, in.contextView)
 		return one[0], err
 	}
-	named, err := s.namedSubjectLane(ctx, token, collection, in, clean)
+	lists, err = s.appendNamedSubjectLane(ctx, token, collection, in, lists, clean)
 	if err != nil {
 		return out, d, err
-	}
-	if len(named) > 0 {
-		lists = append(lists, named)
 	}
 	in.queryVector, in.querySpace = queryVector, querySpace
 	s.expandRecall(ctx, token, &in, d, collection, run, &out)
