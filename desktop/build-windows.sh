@@ -89,6 +89,7 @@ cat > "$WORK/remote.ps1" <<PS1
 $BUILD_ENV# The rustup proxy in .cargo/bin may be broken; use the toolchain directly.
 \$env:PATH = \$env:USERPROFILE + '/.rustup/toolchains/stable-x86_64-pc-windows-msvc/bin;' + \$env:PATH
 & '$REMOTE/installer/prepare-runtime.ps1' -Cache '$BUILD_DIR/cache' -Stage '$REMOTE/stage'
+Copy-Item -LiteralPath '$REMOTE/ui-dist' -Destination '$REMOTE/stage/runtime/web-ui' -Recurse
 Set-Location '$REMOTE/src-tauri'
 \$ErrorActionPreference = 'Continue'
 cmd /c "cargo build --release $LOCKED > ..\\cargo.log 2>&1"

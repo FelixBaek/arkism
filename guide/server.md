@@ -51,7 +51,9 @@ The SSH user needs to be root, or have passwordless sudo (`sudo -n`) for the cop
 
 ### Open the screens in a browser
 
-Without the desktop app, `memoryd` can serve the same screens to a browser on your private network. It is off by default.
+On Windows, start the installed desktop app in local mode. Open the address in the `url` field of `%LOCALAPPDATA%\dev.arkism.desktop\runtime\agents.json` with `/app/` appended in a browser on the same PC. Sign in using `owner.token` from your chosen storage folder. The loopback port can vary.
+
+To serve the screens from a separate server on your private network, follow these steps.
 
 1. Build the UI once: `npm ci --prefix desktop/frontend --no-audit --no-fund && node desktop/frontend/build.cjs` (output: `desktop/ui-dist`).
 2. Copy that folder to the server and set `ARKISM_WEB_UI_DIR=/srv/arkism/web-ui` for `memoryd`, then restart it. `GET /` now redirects to `/app/`. `memoryd` refuses to start if the folder is not a build (it has no `.arkism-frontend-output` file), so the source folder with its tests is never served.

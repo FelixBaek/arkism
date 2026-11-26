@@ -1466,7 +1466,14 @@ impl Runtime {
         let spawn = |role: Role, args: &[&str], log: &str| -> Result<ManagedChild, String> {
             let file = fs::OpenOptions::new().create(true).append(true).open(logs.join(log)).map_err(|e| e.to_string())?;
             let err = file.try_clone().map_err(|e| e.to_string())?;
-            let mut cmd = Command::new(self.programs()?.join(exe("memoryd")));
+            let programs = self.programs()?;
+            let mut cmd = Command::new(programs.join(exe("memoryd")));
+            if role == Role::Server && std::env::var_os("ARKISM_WEB_UI_DIR").is_none() {
+                let web_ui = programs.join("web-ui");
+                if web_ui.join(".arkism-frontend-output").is_file() {
+                    cmd.env("ARKISM_WEB_UI_DIR", web_ui);
+                }
+            }
             cmd.args(args)
                 .env("GOMEMLIMIT", "512MiB")
                 .env("MEMORY_STORE", "postgres")
