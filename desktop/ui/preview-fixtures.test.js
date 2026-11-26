@@ -6,7 +6,7 @@ const {create}=require('./memory-pages.js');
 let server,origin;
 before(async()=>{
  const port=await new Promise(r=>{const s=net.createServer().listen(0,'127.0.0.1',()=>{const p=s.address().port;s.close(()=>r(p));});});
- server=spawn('python3',['-I',path.join(__dirname,'testdata/preview/serve.py'),String(port)],{stdio:'ignore'});origin=`http://127.0.0.1:${port}`;
+ server=spawn(process.env.ARKISM_TEST_PYTHON || 'python3',['-I',path.join(__dirname,'testdata/preview/serve.py'),String(port)],{stdio:'ignore',windowsHide:true});origin=`http://127.0.0.1:${port}`;
  for(let i=0;i<100;i++){try{if((await fetch(origin+'/readyz')).ok)return;}catch{/* not listening yet */}await new Promise(r=>setTimeout(r,50));}
  throw Error('preview server did not start');
 });
