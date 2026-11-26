@@ -40,7 +40,9 @@
 
 ## 브라우저에서 열기
 
-데스크톱 앱 없이도 `memoryd`가 같은 화면을 내부망의 브라우저에 보여 줄 수 있어요. 기본은 꺼져 있어요.
+Windows 설치판에서 **이 PC에서 쓰기**로 실행하면 브라우저에서도 같은 기억과 스킬을 열 수 있어요. `%LOCALAPPDATA%\dev.arkism.desktop\runtime\agents.json`의 `url`에 `/app/`을 붙여 이 PC의 브라우저에서 열고, 선택한 저장 폴더의 `owner.token`으로 로그인하세요. 포트는 PC마다 다를 수 있어요.
+
+별도 서버에서 브라우저 화면을 제공하려면 다음 단계를 따르세요.
 
 1. 화면을 한 번 빌드해요: `npm ci --prefix desktop/frontend --no-audit --no-fund && node desktop/frontend/build.cjs` (결과: `desktop/ui-dist`).
 2. 그 폴더를 서버에 복사하고 `memoryd`에 `ARKISM_WEB_UI_DIR=/srv/arkism/web-ui`를 넣은 뒤 다시 시작해요. 이제 `GET /`는 `/app/`으로 넘어가요. 빌드한 폴더가 아니면(`.arkism-frontend-output` 파일이 없으면) `memoryd`가 시작하지 않아요. 테스트 파일이 든 소스 폴더를 실수로 내보내지 않게 하려는 거예요.
