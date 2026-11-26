@@ -77,8 +77,9 @@ type SearchInput struct {
 	// MinScores drops lane hits and reranked hits below per-stage floors (recall_floors.go).
 	MinScores *MinScores `json:"min_scores,omitempty"`
 	// RerankOptions lets the model rerank and the recall decision engine also drop off-topic hits and near-duplicates.
-	RerankOptions  *RerankOptions `json:"rerank_options,omitempty"`
-	retrievalQuery string
+	RerankOptions     *RerankOptions `json:"rerank_options,omitempty"`
+	literalIdentifier string
+	retrievalQuery    string
 	// space is the resolved space settings (space_settings.go); spaceModes marks Modes the space set, not the caller.
 	space      *SpaceConfig
 	spaceModes bool
@@ -372,6 +373,7 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 	if err != nil {
 		return ContextBundle{}, Decision{}, err
 	}
+	in.configureLiteralLookup(collection)
 	queryVector, querySpace, degraded, memoryErr := s.searchQueryVector(ctx, in, d, searchContent)
 	if memoryErr != nil {
 		return out, Decision{}, ErrUnavailable
@@ -691,6 +693,9 @@ func (s *Service) cleanSearchHit(ctx context.Context, token string, in SearchInp
 	}
 	why, distanceLimit := h.Reasons, h.vectorDistanceLimit
 	h = HitFromRecord(h.Collection, r)
+	if id := in.literalIdentifier; id != "" && !containsLookupIdentifier(h.Text, id) && !containsLookupIdentifier(h.Summary, id) {
+		return h, false, nil
+	}
 	if in.IncludeInactive && !live(r) {
 		historyRecords[h.ID] = r
 	}
