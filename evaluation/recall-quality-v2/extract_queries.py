@@ -14,16 +14,24 @@ import os
 import random
 import re
 import sys
+import tempfile
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from eval_support import restrict_private_file
+
 
 PRIVATE_DIR = Path.home() / ".local/state/arkism/recall-quality-v2"
 TRANSCRIPTS = Path.home() / ".claude/projects"
+HOME_PATTERN = re.compile(re.escape(str(Path.home())))
+if os.name == "nt":
+    HOME_PATTERN = re.compile(r"[\\/]".join(re.escape(part) for part in str(Path.home()).split("\\")), re.I)
 MASKS = [
     (re.compile(r"[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}", re.I), "[email]"),
     (re.compile(r"https?://\S+"), "[url]"),
     (re.compile(r"\b01[016789][- ]?\d{3,4}[- ]?\d{4}\b"), "[phone]"),
     (re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b"), "[ip]"),
-    (re.compile(re.escape(str(Path.home()))), "~"),
+    (HOME_PATTERN, "~"),
     (re.compile(r"\b[A-Za-z0-9_-]{32,}\b"), "[token]"),
 ]
 QUESTION = re.compile(r"(?:\?)|(?:(?:지|까|어|야|해|나|냐|요|줘|해줘|알려|보여|찾아|확인)\s*[.!]?$)")
@@ -93,15 +101,18 @@ def sample(rows, limit, seed):
     rng.shuffle(questions)
     rng.shuffle(others)
     chosen, per_project = [], {}
+    overflow = []
     cap = max(1, limit // 10)  # shortcut: a flat per-project cap stands in for stratification; revisit once >10 projects matter
     for pool in (questions, others):
         for row in pool:
             if len(chosen) >= limit:
                 break
             if per_project.get(row["project"], 0) >= cap:
+                overflow.append(row)
                 continue
             per_project[row["project"]] = per_project.get(row["project"], 0) + 1
             chosen.append(row)
+    chosen.extend(overflow[:limit - len(chosen)])
     for i, row in enumerate(chosen, 1):
         row["id"] = f"q-{i:04d}"
     return chosen
@@ -114,14 +125,26 @@ def main(argv=None):
     parser.add_argument("--limit", type=int, default=200)
     parser.add_argument("--seed", type=int, default=20261027)
     args = parser.parse_args(argv)
+    if args.limit < 1:
+        parser.error("--limit must be positive")
     rows = collect(args.transcripts)
+    if not rows:
+        parser.error("no usable transcript questions found; check --transcripts")
     chosen = sample(rows, args.limit, args.seed)
     args.out.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    os.chmod(args.out.parent, 0o700)
-    with open(args.out, "w", encoding="utf-8") as f:
-        for row in chosen:
-            f.write(json.dumps({k: row[k] for k in ("id", "query", "session", "day", "project")}, ensure_ascii=False) + "\n")
-    os.chmod(args.out, 0o600)
+    if os.name != "nt":
+        os.chmod(args.out.parent, 0o700)
+    pending = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=args.out.parent, delete=False) as f:
+            pending = Path(f.name)
+            restrict_private_file(f)
+            for row in chosen:
+                f.write(json.dumps({k: row[k] for k in ("id", "query", "session", "day", "project")}, ensure_ascii=False) + "\n")
+        os.replace(pending, args.out)
+    finally:
+        if pending is not None:
+            pending.unlink(missing_ok=True)
     print(json.dumps({"candidates": len(rows), "written": len(chosen), "questions": sum(bool(QUESTION.search(r["query"])) for r in chosen),
                       "projects": len({r["project"] for r in chosen}), "out": str(args.out), "at": datetime.datetime.now(datetime.timezone.utc).isoformat()}, ensure_ascii=False))
     return 0
