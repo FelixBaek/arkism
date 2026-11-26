@@ -288,6 +288,10 @@ func TestDaemonDynamicsSeparateAPIWorkerCachesPG(t *testing.T) {
 	worker := &memory.Service{Repo: workerRepo, Auth: auth}
 	api := &memory.Service{Repo: app, Auth: auth}
 	load, c := daemonDynamicsFixture(t)
+	// This fixture observes one publication. Leave room between worker transactions
+	// for the baseline HTTP search to complete its serializable transaction.
+	c.Limits.PollIntervalNS = int64(250 * time.Millisecond)
+	c.Limits.PublishIntervalNS = int64(250 * time.Millisecond)
 	c.Scopes = []memory.Scope{{WorkspaceID: "default", ProjectID: "default"}}
 	r, l := daemonDynamicsFiles(t, load, c)
 	t.Setenv("MEMORY_WORKER_TOKEN", db.token)
