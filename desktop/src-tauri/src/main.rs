@@ -1089,7 +1089,7 @@ async fn update_install(app: tauri::AppHandle) -> Result<(), String> {
 /// `Arkism --runtime-check DIR`: starts the built-in Arkism with its data in DIR, checks that it
 /// answers with the owner token, stops it and writes the outcome to DIR/check.json. No window;
 /// used to test an installer (and CI) without touching the user's data.
-fn runtime_check(dir: &std::path::Path) -> i32 {
+fn runtime_check(dir: &std::path::Path, app_version: String) -> i32 {
     if runtime::token_check::fresh_directory(dir).is_err() {
         eprintln!("runtime_check_requires_fresh_ordinary_absolute_directory");
         return 2;
@@ -1097,7 +1097,7 @@ fn runtime_check(dir: &std::path::Path) -> i32 {
     if std::fs::write(dir.join("models.json"), br#"{"embedder":"none","judge":"fixed"}"#).is_err() {
         return 2;
     }
-    let rt = runtime::Runtime::new(runtime::find_programs(None), dir.to_path_buf()).isolated();
+    let rt = runtime::Runtime::for_release(runtime::find_programs(None), dir.to_path_buf(), app_version).isolated();
     let started = Instant::now();
     let mut phase = "start";
     let outcome = rt.start().and_then(|s| {
@@ -1122,6 +1122,9 @@ fn runtime_check(dir: &std::path::Path) -> i32 {
         let backups = dir.join("backups");
         phase = "backup";
         let backup = rt.backup_into(&backups)?;
+        if backup.app_version != engine_version {
+            return Err("backup_release_version_mismatch".into());
+        }
         phase = "erase";
         rt.erase()?;
         phase = "restore";
@@ -1139,7 +1142,7 @@ fn runtime_check(dir: &std::path::Path) -> i32 {
             .as_u16();
         let mut report = fixture.report()?;
         let details = serde_json::json!({ "engine_version": engine_version, "server": s.server, "capabilities": caps, "token_checks":token_checks, "reused": again.server == s.server,
-            "backup_bytes": backup.bytes, "restored_capabilities": after, "safety_copy": restored.safety_copy.is_some(), "expiry": expiry });
+            "backup_version": backup.app_version, "backup_bytes": backup.bytes, "restored_capabilities": after, "safety_copy": restored.safety_copy.is_some(), "expiry": expiry });
         report.as_object_mut().ok_or("runtime_fixture_report")?.extend(details.as_object().ok_or("runtime_fixture_report")?.clone());
         Ok(report)
     });
@@ -1186,9 +1189,10 @@ fn main() {
         if args.len() != 2 { std::process::exit(2); }
         std::process::exit(if app_autostart::set_enabled(false).is_ok() { 0 } else { 1 });
     }
+    let context = tauri::generate_context!();
     if let Some(i) = args.iter().position(|a| a == "--runtime-check") {
         let dir = args.get(i + 1).map(std::path::PathBuf::from).unwrap_or_else(|| std::env::temp_dir().join("arkism-runtime-check"));
-        std::process::exit(runtime_check(&dir));
+        std::process::exit(runtime_check(&dir, context.package_info().version.to_string()));
     }
     let app = tauri::Builder::default()
         // A second launch only brings the running window forward; two copies would share one database.
@@ -1225,7 +1229,7 @@ fn main() {
             let default = app_dir.join("runtime");
             let data = storage_location::read(&app_dir).unwrap_or_else(|| default.clone());
             let programs = runtime::find_programs(app.path().resource_dir().ok());
-            let rt = Arc::new(runtime::Runtime::new(programs, data).agents_file(default.join("agents.json")));
+            let rt = Arc::new(runtime::Runtime::for_release(programs, data, app.package_info().version.to_string()).agents_file(default.join("agents.json")));
             #[cfg(windows)]
             {
                 let logging_runtime = Arc::downgrade(&rt);
@@ -1307,7 +1311,7 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![api, api_upload, app_defaults, managed_local_connect, local_location, local_location_set, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, open_logs, model_roles, set_model_roles, gateway_info, agent_link_set, doctor, import_agent_memories, agents_setup, agents_setup_retry, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_connect_done, ssh_test, ssh_host_key_check, ssh_host_key_approve, ssh_host_key_cancel, ssh_disconnect, ssh_keys, ssh_hosts, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate, general::general_get, general::general_set, general::notify, agent_backends, popout::popout_destroy, server_update, agent_login, agents_install])
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("Arkism failed to start");
     app.run(|app, event| {
         if let RunEvent::Exit = event {

@@ -540,6 +540,7 @@ type EndpointBoundary = Box<dyn Fn(Role,&LaunchSpec,bool)->Result<bool,String> +
 type CommandBoundary = Box<dyn Fn(&mut Command)->Result<runtime_process::Output,runtime_process::Failure> + Send>;
 
 pub struct Runtime {
+    app_version: String,
     programs: Option<PathBuf>,
     /// Changes only before anything runs (the first start's 저장 위치), see `move_data_dir`.
     data: std::sync::RwLock<PathBuf>,
@@ -572,9 +573,14 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    /// `programs` is the folder with the bundled programs; None when this build has none.
-    pub fn new(programs: Option<PathBuf>, data: PathBuf) -> Self {
-        Runtime { programs, agents_file: data.join("agents.json"), data: std::sync::RwLock::new(data), children: Mutex::new(Vec::new()), watcher: Mutex::new(None), gateway: Mutex::new(None), postgres: Mutex::new(None), gate: Arc::new(Gate::default()), unverified: Mutex::new(Vec::new()), pending_installer: Mutex::new(None),
+    #[cfg(test)]
+    fn new(programs: Option<PathBuf>, data: PathBuf) -> Self {
+        Self::for_release(programs, data, "0.0.0-test".into())
+    }
+
+    /// `app_version` is the packaged desktop version, including build-time Tauri overrides.
+    pub fn for_release(programs: Option<PathBuf>, data: PathBuf, app_version: String) -> Self {
+        Runtime { app_version, programs, agents_file: data.join("agents.json"), data: std::sync::RwLock::new(data), children: Mutex::new(Vec::new()), watcher: Mutex::new(None), gateway: Mutex::new(None), postgres: Mutex::new(None), gate: Arc::new(Gate::default()), unverified: Mutex::new(Vec::new()), pending_installer: Mutex::new(None),
             #[cfg(windows)] generation: AtomicU64::new(0),
             #[cfg(test)] process_factory: Mutex::new(None),
             #[cfg(test)] postgres_boundary: Mutex::new(None),
@@ -1542,7 +1548,7 @@ impl Runtime {
         }
         let info = BackupInfo {
             format: 2,
-            app_version: env!("CARGO_PKG_VERSION").to_string(),
+            app_version: self.app_version.clone(),
             created: name.trim_start_matches("arkism-").to_string(),
             owner: secrets.owner.clone(),
             worker: secrets.worker.clone(),
