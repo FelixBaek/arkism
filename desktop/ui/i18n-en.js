@@ -3222,6 +3222,7 @@ window.ArkismI18nEN = (window.ArkismI18nDicts ||= {}).en = {
   "연결된 기억": "Linked memories"
  },
  "patterns": {
+ "선택한 {0}판 지침 보기": "View instructions for version {0}",
  "근거 기억 {0}개": "{0} source memories",
  "승인된 다른 AI 정리 {0}개도 근거로 썼어요.": "Also based on {0} other approved AI notes.",
  "{0} · 우선순위 {1}": "{0} · Priority {1}",

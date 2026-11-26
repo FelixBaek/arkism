@@ -92,3 +92,20 @@ test("same version ID with different self-consistent body hashes is refused",asy
   assert.doesNotMatch(s.panel.textContent,/different but correctly hashed|보조 파일 비교/);
   assert.equal(s.calls.filter(([p])=>p.includes("/skill_versions/")).length,reads);
 });
+
+test("switching versions displays the selected verified instructions", async () => {
+  const s = await start({mutate(items) {
+    for (const item of items) {
+      item.instructions = "Guidance for version " + item.resolved_version;
+      item.content_hash = sha(item.instructions);
+    }
+  }});
+  await s.loading;
+  const pick = s.panel.querySelector("select");
+  for (const n of [1, 2, 1]) {
+    pick.value = String(n - 1);
+    await pick.fire("change");
+    assert.equal(s.panel.querySelector("pre").textContent, "Guidance for version " + n);
+    assert(s.panel.textContent.includes("선택한 " + n + "판 지침 보기"));
+  }
+});

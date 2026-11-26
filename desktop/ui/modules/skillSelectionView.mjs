@@ -77,7 +77,7 @@ export async function selectionEvidence(deps, skill, index, isCurrent = () => tr
     if (!matchesScope(v,scope) || v.id!==expected || v.skill_id!==skill.id || typeof v.text!=="string" || await sha(v.text)!==v.content_hash) fail();
     let analysis=v.analysis;
     if (!analysis) { try {analysis=JSON.parse(v.text);} catch {analysis=null;} }
-    return {version:item.resolved_version,id:expected,hash:item.content_hash,analysis:analysis?.content_hash===item.content_hash ? analysis : {},
+    return {version:item.resolved_version,id:expected,hash:item.content_hash,instructions:item.instructions,analysis:analysis?.content_hash===item.content_hash ? analysis : {},
       requirements:item.requirements || {}, resolution:{compatibility:item.compatibility}, files:await manifest(item.bundle)};
   }));
   const [a,b]=pair, changes=[];
@@ -121,6 +121,9 @@ export function skillSelectionView(deps,skillID,preferred) {
           const {a,b,changes}=await selectionEvidence(deps,skill,Number(pick.value),() => live(current));
           if (!live(current)) return;
           result.replaceChildren(el("p","meta","선택 "+a.version+"판 · 최신 승인 "+b.version+"판 · 본문 "+(a.hash===b.hash?"같음":"변경")));
+          const body=el("details");
+          body.append(el("summary","",`선택한 ${a.version}판 지침 보기`),el("pre","skill-instructions",a.instructions));
+          result.append(body);
           const meta=el("details");meta.append(el("summary","","분석·요구사항 "+changes.length+"개"));
           for(const c of changes) meta.append(el("p","meta",c.label+" · "+c.status+(c.status==="변경"||c.status==="한쪽 미기재" ? " · "+c.left+" → "+c.right : "")));
           result.append(meta);
