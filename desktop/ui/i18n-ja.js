@@ -6488,6 +6488,7 @@
  "평가 이력은 삭제하지 않아요. 기억 상세에서 현재 적용 표본과 가중치를 확인할 수 있어요. 성공의 원인을 입증하는 기능은 아니에요.": "Evaluations are never deleted. The memory's details show the samples counted now and the weights. This does not prove what caused a success."
  },
  "patterns": {
+ "선택한 {0}판 지침 보기": "バージョン{0}の手順を表示",
  "근거 기억 {0}개": "根拠の記憶 {0}件",
  "승인된 다른 AI 정리 {0}개도 근거로 썼어요.": "承認済みの他のAI整理 {0}件も根拠に使いました。",
  "{0} · 우선순위 {1}": "{0} · 優先度 {1}",
