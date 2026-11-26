@@ -22,6 +22,22 @@ RUNS = [
 
 
 class LabeledMetricsTests(unittest.TestCase):
+    def test_requested_depth_bounds_reported_metrics_even_if_no_hits(self):
+        runs = [dict(row, requested_k=3) for row in RUNS]
+        self.assertEqual(set(recall.labeled_metrics(LABELS, runs)["at_k"]), {"1", "3"})
+        runs[-1]["requested_k"] = 0
+        with self.assertRaisesRegex(ValueError, "requested_k"):
+            recall.labeled_metrics(LABELS, runs)
+
+    def test_duplicate_question_ids_rejected_before_scoring(self):
+        for labels, runs, source in (
+            (LABELS + [LABELS[0]], RUNS, "labels"),
+            (LABELS, RUNS + [{"id": "a", "returned": []}], "runs"),
+            (LABELS, RUNS + [{"id": "a", "returned": ["m1"]}], "runs"),
+        ):
+            with self.subTest(source=source), self.assertRaisesRegex(ValueError, f"duplicate question id in {source}"):
+                recall.labeled_metrics(labels, runs)
+
     def test_counts_and_mrr(self):
         out = recall.labeled_metrics(LABELS, RUNS, ks=(1, 3))
         self.assertEqual((out["labeled"], out["scored"], out["unscored"], out["positives"], out["negatives"]), (6, 5, 1, 3, 2))
