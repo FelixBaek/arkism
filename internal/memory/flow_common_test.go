@@ -18,22 +18,8 @@ func commonFlowEngine(t *testing.T, h flowHTTPHarness) (*crewrun.Engine, string)
 		t.Fatal(e)
 	}
 	log := filepath.Join(dir, "fixture-inputs.jsonl")
-	runner := filepath.Join(dir, "fixture-runner")
-	script := `#!/bin/sh
-in=$(cat)
-printf '%s\n' "$in" >> "$1"
-case "$in" in
-  *"JSON 하나로만"*) out='{\"summary\":\"Fixture conclusion\",\"decisions\":[\"Fixture decision\"],\"todos\":[],\"open_questions\":[]}' ;;
-  *STANCE*) out='Fixture review\nSTANCE: approve' ;;
-  *) out='Fixture completed answer' ;;
-esac
-printf '{"ok":true,"output":"%s","model":"opus 5.5","effort":"medium","cli":"fake","duration_ms":1,"usage":{"input_tokens":100,"output_tokens":20,"cost_usd":0.001,"estimated":false}}\n' "$out"
-`
-	if e := os.WriteFile(runner, []byte(script), 0700); e != nil {
-		t.Fatal(e)
-	}
 	client := &crewrun.Client{BaseURL: "http://memoryd.test", TokenFile: token, Scope: crewrun.Scope{WorkspaceID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID}, HTTP: &http.Client{Transport: flowHandlerTransport{h.handler}}}
-	return &crewrun.Engine{Store: client, Meetings: client, Runner: []string{runner, log}, DefaultModel: "opus 5.5"}, log
+	return &crewrun.Engine{Store: client, Meetings: client, Runner: fixtureCrewRunner(log), DefaultModel: "opus 5.5"}, log
 }
 
 func commonFlowStart(t *testing.T, h flowHTTPHarness, item Record, request string) Record {
