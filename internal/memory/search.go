@@ -228,6 +228,9 @@ func mergeFusionLane(merged map[string]*fusedEntry, lane int, list []Hit, weight
 }
 
 func fusionHitWeight(hit Hit) float64 {
+	if slices.Contains(hit.Reasons, reasonNamedSubject) {
+		return fusionExactKeywordWeight
+	}
 	if slices.Contains(hit.Reasons, "exact_keyword") {
 		weight := fusionExactKeywordWeight
 		if hit.termShare > 0 {
@@ -405,6 +408,10 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 		err := s.cleanSearchLanes(ctx, token, in, d, collection, anchor, run, -1, queryVector, querySpace, historyRecords, &out, one)
 		filterContextViewLanes(one, in.contextView)
 		return one[0], err
+	}
+	lists, err = s.appendNamedSubjectLane(ctx, token, collection, in, lists, clean)
+	if err != nil {
+		return out, d, err
 	}
 	in.queryVector, in.querySpace = queryVector, querySpace
 	s.expandRecall(ctx, token, &in, d, collection, run, &out)

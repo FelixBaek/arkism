@@ -343,6 +343,22 @@ func relevanceGate(in SearchInput, lists [][]Hit, trace *recallTrace) [][]Hit {
 // lexicallyRelevant: the hit's text, summary and keywords hold one of the query's topic
 // concepts, or two once the query has three or more (the keyword lane's own rule).
 func lexicallyRelevant(terms []string, h Hit) bool {
+	if slices.Contains(h.Reasons, reasonNamedSubject) && !lexicallyRelevantTerms(terms, h) {
+		translated := slices.Clone(terms)
+		for i, t := range translated {
+			switch t {
+			case "로드맵":
+				translated[i] = "roadmap"
+			case "라벨", "레이블":
+				translated[i] = "label"
+			}
+		}
+		terms = translated
+	}
+	return lexicallyRelevantTerms(terms, h)
+}
+
+func lexicallyRelevantTerms(terms []string, h Hit) bool {
 	found, concepts := conceptsFound(terms, h)
 	if concepts == 0 {
 		return false
