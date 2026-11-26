@@ -370,13 +370,7 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 	if err != nil {
 		return ContextBundle{}, Decision{}, err
 	}
-	if collection == colMemories && len(in.Modes) == 0 && !in.IncludeInactive && in.RelatedTo == nil && in.contextView == nil && in.retrievalQuery == "" && !in.ExpandCausal {
-		if id := lookupIdentifier(in.Query); id != "" {
-			in.literalIdentifier = id
-			in.retrievalQuery = id
-			in.Modes = []string{"fts"}
-		}
-	}
+	in.configureLiteralLookup(collection)
 	queryVector, querySpace, degraded, memoryErr := s.searchQueryVector(ctx, in, d, searchContent)
 	if memoryErr != nil {
 		return out, Decision{}, ErrUnavailable
