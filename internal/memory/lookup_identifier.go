@@ -49,3 +49,13 @@ func containsLookupIdentifier(text, id string) bool {
 	}
 	return false
 }
+
+func (in *SearchInput) configureLiteralLookup(collection string) {
+	if collection == colMemories && len(in.Modes) == 0 && !in.IncludeInactive && in.RelatedTo == nil && in.contextView == nil && in.retrievalQuery == "" && !in.ExpandCausal {
+		if id := lookupIdentifier(in.Query); id != "" {
+			in.literalIdentifier = id
+			in.retrievalQuery = id
+			in.Modes = []string{"fts"}
+		}
+	}
+}
