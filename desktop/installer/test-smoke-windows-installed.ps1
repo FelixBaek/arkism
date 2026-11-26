@@ -19,6 +19,11 @@ function Write-SmokeTestFile([string]$Path, [string]$Text) {
   [IO.File]::WriteAllText($Path, $Text, [Text.UTF8Encoding]::new($false))
 }
 
+function Get-InstalledSmokeDesktopVersion([string]$Path) {
+  Assert-SmokeTest ([IO.Path]::GetFileName($Path) -ceq 'Arkism.exe') 'Expected installed desktop PE'
+  return '1.2.3'
+}
+
 function New-SmokeTestState {
   return @{ Registrations = @(); Shortcuts = @(); Residual = @(); Tasks = @(); Autostart = @() }
 }
@@ -43,7 +48,7 @@ function New-SmokeTestFixture {
     Events = [Collections.Generic.List[string]]::new(); Links = [Collections.Generic.List[string]]::new(); Mode = ''; CleanupMode = ''
     Result = @{ ok = $true; phase = 'complete'; capabilities = 200; restored_capabilities = 200; reused = $true; backup_bytes = 128; expiry = 'ok'; safety_copy = $false; server = 'http://127.0.0.1:8091'
       token_checks = @{ expiry_rotation = $true; pending_before_commit = $true; pending_after_commit = $true; pending_backup_restore = $true; pending_backup_restore_content = $true; retired_token_http_403 = $true }
-      fixture_source_rows = 1; fixture_memory_rows = 1; fixture_sha256 = ('b' * 64); backup_restore_content = $true }
+      engine_version = '1.2.3'; fixture_source_rows = 1; fixture_memory_rows = 1; fixture_sha256 = ('b' * 64); backup_restore_content = $true }
   }
 }
 
@@ -179,6 +184,14 @@ function Invoke-SmokeTestCase([string]$Name, [scriptblock]$Body) {
 function Get-SmokeTestError($Fixture) {
   try { Invoke-SmokeTestFixture $Fixture | Out-Null; return '' }
   catch { return $_.Exception.Message }
+}
+
+foreach ($badEngineVersion in @('1.2.2', $null, 123)) {
+  Invoke-SmokeTestCase 'Reject mismatched runtime release version' {
+    param($f)
+    $f.Result.engine_version = $badEngineVersion
+    Assert-SmokeTest ((Get-SmokeTestError $f).Contains('runtime_release_version_mismatch')) 'Unverified engine version accepted'
+  }
 }
 
 Invoke-SmokeTestCase 'fresh installed binary and owned manual cleanup' {

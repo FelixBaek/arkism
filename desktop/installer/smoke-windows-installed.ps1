@@ -378,12 +378,17 @@ function Assert-InstalledSmokePayload([string]$InstallPath, $Manifest) {
   if ($actual.Count -ne @($Manifest).Count) { throw 'smoke_installed_unexpected_file' }
 }
 
-function Read-InstalledSmokeResult([string]$Path) {
+function Get-InstalledSmokeDesktopVersion([string]$Path) {
+  return (Get-Item -LiteralPath $Path -ErrorAction Stop).VersionInfo.ProductVersion
+}
+
+function Read-InstalledSmokeResult([string]$Path, [string]$DesktopPath, [string]$Version) {
   Assert-InstalledSmokeFile $Path
   if (([IO.FileInfo]$Path).Length -gt 65536) { throw 'smoke_result_too_large' }
   $result = [IO.File]::ReadAllText($Path) | ConvertFrom-Json -ErrorAction Stop
   . (Join-Path $PSScriptRoot 'runtime-check-result.ps1')
   Assert-RuntimeTokenEvidence $result
+  if ($DesktopPath) { Assert-RuntimeReleaseVersion $result (Get-InstalledSmokeDesktopVersion $DesktopPath) $Version }
   if ($result.phase -cne 'complete') { throw 'smoke_runtime_incomplete' }
   if ($result.ok -isnot [bool] -or -not $result.ok -or $result.reused -isnot [bool] -or -not $result.reused -or
       $result.safety_copy -isnot [bool] -or $result.safety_copy -or $result.expiry -cne 'ok') { throw 'smoke_result_failed' }
@@ -394,7 +399,7 @@ function Read-InstalledSmokeResult([string]$Path) {
   $uri = $null
   if (-not [Uri]::TryCreate($result.server, [UriKind]::Absolute, [ref]$uri) -or $uri.Scheme -cne 'http' -or
       $uri.Host -cne '127.0.0.1' -or $uri.Port -le 0 -or $uri.UserInfo -or $uri.AbsolutePath -ne '/' -or $uri.Query -or $uri.Fragment) { throw 'smoke_server_not_loopback' }
-  return [ordered]@{ ok = $true; capabilities = 200; restored_capabilities = 200; reused = $true; backup_bytes = $result.backup_bytes; expiry = 'ok'; safety_copy = $false; token_checks = $result.token_checks
+  return [ordered]@{ ok = $true; engine_version = $result.engine_version; capabilities = 200; restored_capabilities = 200; reused = $true; backup_bytes = $result.backup_bytes; expiry = 'ok'; safety_copy = $false; token_checks = $result.token_checks
     fixture_source_rows = $result.fixture_source_rows; fixture_memory_rows = $result.fixture_memory_rows
     fixture_sha256 = $result.fixture_sha256; backup_restore_content = $result.backup_restore_content }
 }
@@ -556,7 +561,7 @@ function Invoke-InstalledSmoke([string]$InstallerPath, [string]$StagePath, [stri
     Assert-InstalledSmokeRegistration $state $install $Version -RequireComplete
     Assert-InstalledSmokeNoProcesses $install 'smoke_unexpected_autorun'
     $report.runtime = Invoke-InstalledSmokeProcess (Join-Path $install 'Arkism.exe') ('--runtime-check "' + $data + '"') $childEnv 300 'runtime_check'
-    $report.result = Read-InstalledSmokeResult (Join-Path $data 'check.json')
+    $report.result = Read-InstalledSmokeResult (Join-Path $data 'check.json') (Join-Path $install 'Arkism.exe') $Version
     Assert-InstalledSmokePayload $install $manifest
     if ((Get-InstalledSmokeHash $installer) -cne $installerHash) { throw 'smoke_installer_changed' }
     $report.ok = $true
