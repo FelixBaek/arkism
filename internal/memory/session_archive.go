@@ -611,6 +611,10 @@ func deleteSessionArchiveChunks(ctx context.Context, tx Tx, scope Scope, headerI
 		if !isSessionArchiveChunkFor(chunk, headerID) {
 			return ErrConflict
 		}
+		if chunk.PrivacyQuarantined || chunk.ContentErased {
+			// Detached chunks are collected by the orphan sweep once eligible.
+			continue
+		}
 		if err := tx.Delete(ctx, colSessionArchiveChunks, scope, c, chunk.Revision); err != nil {
 			return err
 		}
