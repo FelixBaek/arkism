@@ -151,8 +151,41 @@ func archiveLifecycle(t *testing.T, p Repository) {
 	if err != nil || view.State != "expired" || view.Text != "" {
 		t.Fatalf("expired projection leaked before sweep: %v", err)
 	}
+	// A privacy hold covers both the manifest and uncommitted chunks for the same parent.
+	extra, err := f.svc.UploadSessionArchiveChunk(testCtx, f.human, SessionArchiveChunkInput{
+		Scope: scope, ParentID: parent, SHA256: ContentHash("pending"), Data: base64.StdEncoding.EncodeToString([]byte("pending")),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(SessionArchiveTTL + time.Hour)
+	setHold := func(held bool) {
+		t.Helper()
+		header, err := p.Get(testCtx, colSessionArchives, scope, parent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		previous := header.Revision
+		header.PrivacyQuarantined = held
+		header.Revision++
+		if err := p.Replace(testCtx, colSessionArchives, header, previous); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setHold(true)
+	protected, err := f.svc.ExpireSessionArchives(testCtx, f.human, SessionArchiveExpireInput{Scope: scope, Limit: 100})
+	if err != nil || len(protected.Expired) != 0 || protected.Orphans != 0 {
+		t.Fatalf("held archive sweep: %+v %v", protected, err)
+	}
+	for _, id := range []string{chunk.ID, extra.ID} {
+		row, err := p.Get(testCtx, colSessionArchiveChunks, scope, id)
+		if err != nil || row.SessionArchive == nil || row.SessionArchive.Cipher == "" {
+			t.Fatalf("lost protected chunk: %v", err)
+		}
+	}
+	setHold(false)
 	expired, err := f.svc.ExpireSessionArchives(testCtx, f.human, SessionArchiveExpireInput{Scope: scope, Limit: 100})
-	if err != nil || len(expired.Expired) != 1 {
+	if err != nil || len(expired.Expired) != 1 || expired.Orphans != 1 {
 		t.Fatalf("expiry failed: %v", err)
 	}
 	if _, err := p.Get(testCtx, colSessionArchiveChunks, scope, chunk.ID); err != ErrNotFound {
@@ -197,11 +230,11 @@ func (f archiveFake) SessionArchiveOrphanRows(ctx context.Context, scope Scope, 
 	rows, _ := f.ListRecords(ctx, scope, colSessionArchiveChunks, 1<<30)
 	out := []Record{}
 	for _, r := range rows {
-		if r.ExpiresAt == nil || r.ExpiresAt.After(now) {
+		if r.PrivacyQuarantined || r.ContentErased || r.ExpiresAt == nil || r.ExpiresAt.After(now) {
 			continue
 		}
 		h, e := f.Get(ctx, colSessionArchives, scope, r.SessionArchive.ParentID)
-		found := false
+		found := e == nil && h.PrivacyQuarantined
 		if e == nil && h.SessionArchive != nil {
 			for _, id := range h.SessionArchive.Chunks {
 				if id == r.ID {
