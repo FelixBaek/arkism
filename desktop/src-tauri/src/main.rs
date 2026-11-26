@@ -1089,6 +1089,23 @@ async fn update_install(app: tauri::AppHandle) -> Result<(), String> {
 /// `Arkism --runtime-check DIR`: starts the built-in Arkism with its data in DIR, checks that it
 /// answers with the owner token, stops it and writes the outcome to DIR/check.json. No window;
 /// used to test an installer (and CI) without touching the user's data.
+#[cfg(windows)]
+fn check_installed_browser_ui(server: &str) -> Result<(), String> {
+    let programs = runtime::find_programs(None).ok_or("missing runtime directory")?;
+    for asset in ["index.html", "assets/entry.js"] {
+        let expected = std::fs::read(programs.join("web-ui").join(asset)).map_err(|e| e.to_string())?;
+        let route = if asset == "index.html" { "" } else { asset };
+        let mut response = ureq::get(&format!("{server}/app/{route}")).call().map_err(|e| e.to_string())?;
+        let mut served = Vec::new();
+        response.body_mut().as_reader().take(expected.len() as u64 + 1)
+            .read_to_end(&mut served).map_err(|e| e.to_string())?;
+        if expected.is_empty() || served != expected {
+            return Err(format!("installed browser asset mismatch: {asset}"));
+        }
+    }
+    Ok(())
+}
+
 fn runtime_check(dir: &std::path::Path) -> i32 {
     if runtime::token_check::fresh_directory(dir).is_err() {
         eprintln!("runtime_check_requires_fresh_ordinary_absolute_directory");
@@ -1108,6 +1125,11 @@ fn runtime_check(dir: &std::path::Path) -> i32 {
             .map_err(|e| format!("capabilities: {e}"))?
             .status()
             .as_u16();
+        #[cfg(windows)]
+        {
+            phase = "browser_ui";
+            check_installed_browser_ui(&s.server)?;
+        }
         phase = "managed_token_lifecycle";
         let (s, token_checks, fixture) = rt.check_managed_tokens(&s)?;
         phase = "reuse_start";

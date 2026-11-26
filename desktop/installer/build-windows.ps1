@@ -39,6 +39,9 @@ Invoke-Checked { npm ci --prefix (Join-Path $desktop 'frontend') --no-audit --no
 Invoke-Checked { node (Join-Path $desktop 'frontend\build.cjs') } 'frontend bundle'
 Invoke-Checked { node (Join-Path $desktop 'frontend\check.cjs') } 'frontend output checks'
 
+# Serve the same compiled assets from the loopback engine in a browser.
+Copy-Item -LiteralPath (Join-Path $desktop 'ui-dist') -Destination (Join-Path $stage 'runtime/web-ui') -Recurse
+
 # Build the agent client (including embedded task helpers), the server programs and database roles;
 # then prepare Postgres with pgvector (prepare-runtime.ps1).
 $env:CGO_ENABLED = '0'
