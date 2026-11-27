@@ -1,3 +1,5 @@
+//go:build linux || windows
+
 package memory
 
 import (
@@ -9,7 +11,6 @@ import (
 	"maps"
 	"os"
 	"strings"
-	"syscall"
 )
 
 // AdoptRestoredBlobs only opens a quarantined restore into a different DB UUID.
@@ -67,11 +68,7 @@ func (s *Service) adoptRestoredBlobs(ctx context.Context, b *lockedBlobs, token 
 	}); err != nil {
 		return err
 	}
-	review, ok := s.Repo.(restoreReviewStore)
-	if !ok {
-		return ErrUnavailable
-	}
-	if err = review.RequireRestoreReview(ctx, ContentHash(string(raw))); err != nil {
+	if err := s.requireBlobRestoreReview(ctx, ContentHash(string(raw))); err != nil {
 		return err
 	}
 	if err = s.uploadRestoredFiles(b, files); err != nil {
@@ -93,7 +90,7 @@ func (s *Service) adoptRestoredBlobs(ctx context.Context, b *lockedBlobs, token 
 	if err = s.dropUploadedFiles(b, files); err != nil {
 		return err
 	}
-	return directory.Sync()
+	return syncBlobDirectory(directory)
 }
 
 // restoreManifest is the parsed pending manifest with the sizes of the objects it names.
@@ -118,7 +115,7 @@ func (s *Service) dropUploadedFiles(b *lockedBlobs, files map[string]int64) erro
 
 func readRestoreManifest(b *lockedBlobs) ([]byte, map[string]int64, restoreManifest, error) {
 	var m blobBackupManifest
-	pending, err := openPrivateBlob(b.root, ".restore-pending", os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	pending, err := openPrivateBlob(b.root, ".restore-pending", os.O_RDONLY, 0)
 	if err != nil {
 		return nil, nil, restoreManifest{}, err
 	}
@@ -265,7 +262,7 @@ func verifyRestoredEntry(b *lockedBlobs, name string, files map[string]int64) (b
 	if !ok || e != nil || len(decoded) != 16 || hex.EncodeToString(decoded) != suffix {
 		return false, ErrInvalid
 	}
-	file, e := openPrivateBlob(b.root, name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	file, e := openPrivateBlob(b.root, name, os.O_RDONLY, 0)
 	if e != nil {
 		return false, e
 	}
@@ -300,4 +297,23 @@ func (s *Service) restoredRootID(ctx context.Context, b *lockedBlobs, identity s
 		return b.bind(identity)
 	}
 	return "", err
+}
+
+func (s *Service) requireBlobRestoreReview(ctx context.Context, digest string) error {
+	review, ok := s.Repo.(restoreReviewStore)
+	if !ok {
+		return ErrUnavailable
+	}
+
+	if err := review.RequireRestoreReview(ctx, digest); err != nil {
+		return err
+	}
+	if repair, ok := s.Repo.(interface {
+		ScrubRestoredEntitySummaries(context.Context, string) error
+	}); ok {
+		if err := repair.ScrubRestoredEntitySummaries(ctx, digest); err != nil {
+			return err
+		}
+	}
+	return nil
 }

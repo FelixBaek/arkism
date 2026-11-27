@@ -56,14 +56,11 @@ func newDaemonService(ctx context.Context, pg *memory.Postgres, cfg daemonOption
 	svc := &memory.Service{BlobObjects: objects, GoogleLogin: google, SyntheticHandoff: syntheticHandoff == "1", BlobDirectory: os.Getenv("MEMORY_BLOB_DIRECTORY"), Repo: pg, Auth: auth, Embedder: embed, CandidateDailyLimit: candidateLimit, ReflectRereadDailyLimit: rereadLimit, ReflectPassages: passages, CaptureMergeSimilarity: mergeSimilarity, CaptureGateBudget: gateBudget, CostRates: costRates,
 		Reranker: reranker, RecallGraph: os.Getenv("ARKISM_RECALL_GRAPH") == "1"}
 
-	if !cfg.Recovery {
-		if path := os.Getenv("MEMORY_REVIEW_CLASSIFIER"); path != "" {
-			classifier, err := memory.LoadReviewClassifier(path)
-			if err != nil {
-				return nil, err
-			}
-			svc.ReviewClassifier = classifier
-		}
+	if err := setCaptureRuntimeID(svc, standalone, os.Getenv("MEMORY_CAPTURE_RUNTIME_ID")); err != nil {
+		return nil, err
+	}
+	if err := configureReviewClassifier(svc, cfg); err != nil {
+		return nil, err
 	}
 	if err := configureDaemonPolicies(svc); err != nil {
 		return nil, err
@@ -323,4 +320,29 @@ func captureGateFromEnv() (float64, time.Duration, error) {
 		}
 	}
 	return similarity, budget, nil
+}
+
+func setCaptureRuntimeID(svc *memory.Service, standalone, id string) error {
+	if id == "" {
+		return nil
+	}
+	raw, err := hex.DecodeString(id)
+	if standalone != "true" || err != nil || len(raw) != 32 || id != strings.ToLower(id) {
+		return memory.ErrInvalid
+	}
+	svc.CaptureRuntimeID = id
+	return nil
+}
+
+func configureReviewClassifier(svc *memory.Service, cfg daemonOptions) error {
+	if !cfg.Recovery {
+		if path := os.Getenv("MEMORY_REVIEW_CLASSIFIER"); path != "" {
+			classifier, err := memory.LoadReviewClassifier(path)
+			if err != nil {
+				return err
+			}
+			svc.ReviewClassifier = classifier
+		}
+	}
+	return nil
 }

@@ -69,6 +69,10 @@ func registerHealthCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetric
 			respond(w, nil, ErrUnavailable)
 			return
 		}
+		if s.CaptureRuntimeID != "" {
+			w.Header().Set(captureRuntimeHeader, s.CaptureRuntimeID)
+			w.Header().Set("Cache-Control", "no-store")
+		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 	})
 	// Unauthenticated on purpose: the app reads the version before it trusts a feature exists.

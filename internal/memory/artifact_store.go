@@ -1,3 +1,5 @@
+//go:build linux || windows
+
 package memory
 
 import (
@@ -5,7 +7,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"syscall"
 	"time"
 )
 
@@ -113,7 +114,7 @@ func (b *lockedBlobs) unlink(digest string) error {
 		if !info.Mode().IsRegular() {
 			return ErrUnavailable
 		}
-		file, e := openPrivateBlob(b.root, digest, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+		file, e := openPrivateBlob(b.root, digest, os.O_RDONLY, 0)
 		if e != nil {
 			return e
 		}
@@ -128,7 +129,7 @@ func (b *lockedBlobs) unlink(digest string) error {
 	if err != nil {
 		return err
 	}
-	err = directory.Sync()
+	err = syncBlobDirectory(directory)
 	directory.Close()
 	return err
 }

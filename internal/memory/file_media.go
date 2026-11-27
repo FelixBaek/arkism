@@ -57,12 +57,13 @@ const hostedParserDestination = "external:file_parser"
 
 // uploadedFile is one file a person sent, decoded and size-checked.
 type uploadedFile struct {
-	Scope   Scope
-	Name    string
-	MIME    string
-	Raw     []byte
-	Parsers []string
-	DryRun  bool
+	KeepOriginal bool
+	Scope        Scope
+	Name         string
+	MIME         string
+	Raw          []byte
+	Parsers      []string
+	DryRun       bool
 	// Blocks is text with images in place, read instead of Raw.
 	Blocks []fileBlock
 }
@@ -496,7 +497,7 @@ func uploadArtifactKind(mime string) string {
 // whose text had private or secret parts removed is not kept, since the original
 // still holds them. A file not kept gets a note; the upload still succeeds.
 func (s *Service) keepOriginal(ctx context.Context, d Decision, f uploadedFile, out *FileMemoriesResult, redacted int) {
-	if !s.Files.KeepOriginals || len(out.SourceIDs) == 0 || len(f.Raw) == 0 {
+	if !(s.Files.KeepOriginals || s.Files.RequestOriginals && f.KeepOriginal) || len(out.SourceIDs) == 0 || len(f.Raw) == 0 {
 		return
 	}
 	kind := uploadArtifactKind(f.MIME)

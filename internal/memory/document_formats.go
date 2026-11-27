@@ -91,6 +91,8 @@ type FileSettings struct {
 	Hosted map[string]HostedParser
 	// KeepOriginals keeps each uploaded file as an attachment of its evidence (MEMORY_FILE_KEEP_ORIGINALS=1).
 	KeepOriginals bool
+	// RequestOriginals permits retaining an original only when its upload explicitly asks.
+	RequestOriginals bool
 	// BundleBytes caps one attachment in a space bundle (MEMORY_FILE_BUNDLE_MAX_BYTES, default MaxBytes); larger ones are skipped as too_large.
 	BundleBytes int64
 }
@@ -175,6 +177,8 @@ func FileSettingsFromEnv() (FileSettings, error) {
 	case "", "0", "false":
 	case "1", "true":
 		f.KeepOriginals = true
+	case "request":
+		f.RequestOriginals = true
 	default:
 		return FileSettings{}, fmt.Errorf("MEMORY_FILE_KEEP_ORIGINALS: %w", ErrInvalid)
 	}

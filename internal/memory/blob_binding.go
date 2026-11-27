@@ -1,3 +1,5 @@
+//go:build linux || windows
+
 package memory
 
 import (
@@ -7,7 +9,6 @@ import (
 	"io"
 	"os"
 	"strings"
-	"syscall"
 )
 
 func (s *Service) withBlobs(ctx context.Context, fn func(*lockedBlobs) error) error {
@@ -50,7 +51,7 @@ func (b *lockedBlobs) bind(identity string) (string, error) {
 	if !sourceHashPattern.MatchString(identity) {
 		return "", ErrInvalid
 	}
-	marker, err := openPrivateBlob(b.root, ".database", os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	marker, err := openPrivateBlob(b.root, ".database", os.O_RDONLY, 0)
 	fresh := errors.Is(err, os.ErrNotExist)
 	if !fresh {
 		if err != nil {
@@ -115,7 +116,7 @@ func (b *lockedBlobs) removeStaleBinding(directory *os.File) error {
 	if stale == "" {
 		return nil
 	}
-	file, e := openPrivateBlob(b.root, stale, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	file, e := openPrivateBlob(b.root, stale, os.O_RDONLY, 0)
 	if e != nil {
 		return e
 	}
@@ -138,7 +139,7 @@ func (b *lockedBlobs) publishBinding(identity, rootID string, fresh bool) error 
 	defer directory.Close()
 
 	name := ".binding-" + ID()
-	probe, err := b.root.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	probe, err := openPrivateBlob(b.root, name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
@@ -165,7 +166,7 @@ func (b *lockedBlobs) publishBinding(identity, rootID string, fresh bool) error 
 	if err != nil {
 		return err
 	}
-	if err = directory.Sync(); err != nil {
+	if err = syncBlobDirectory(directory); err != nil {
 		return err
 	}
 	return nil

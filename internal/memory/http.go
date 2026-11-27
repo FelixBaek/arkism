@@ -188,6 +188,11 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 		started := time.Now()
 		requestID := ID()
 		w.Header().Set("X-Request-ID", requestID)
+		if ids := r.Header.Values(captureRuntimeHeader); len(ids) != 0 &&
+			(len(ids) != 1 || !sourceHashPattern.MatchString(ids[0]) || ids[0] != s.CaptureRuntimeID) {
+			rejectCaptureRuntime(w)
+			return
+		}
 		r = r.WithContext(ContextWithPostgresToken(withAuditRequest(context.WithValue(r.Context(), auditRequestKey{}, requestID), r, pattern, started), bearer(r)))
 		var capture *auditCapture
 		if s.AuditBodies {

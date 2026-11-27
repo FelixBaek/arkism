@@ -73,6 +73,12 @@ func (m *authorizationMux) HandleFunc(pattern string, next func(http.ResponseWri
 			respond(w, nil, err)
 			return
 		}
+		captureBound := actor.PrincipalID == "pc-capture" && captureRuntimeWrite(r)
+		reviewBound := actor.PrincipalID == "pc-reviewer" && (policy.action == "review:memory_candidates" || policy.action == "classify:memory_candidates")
+		if m.service.CaptureRuntimeID != "" && (captureBound || reviewBound) && r.Header.Get(captureRuntimeHeader) == "" {
+			rejectCaptureRuntime(w)
+			return
+		}
 		bound := &httpActor{principal: actor.PrincipalID, role: actor.Role}
 		ctx := context.WithValue(r.Context(), httpActorKey{}, bound)
 		// A service may intentionally filter an ordinary per-record denial. An

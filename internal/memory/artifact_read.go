@@ -1,3 +1,5 @@
+//go:build linux || windows
+
 package memory
 
 import (
@@ -7,7 +9,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"syscall"
 )
 
 func (s *Service) ReadArtifact(ctx context.Context, token string, scope Scope, sourceID, id string) ([]byte, error) {
@@ -124,7 +125,7 @@ func (b *lockedBlobs) readArtifactBytes(data artifactMetadata) ([]byte, error) {
 		}
 		content = got
 	} else {
-		file, err := openPrivateBlob(b.root, data.Digest, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+		file, err := openPrivateBlob(b.root, data.Digest, os.O_RDONLY, 0)
 		if err != nil {
 			return nil, err
 		}
