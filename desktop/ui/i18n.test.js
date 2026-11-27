@@ -90,10 +90,10 @@ for (const code of codes.filter((c) => c !== "en")) {
 test("menu names stay English in every language", () => {
   // The rail and the folded-rail location are written in English, so no dictionary can reach them.
   const html = fs.readFileSync(path.join(__dirname, "index.html"), "utf8"), shell = fs.readFileSync(path.join(__dirname, "shell.js"), "utf8");
-  for (const menu of ["home", "memory", "agent", "router", "connect"]) {
+  for (const menu of ["home", "memory", "agent", "connect"]) {
     const rail = new RegExp(`data-menu="${menu}"[^>]*>.*?<span>([^<]*)</span>`).exec(html)?.[1];
-    assert.match(rail || "", /^(Home|Memory|Flow|Router|Tools)$/, `rail ${menu}`);
-    assert.match(new RegExp(`${menu}: \\{ label: "([^"]+)"`).exec(shell)?.[1] || "", /^(HOME|MEMORY|FLOW|ROUTER|TOOLS)$/, `shell ${menu}`);
+    assert.match(rail || "", /^(Home|Memory|Flow|Tools)$/, `rail ${menu}`);
+    assert.match(new RegExp(`${menu}: \\{ label: "([^"]+)"`).exec(shell)?.[1] || "", /^(HOME|MEMORY|FLOW|TOOLS)$/, `shell ${menu}`);
   }
   // Korean words that name a menu elsewhere (the Home tab, flow and tool mentions) map to the English menu name.
   for (const code of codes) for (const [ko, en] of [["홈", "Home"], ["흐름", "Flow"], ["도구", "Tools"]]) assert.equal(dicts[code].strings[ko], en, `${code}: ${ko}`);

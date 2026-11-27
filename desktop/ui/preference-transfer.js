@@ -2,9 +2,9 @@
 window.ArkismPreferenceTransfer = {
   export(read) {
     const values = {};
-    for (const key of ["look", "designGroup", "skillSort", "skillDir", "gitHost", "gitRepo", "routing.policyOpen"]) {
+    for (const key of ["look", "designGroup", "skillSort", "skillDir", "gitHost", "gitRepo"]) {
       const value = read("arkism." + key);
-      if (value !== null && value !== undefined) values[key] = key === "routing.policyOpen" || key === "look" ? JSON.parse(value) : value;
+      if (value !== null && value !== undefined) values[key] = key === "look" ? JSON.parse(value) : value;
     }
     const prefs = JSON.parse(read("arkism.prefs") || "{}");
     for (const key of ["agentsOff", "categories", "comfyUrl"]) if (Object.hasOwn(prefs, key)) values[key] = prefs[key];
@@ -57,11 +57,6 @@ window.ArkismPreferenceTransfer = {
       if (v[key] === undefined) continue;
       if (!short(v[key])) throw new Error("invalid_" + key);
       out["arkism." + key] = v[key];
-    }
-    if (v["routing.policyOpen"] !== undefined) {
-      const o = v["routing.policyOpen"];
-      if (!o || typeof o !== "object" || Object.values(o).some(x => typeof x !== "boolean")) throw new Error("invalid_policy_open");
-      out["arkism.routing.policyOpen"] = JSON.stringify({ routing: !!o.routing, failover: !!o.failover });
     }
     const prefs = JSON.parse(read("arkism.prefs") || "{}");
     if (v.agentsOff !== undefined) {

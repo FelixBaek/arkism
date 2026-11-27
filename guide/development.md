@@ -111,7 +111,7 @@ separate from a running Windows product or its native WebView.
 Screen code writes Korean only. `desktop/ui/i18n.js` swaps the text on screen through one dictionary per language,
 `desktop/ui/i18n-<code>.js` (`en`, `ja`, `zh-CN`, `zh-TW`, `es`, `de`, `fr`, `pt`, `vi`, `id`). The picker list lives in
 `look.js` (`ArkismLook.languages`) and the loader list in `i18n.js` (`DICTIONARIES`); `i18n.test.js` keeps the two and the
-files equal. The menu names Home, Memory, Flow, Router and Tools stay English in every language.
+files equal. The menu names Home, Memory, Flow and Tools stay English in every language.
 
 `i18n.test.js` fails when a Korean UI string has no entry in a dictionary. After changing Korean text:
 

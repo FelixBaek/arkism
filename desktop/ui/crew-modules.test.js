@@ -84,7 +84,7 @@ test("default graphs: template, one AI step, or empty", async () => {
   // 새 워크플로우 (1511:4650): 직접 부르기 → AI 작업 (모델 auto, 할 일 비움) → 결과, and the 처음이라면 guide only while it is untouched
   const fresh = model.defaultGraph("new", {});
   assert.deepEqual(fresh.nodes.map((n) => [n.type, n.title]), [["start", "직접 부르기"], ["ai", "AI 작업"], ["end", "결과"]]);
-  assert.deepEqual(fresh.nodes[1].config, { model: "auto", goal: "", access: "read" });
+  assert.deepEqual(fresh.nodes[1].config, { model: "", goal: "", access: "read" });
   assert.equal(model.isFresh(fresh), true);
   const moved = structuredClone(fresh); moved.nodes[1].x += 50;
   assert.equal(model.isFresh(moved), true, "moving a node is not an edit");

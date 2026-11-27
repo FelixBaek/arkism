@@ -47,9 +47,17 @@ test("MEMORY and one-page menus draw no tab line; 한눈에 chips lead to 확인
 test("TOOLS › 관리 lists skills by use, and the skills page shows the routing flow", async () => {
   await app.click(app.$('.nav-item[data-menu="connect"]'), 50);
   assert.equal(app.$$("#controls .v4s-flow-steps li").length, 5, "스킬 처리 흐름: five steps");
-  await app.click(app.$$("#area-tabs .area-tab").find((t) => t.dataset.tab === "manage"), 50);
+  app.window.apiOverride = ({ path }) => path.startsWith("/v1/routing/skills?") && {
+    status: 200, body: JSON.stringify({ items: [{ selected: "fixture-skill", selected_name: "Fixture skill", confirmed: true, candidates: 1 }] })
+  };
+  try {
+    await app.click(app.$$("#area-tabs .area-tab").find((t) => t.dataset.tab === "manage"), 50);
+  } finally {
+    delete app.window.apiOverride;
+  }
   const boxes = app.$$("#table .mg-box").map((b) => app.dom.text(b.querySelector("h3")));
-  assert.deepEqual(boxes, ["자주 씀", "거의 안 씀", "업데이트 필요", "업데이트·설치 실패", "최근 추가"]);
+  assert.deepEqual(boxes, ["자주 씀", "거의 안 씀", "업데이트 필요", "업데이트·설치 실패", "최근 추가", "스킬 판정"]);
+  assert.match(app.dom.text(app.$("#table .rtg-card")), /Fixture skill/);
   const often = app.$$("#table .mg-box")[0].querySelectorAll(".mg-side");
   const n = [...often].map((x) => parseInt(app.dom.text(x), 10));
   assert.ok(n.length && n.every((v, i) => !i || n[i - 1] >= v), "most used first");
@@ -77,32 +85,25 @@ test("every menu and area tab draws", async () => {
   assert.ok(shown.length >= 3, `non-zero counts still show: ${shown}`);
 });
 
-test("ROUTER has no 라우팅 설정 tab: the policy card opens it and 라우팅 현황 stays the open tab", async () => {
-  const text = (n) => app.dom.text(n);
-  const tabs = () => app.$$("#area-tabs .area-tab").map((t) => text(t.querySelector("span")));
-  await app.click('.nav-item[data-menu="router"]', 100);
-  assert.deepEqual(tabs(), ["라우팅 현황", "사용량"]);
-  const open = app.$$("#detail button").find((b) => text(b) === "라우팅 설정");
-  assert.ok(open, "the policy card links to the routing settings");
-  await app.click(open, 100);
-  assert.equal(app.$(".nav-item.active").dataset.menu, "router");
-  assert.deepEqual(tabs(), ["라우팅 현황", "사용량"]);
-  assert.equal(app.$("#area-tabs").dataset.active, "라우팅 현황");
-  assert.ok(app.$("#table .v4-set-routing"), "the settings page is drawn");
-  await app.click(app.$$("#area-tabs .area-tab")[0], 100);
-  assert.ok(!app.$("#table .v4-set-routing"), "the tab goes back to 라우팅 현황");
+test("the model router is absent and usage remains under TOOLS", async () => {
+  assert.equal(app.$('.nav-item[data-menu="router"]'), null);
+  await app.click('.nav-item[data-menu="connect"]', 60);
+  const usage = app.$('#area-tabs [data-tab="usage"]');
+  assert.ok(usage, "TOOLS still opens usage");
+  await app.click(usage, 60);
+  assert.doesNotMatch(app.dom.text(app.$("#controls")), /요청/);
 });
 
 test("the rail folds to icons, says where you are, and stays folded after a reload of the setting", async () => {
   const root = app.$("#app").ownerDocument.documentElement, fold = app.$("#rail-toggle");
-  await app.click(app.$('.nav-item[data-menu="router"]'), 50);
+  await app.click(app.$('.nav-item[data-menu="connect"]'), 50);
   assert.equal(root.classList.contains("rail-collapsed"), false);
   assert.equal(fold.getAttribute("aria-label"), "메뉴 접기");
   await app.click(fold, 20);
   assert.ok(root.classList.contains("rail-collapsed"));
   assert.equal(fold.getAttribute("aria-expanded"), "false");
   assert.equal(fold.getAttribute("aria-label"), "메뉴 펼치기");
-  assert.equal(app.$("#location-bar").textContent, "Router›라우팅 현황");
+  assert.equal(app.$("#location-bar").textContent, "Tools›스킬");
   await app.click(app.$('.nav-item[data-menu="agent"]'), 50);
   assert.equal(app.$("#location-bar").textContent, "Flow", "a one-page menu names only the menu");
   assert.equal(app.$("#app").ownerDocument.defaultView.localStorage.getItem("arkism.rail.folded"), "1");

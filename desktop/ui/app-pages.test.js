@@ -220,7 +220,7 @@ test("에이전트: switches, removal, shared folders and the add dialog", async
   await settings("roles");
   // one card per kind of work, no page title under the tab that already names it (asked three times)
   assert.deepEqual(app.$$(".ag-roles").map((g) => text(g.querySelector("h2"))), ["기억", "스킬", "요청 처리"]);
-  assert.match(app.$$(".ag-roles").map(text).join(" "), /기억 추출.*반성·검토.*임베딩.*스킬 요약.*스킬 후보 찾기.*스킬 판정.*스킬 보안 검사.*라우팅 판정/);
+  assert.match(app.$$(".ag-roles").map(text).join(" "), /기억 추출.*반성·검토.*임베딩.*스킬 요약.*스킬 후보 찾기.*스킬 판정.*스킬 보안 검사/);
   await settings("agents");
   // the first row is chosen: its detail (계정, Arkism 연결) is in the right column
   assert.ok(app.$(".ag-row.on"));
@@ -353,17 +353,11 @@ test("역할별 모델 › 판정 모델과 폴더 위치는 빠진 값을 알�
   const roles = () => app.$(".ag-roles").parentNode;
   const save = () => press("저장", kit());
   const choose = async (label, value) => { const sel = roles().querySelector(`[aria-label="${label}"]`); sel.value = value; app.dom.fire(sel, "change"); await app.settle(); };
-  await choose("라우팅 판정 모델", "clef"); await save();
+  await choose("스킬 판정 모델", "clef"); await save();
   assert.match(notice(), /Cloudflare 계정 ID와 토큰/);
-  await choose("라우팅 판정 모델", "jev"); await save();
+  await choose("스킬 판정 모델", "jev"); await save();
   assert.match(notice(), /API 키가 필요/);
-  await choose("라우팅 판정 모델", "chat"); await save();
-  assert.match(notice(), /주소와 모델 이름/);
-  roles().querySelector('[aria-label="판별 모델 주소"]').value = "http://example.com";
-  roles().querySelector('[aria-label="판별 모델"]').value = "qwen3:4b";
-  await save();
-  assert.match(notice(), /https이거나/);
-  roles().querySelector('[aria-label="판별 모델 주소"]').value = "http://127.0.0.1:11434/v1";
+  await choose("스킬 판정 모델", "fixed");
   answers.push(false); await choose("임베딩", "ollama"); // re-indexing is asked first; no keeps the old one
   assert.equal(roles().querySelector('[aria-label="임베딩"]').value, "auto");
   await choose("기억 추출 모델", "opus"); await choose("임베딩", "none");
@@ -400,8 +394,7 @@ test("역할별 모델 picks Ollama models from the list and keeps what runs tod
   assert.equal(field("임베딩 모델").tagName, "SELECT");
   assert.deepEqual(values("임베딩 모델"), ["nomic-embed-text:latest", "qwen3-embedding:0.6b"]);
   assert.equal(field("임베딩 모델").value, "qwen3-embedding:0.6b", "nothing saved: the default stays picked");
-  const judge = app.$('.ag-roles [aria-label="라우팅 판정 모델"]'); judge.value = "chat"; app.dom.fire(judge, "change"); await app.settle();
-  assert.deepEqual(values("판별 모델"), ["qwen3:4b", "llama3.2:3b"]);
+  assert.equal(field("라우팅 판정 모델"), null);
   const summary = app.$('.ag-roles [aria-label="스킬 요약 모델"]'); summary.value = "chat"; app.dom.fire(summary, "change"); await app.settle();
   assert.equal(field("요약 모델").tagName, "SELECT", "the summary model is picked too");
   assert.ok(!values("요약 모델").includes("nomic-embed-text:latest"));
@@ -443,7 +436,6 @@ test("역할별 모델 › 스킬 요약·후보 찾기·판정·보안 검사�
   const save = () => press("저장", app.$(".v4-kit-body"));
   const choose = async (label, value) => { const sel = roles().querySelector(`[aria-label="${label}"]`); sel.value = value; app.dom.fire(sel, "change"); await app.settle(); };
   for (const t of ["스킬 요약", "스킬 후보 찾기", "스킬 판정", "스킬 보안 검사"]) assert.match(text(roles()), new RegExp(t));
-  await choose("라우팅 판정 모델", "fixed");
   // 스킬 판정 alone on Clef asks for the Clef fields under itself.
   await choose("스킬 판정 모델", "clef");
   assert.ok(roles().querySelector('[aria-label="Cloudflare 계정 ID"]'));
@@ -686,7 +678,7 @@ test("연결: SSH test, connect, failure, then the server side", async () => {
   assert.deepEqual(rolePosts.at(-1).off, []);
   assert.equal(roles().querySelector('[aria-label="Cisco Skill Scanner"]'), null); // not installed on this server
   await press("최근 판정", roles());
-  assert.match(notice(), /라우팅 현황/);
+  assert.equal(app.$("#area-tabs .area-tab.active").dataset.tab, "manage");
   // a server without role_defaults has no POST /v1/providers/role_model: no picker that would snap back
   providersPatch = (d) => { delete d.role_defaults; delete d.role_options; };
   try {

@@ -22,7 +22,7 @@ Feature availability, implementation checks, and benefits in actual use are asse
 | 3 | Corrections and recovery | Changes that survive restarts and restoration |
 | 4 | Dreaming | Experience, approved changes, and later results |
 | 5 | Teams and resumption | Preservation of completed work without duplicate execution |
-| 6 | Routing and total cost | Selection-time context; quality, time, and cost across all attempts |
+| 6 | Workflow execution cost | Selection-time context; quality, time, and cost across all attempts |
 | 7 | Skills, MCP, and plugins | Versions, permissions, compatibility, and actual results |
 | 8 | User understanding and action | Accurate state judgments and necessary actions |
 | 9 | Delivery order and adoption | Dependencies, actual verification, and a recovery path |
@@ -143,7 +143,7 @@ The complete improvement cycle is still being built.
 
 ![Model selection through all attempts to final quality, time, and cost](images/en/roadmap-routing.png)
 
-**Current:** Model routing and fallback paths exist.
+**Scope:** Track attempts and costs within team workflows. The standalone Router is retired.
 **Planned:** Connect decisions → attempts → outcomes, accounting for total cost including failures.
 
 - Record the policy, candidates, task context, and memory revision at selection. Do not feed later results into earlier decisions or reassign outcomes to newer revisions.
@@ -156,7 +156,7 @@ The complete improvement cycle is still being built.
 **Required artifacts:** A routing map, linked decision–attempt–outcome records, time-consistent context, an attempt ledger, and duplicate, omission, and coverage reports.
 **Completion criteria:** Explain the choice and the resources required for its result. Unknown costs are not zero, and cheap failures are not savings.
 
-**Conditional extension:** Consider bounded adaptation only when useful behavior is demonstrated. Low average cost does not establish a hard spending cap.
+Report cost estimates separately from enforced spending limits.
 
 ---
 

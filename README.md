@@ -20,12 +20,11 @@ Carry context between Claude Code, Codex and Gemini CLI. Arkism collects what is
 
 ## 1. Keep the context as your work moves on
 
-![Focused recall, skills on demand and model routing shared across tools](images/en/shared-foundation.png)
 
 - **Shared memory.** Keep decisions, preferences and solutions with their sources.
 - **You decide what stays.** AI-generated notes are candidates. Agents use them after a person approves them.
 - **Shared skills.** Manage working methods with versions and history. Any agent connected through MCP can load them; installing them as skill folders covers Claude Code, Codex and ZCode only.
-- **Connected work.** Configure tasks and teams through model routing and Arkism's own workflow engine.
+- **Connected work.** Configure tasks and teams in Arkism’s workflow engine.
 
 Start on your own PC, without an Arkism account or Docker. Memory extraction uses your chosen model and agent login. Your model provider's terms and charges still apply.
 
@@ -75,7 +74,6 @@ The [roadmap](ROADMAP.md) describes the order of improvements and the conditions
 |---|---|
 | **MEMORY** | Review candidates and AI-written notes, topic summaries and cause links; search by meaning, words or time ("last week", "10월 말"); ask questions answered from cited memories; set rules agents follow; see a memory map with names; turn files into candidates; move a space as a bundle; edit, merge and delete memories; view and export sessions; check usage, operations and webhooks. |
 | **FLOW** | Manage individual work, collaboration, meetings, and automations together, retaining role/persona settings, graphs, and history. |
-| **ROUTER** | Register model providers and accounts, set routing rules and fallback order, and inspect call records. |
 | **TOOLS** | Manage skill versions and validation records, see the success or failure results agents report after using a skill (self-reported, not independently checked), connect MCP servers and plugins per agent, and manage knowledge sources. |
 
 Workflows run on Arkism's own Go engine. Team meetings and task execution are managed as separate flows.
@@ -102,7 +100,7 @@ To share one Arkism across several PCs, choose **Connect to a server over SSH** 
 
 **Built-in mode stores data on your PC.** This includes memories, skills, session records and usage. Archived session transcripts are encrypted. Server mode uses the database on the server you configure.
 
-Creating a memory candidate sends relevant parts of a conversation to your chosen model provider. Model routing and connected external tools may also communicate with their respective providers.
+Creating a memory candidate sends relevant parts of a conversation to your chosen model provider. Team workflows and connected external tools may also communicate with their configured providers.
 
 - Pause capture or exclude folders. You can also exclude a folder with `.arkism-ignore`.
 - Content marked with `<private>…</private>` is excluded before extraction or model transfer on supported capture paths. Sessions containing the marker are also excluded from raw transcript archiving.

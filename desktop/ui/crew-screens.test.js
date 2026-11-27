@@ -262,9 +262,9 @@ test("inline card edits change cron, model and text values", async () => {
   // model: a select that saves on change
   rowOf("ai1", "모델").click(); await h.settle();
   const sel = node("ai1").querySelector("select.g-inline");
-  // the 설정 › 역할별 모델 picker: 기본·자동 first, then one group per provider with all its connection badges, saving the plain model name
+  // the 설정 › 역할별 모델 picker: 기본 first, then one group per provider with all its connection badges, saving the plain model name
   assert.deepEqual([...sel.querySelectorAll("optgroup")].map((g) => `${g.label}:${g.dataset.badges}`), ["Anthropic:MAX,API", "OpenAI:"]);
-  assert.deepEqual([...sel.querySelectorAll("option")].slice(1).map((o) => o.value), ["auto", "\u0000sub", "sonnet", "haiku", "\u0000api", "gpt-5"]); // subscription models, then API-key ones, each under a heading
+  assert.deepEqual([...sel.querySelectorAll("option")].slice(1).map((o) => o.value), ["\u0000sub", "sonnet", "haiku", "\u0000api", "gpt-5"]); // subscription models, then API-key ones, each under a heading
   assert.equal([...sel.options].find((o) => o.value === "\u0000sub").disabled, true);
   sel.value = sel.options[sel.options.length - 1].value; dom.fire(sel, "change"); await h.settle();
   rowOf("ai1", "모델").click(); await h.settle();
@@ -790,12 +790,12 @@ test("a save in the editor's window refreshes the list and cards in this one", a
   assert.deepEqual(clean(), []);
 });
 
-test("the auto model choice names the router, never its raw id", async () => {
-  const h = await openGraph("wf1", { routes: [["GET", /^\/v1\/routing\/overview/, () => ({ policy: { classifier: "clef-flash" } })]] });
+test("model choices do not offer automatic routing or load routing management", async () => {
+  let managementReads = 0;
+  const h = await openGraph("wf1", { routes: [["GET", /^\/v1\/routing\/overview/, () => { managementReads++; return {}; }]] });
   node("ai1").click(); await h.settle();
-  const opts = [...document.querySelectorAll("option[data-router]")];
-  assert.ok(opts.length > 0);
-  for (const o of opts) assert.ok(/Clef/.test(o.label) && !/clef-flash/.test(o.label + o.textContent), o.label);
+  assert.equal(document.querySelectorAll('option[value="auto"]').length, 0);
+  assert.equal(managementReads, 0);
 });
 
 test("a trial run in progress lights the line into the working step and keeps a clock", async () => {

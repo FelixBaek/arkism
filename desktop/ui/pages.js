@@ -1,7 +1,7 @@
 // Settings and the Arkism design-token pages. app.js passes the shared helpers in once, so these screens use the same state and builders.
 window.ArkismPages = (ctx) => {
   "use strict";
-  const { state, $, el, icon, button, segment, go, render, query, AGENTS, agentLogo, allowed, notice, store, stored, disconnect, useLocal, startLocal, sshFields, sshTest, sshConnect, sshLabel, storageRow, tauri, models, routing, crew, request, reloadTools, assist, pcStatus, saveFile } = ctx;
+  const { state, $, el, icon, button, segment, go, render, query, AGENTS, agentLogo, allowed, notice, store, stored, disconnect, useLocal, startLocal, sshFields, sshTest, sshConnect, sshLabel, storageRow, tauri, models, crew, request, reloadTools, assist, pcStatus, saveFile } = ctx;
 
   // ---------------------------------------------------------------- saved choices (this PC only)
   const PREFS_KEY = "arkism.prefs";
@@ -131,8 +131,7 @@ window.ArkismPages = (ctx) => {
     categories: ["카테고리", "스킬을 규칙에 따라 묶어요. 위에 있는 카테고리가 먼저 맞춰져요."],
     space: ["기억 공간", "이 공간에서 기억을 뽑고 막고 답하는 방식을 정해요."],
     advanced: ["고급", "백업·진단·데이터 지우기처럼 자주 바꾸지 않는 설정이에요."],
-    info: ["정보", "앱 버전과 Arkism이 기억을 다루는 규칙이에요."],
-    routing: ["라우팅 설정", "질문마다 어떤 모델로 보낼지, 실패하면 어디로 넘길지 정해요."]
+    info: ["정보", "앱 버전과 Arkism이 기억을 다루는 규칙이에요."]
   };
   // The right column and the area-bar buttons of the settings page being drawn (renderSettings fills them in).
   let sideParts = [], headParts = [];
@@ -927,8 +926,7 @@ window.ArkismPages = (ctx) => {
     s.addEventListener("change", () => onChange(s.value));
     return s;
   };
-  const JUDGE = [["fixed", "고정 규칙"], ["chat", "내 모델"], ["clef", "Clef"], ["jev", "Jev"]];
-  const SKILL_JUDGE = [["same", "라우팅 판정과 같게"], ["fixed", "고정 규칙"], ["clef", "Clef"], ["jev", "Jev"]];
+  const SKILL_JUDGE = [["same", "기본값"], ["fixed", "고정 규칙"], ["clef", "Clef"], ["jev", "Jev"]];
   const SUMMARY = [["basic", "스킬 설명 그대로"], ["chat", "내 모델"]];
   const SCANNERS = [["spector", "NVIDIA SkillSpector", "위험한 명령·비밀값 유출을 찾아요."],
     ["evaluator", "NVIDIA SkillEvaluator", "SKILL.md 품질을 0–100점으로 매겨요."],
@@ -945,48 +943,31 @@ window.ArkismPages = (ctx) => {
       return true;
     } catch (e) { notice(String(e).includes("invalid") ? "모델 이름이나 주소를 확인해 주세요." : "저장하지 못했어요."); return false; }
   }
-  // 라우팅 판정 모델: its select, the selected judge's fields, and read() → the patch, or null after telling what is missing.
-  function judgeBlock(cur) {
+  function skillJudgeBlock(cur) {
     const savedHint = (k, placeholder) => (cur[`${k}_saved`] ? "저장됨 · 바꿀 때만 입력" : placeholder);
     const account = roleField(cur.cloudflare_account, "Cloudflare 계정 ID", "account id");
     const token = roleField("", "Cloudflare API 토큰", savedHint("cloudflare_token", "API token"), true);
     const jevKey = roleField("", "Jev API 키", savedHint("jev_key", "API key"), true);
-    const pickerUrl = roleField(cur.picker_url, "판별 모델 주소", "http://127.0.0.1:11434/v1");
-    const local = !cur.picker_url || /^http:\/\/(127\.0\.0\.1|localhost):11434\b/.test(cur.picker_url); // the list is this PC's Ollama
-    const pickerModel = ollamaPick(cur.picker_model, "판별 모델", "qwen3:4b", local ? (cur.ollama_models || []).filter((m) => !EMBEDDING.test(m)) : []);
-    const pickerKey = roleField("", "판별 모델 API 키", savedHint("picker_key", "없으면 비워 두기"), true);
-    // Only the selected judge's settings are shown; the others keep their saved values.
     const judgeFields = {
-      chat: [roleSub("주소", pickerUrl), roleSub("모델", pickerModel), roleSub("API 키", pickerKey)],
       clef: [roleSub("Cloudflare 계정 ID", account), roleSub("Cloudflare API 토큰", token)],
       jev: [roleSub("Jev API 키", jevKey)],
     };
-    let judge = cur.judge || "fixed";
+    const configured = ["clef", "jev"].includes(cur.judge) ? cur.judge : "fixed";
     let skillJudge = cur.skill_judge || "same";
-    const judgeBox = el("div", "v4-judge-fields"), skillBox = el("div", "v4-judge-fields");
-    // 스킬 판정 shares the Clef/Jev fields; they sit under it only when 라우팅 판정 does not already show them.
-    const skillUses = () => (skillJudge === "same" ? (["clef", "jev"].includes(judge) ? judge : "fixed") : skillJudge);
-    const showJudge = () => {
-      judgeBox.replaceChildren(...(judgeFields[judge] || []));
-      skillBox.replaceChildren(...(skillUses() !== judge ? judgeFields[skillUses()] || [] : []));
-    };
+    const skillBox = el("div", "v4-judge-fields");
+    const skillUses = () => (skillJudge === "same" ? configured : skillJudge);
+    const showJudge = () => skillBox.replaceChildren(...(judgeFields[skillUses()] || []));
     showJudge();
-    const node = roleBlock(line("라우팅 판정", "요청마다 맞는 모델을 골라요.",
-      pick(JUDGE, judge, "라우팅 판정 모델", (k) => { judge = k; showJudge(); })), judgeBox);
     const skillNode = roleBlock(line("스킬 판정", "후보 중 지금 요청에 맞는 스킬·MCP·플러그인을 골라요.",
       pick(SKILL_JUDGE, skillJudge, "스킬 판정 모델", (k) => { skillJudge = k; showJudge(); })), skillBox);
     const read = () => {
-      const next = { judge, skill_judge: skillJudge, cloudflare_account: account.value.trim(), cloudflare_token: token.value.trim(), jev_key: jevKey.value.trim(),
-        picker_url: pickerUrl.value.trim(), picker_model: pickerModel.value.trim(), picker_key: pickerKey.value.trim() };
+      const next = { skill_judge: skillJudge, cloudflare_account: account.value.trim(), cloudflare_token: token.value.trim(), jev_key: jevKey.value.trim() };
       const has = (k) => next[k] || cur[`${k}_saved`];
-      const uses = (k) => judge === k || skillUses() === k;
-      if (uses("clef") && (!next.cloudflare_account || !has("cloudflare_token"))) { notice("Clef를 쓰려면 Cloudflare 계정 ID와 토큰이 필요해요."); return null; }
-      if (uses("jev") && !has("jev_key")) { notice("Jev를 쓰려면 API 키가 필요해요."); return null; }
-      if (judge === "chat" && (!next.picker_url || !next.picker_model)) { notice("내 모델로 판별하려면 주소와 모델 이름이 필요해요."); return null; }
-      if (judge === "chat" && !/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/])/.test(next.picker_url)) { notice("주소는 https이거나 이 PC(127.0.0.1)여야 해요."); return null; }
+      if (skillUses() === "clef" && (!next.cloudflare_account || !has("cloudflare_token"))) { notice("Clef를 쓰려면 Cloudflare 계정 ID와 토큰이 필요해요."); return null; }
+      if (skillUses() === "jev" && !has("jev_key")) { notice("Jev를 쓰려면 API 키가 필요해요."); return null; }
       return next;
     };
-    return { node, skillNode, read };
+    return { skillNode, read };
   }
   // 스킬 요약·후보 찾기·보안 검사: the rest of the skill routing flow (summary → candidates → judge, scanned on the way in).
   function skillBlocks(cur) {
@@ -1044,11 +1025,9 @@ window.ArkismPages = (ctx) => {
       draw();
     }
     const source = (picked) => pill(picked ? "내가 고름" : "기본값", picked);
-    // ROUTER › 라우팅 현황 keeps what 라우팅 판정 and route_skills actually picked.
-    const recent = () => button("최근 판정", "ghost small", null, () => { go("routing"); notice("최근 판정은 라우팅 현황에서 봐요."); });
     const controls = (...parts) => { const c = el("div", "v4-role-pick"); c.append(...parts.filter(Boolean)); return c; };
     // options: [[value, label]]; claude adds the models the host can run for the role: Anthropic ones through the
-    // Claude CLI, and for 기억 추출 every provider the server lists in role_options (Codex, Gemini).
+    // Claude CLI, and any other provider advertised for that role.
     function picker(role, title, defaultLabel, options, claude, ...extra) {
       const pick = d().roles?.[role] || {};
       const current = pick.model ? (pick.provider ? globalThis.ArkismModelPick.pickValue({ id: pick.provider, billing: pick.via }, pick.model) : pick.model) : "";
@@ -1092,15 +1071,14 @@ window.ArkismPages = (ctx) => {
         row("반성·검토", picker("reflect", "반성·검토", modelName(def("reflect")), [], true)),
         row("임베딩", controls(source(false), embed), el("p", "pg-hint", "이 서버가 돌릴 수 있는 임베딩은 이것 하나예요. 바꾸려면 서버 설정을 바꾸고 기억을 다시 색인해야 해요."))];
       const skill = [row("스킬 요약", picker("skill_summary", "스킬 요약", summaryDef, [["basic", "스킬 설명 그대로"]], true)),
-        row("스킬 후보 찾기", picker("skill_candidates", "스킬 후보 찾기", def("skill_candidates") && `${def("skill_candidates")}개`, counts, false, recent())),
-        row("스킬 판정", picker("skill_judge", "스킬 판정", ENGINE[def("skill_judge")], engines("skill_judge"), false, recent())),
+        row("스킬 후보 찾기", picker("skill_candidates", "스킬 후보 찾기", def("skill_candidates") && `${def("skill_candidates")}개`, counts, false)),
+        row("스킬 판정", picker("skill_judge", "스킬 판정", ENGINE[def("skill_judge")], engines("skill_judge"), false, button("최근 판정", "ghost small", null, () => go("manage")))),
         scanRow()];
-      const request = [row("라우팅 판정", picker("route_judge", "라우팅 판정", ENGINE[def("route_judge")], engines("route_judge"), false, recent()))];
       if (state.serverLacks?.has("role_model_picks")) { // an older server has no POST /v1/providers/role_model: show, do not offer
-        for (const n of [...memory, ...skill, ...request]) for (const c of n.querySelectorAll("select, input, [role=switch]")) c.disabled = true;
+        for (const n of [...memory, ...skill]) for (const c of n.querySelectorAll("select, input, [role=switch]")) c.disabled = true;
         memory.unshift(el("p", "pg-hint", "서버 업데이트가 필요해요 · 이 서버는 역할별 모델 저장을 아직 몰라요."));
       }
-      fill(memory, skill, request);
+      fill(memory, skill);
     }
     draw();
     kitRedraw.push(draw);
@@ -1110,7 +1088,7 @@ window.ArkismPages = (ctx) => {
   let assistRow = null;
   function roleSections() {
     const secs = ["기억", "스킬", "요청 처리"].map((t) => { const g = group(t); g.classList.add("ag-roles"); const b = el("div", "v4-roles-body"); g.append(b); return { g, b }; });
-    const fill = (memory, skill, request) => { secs[0].b.replaceChildren(...memory); secs[1].b.replaceChildren(...skill); secs[2].b.replaceChildren(...(assistRow ? [assistRow] : []), ...request); };
+    const fill = (memory, skill) => { secs[0].b.replaceChildren(...memory); secs[1].b.replaceChildren(...skill); secs[2].g.hidden = !assistRow; secs[2].b.replaceChildren(...(assistRow ? [assistRow] : [])); };
     return { cards: secs.map((x) => x.g), fill, fail: (node) => { secs.slice(1).forEach((x) => { x.g.hidden = true; }); secs[0].b.replaceChildren(node); } };
   }
   function agentRoleCards() {
@@ -1133,8 +1111,7 @@ window.ArkismPages = (ctx) => {
       assistRow = roleBlock(line("AI 도구", "프롬프트 칸 채우기, 글 다듬기, 분류에 써요.", models.assistPicker()));
       kitRedraw.push(() => { const next = roleBlock(line("AI 도구", "프롬프트 칸 채우기, 글 다듬기, 분류에 써요.", models.assistPicker())); assistRow.replaceWith(next); assistRow = next; });
     }
-    const ROWS = [["라우팅 판정", "요청마다 맞는 모델을 골라요."],
-      ["기억 추출", "대화에서 기억 후보를 뽑아요. 가벼운 모델이 좋아요."],
+    const ROWS = [["기억 추출", "대화에서 기억 후보를 뽑아요. 가벼운 모델이 좋아요."],
       ["반성·검토", "3시간마다 교훈을 정리하고 검토할 기억을 골라요."],
       ["임베딩", "기억을 뜻으로 찾을 때 써요. 바꾸면 기억을 다시 색인해요."]];
     const SKILL_ROWS = [["스킬 요약", "새 스킬이 들어오면 무엇을 언제 쓰는지 정리해요."], ["스킬 후보 찾기", "요약을 뜻이나 낱말로 찾아 판정에 넘겨요."],
@@ -1144,11 +1121,11 @@ window.ArkismPages = (ctx) => {
     if (!(tauri && state.mode === "local")) {
       // role_defaults comes with POST /v1/providers/role_model: a server without it cannot save a pick, so it shows none.
       if (state.data.providers?.role_defaults) {
-        serverRoles(roles.fill, [ROWS[0], ...SKILL_ROWS, ...ROWS.slice(1)]);
+        serverRoles(roles.fill, [...ROWS, ...SKILL_ROWS]);
       } else {
         // An older server keeps its role models in env on the host only.
         const fixed = ([t, hint]) => roleBlock(line(t, hint, pill("서버가 정함")));
-        roles.fill(ROWS.slice(1).map(fixed), SKILL_ROWS.map(fixed), [fixed(ROWS[0])]);
+        roles.fill(ROWS.map(fixed), SKILL_ROWS.map(fixed));
       }
       kitBody.append(el("p", "pg-hint", "서버에 연결해 쓰는 동안에는 서버가 정한 폴더 위치를 써요."));
       return kitCard;
@@ -1156,7 +1133,7 @@ window.ArkismPages = (ctx) => {
     let busy = false;
     const draw = (cur) => {
       const next = {};
-      const judge = judgeBlock(cur);
+      const judge = skillJudgeBlock(cur);
       const skill = skillBlocks(cur);
       const embedModel = ollamaPick(cur.embed_model, "임베딩 모델", "qwen3-embedding:0.6b", (cur.ollama_models || []).filter((m) => EMBEDDING.test(m)));
       const embedSub = roleSub("Ollama 임베딩 모델", embedModel);
@@ -1166,9 +1143,9 @@ window.ArkismPages = (ctx) => {
         if (!await ask("임베딩을 바꿀까요?\n저장하면 기억을 모두 다시 색인해요. 기억이 많으면 시간이 걸려요.")) { embedPick.value = next.embedder || cur.embedder || "auto"; return; }
         next.embedder = k; embedSub.hidden = k === "none";
       });
-      roles.fill([roleBlock(line(...ROWS[1], pick(ROLE_MODELS, cur.extract_model || "haiku", "기억 추출 모델", (k) => { next.extract_model = k; }))),
-        roleBlock(line(...ROWS[2], pick(ROLE_MODELS, cur.reflect_model || "sonnet", "반성·검토 모델", (k) => { next.reflect_model = k; }))),
-        roleBlock(line(...ROWS[3], embedPick), embedSub)], [...skill.nodes, judge.skillNode, skill.scan], [judge.node]);
+      roles.fill([roleBlock(line(...ROWS[0], pick(ROLE_MODELS, cur.extract_model || "haiku", "기억 추출 모델", (k) => { next.extract_model = k; }))),
+        roleBlock(line(...ROWS[1], pick(ROLE_MODELS, cur.reflect_model || "sonnet", "반성·검토 모델", (k) => { next.reflect_model = k; }))),
+        roleBlock(line(...ROWS[2], embedPick), embedSub)], [...skill.nodes, judge.skillNode, skill.scan]);
       const inputs = ROOTS.map(([k, label]) => [k, roleField(cur[k], label, "기본 위치")]);
       const folders = roleBlock(line("폴더 위치", "비워 두면 기본 위치를 써요", el("span")), ...inputs.map(([, i], n) => roleSub(ROOTS[n][1], i)));
       const actions = el("div", "pg-actions");
@@ -1557,7 +1534,7 @@ window.ArkismPages = (ctx) => {
     $("#controls").replaceChildren();
     sideParts = []; headParts = [];
     const kit = { side: toSide, head: toHead, sideSec, kvRow, sideNote, group, line, sw, more, spaceJob };
-    const body = { general: tabGeneral, connect: tabConnect, messenger: () => messenger.tab(kit), appearance: tabAppearance, agents: tabAgents, roles: agentRoleCards, routing: () => routing.tab(kit),
+    const body = { general: tabGeneral, connect: tabConnect, messenger: () => messenger.tab(kit), appearance: tabAppearance, agents: tabAgents, roles: agentRoleCards,
       workflow: () => crew.settingsTab({ group }), categories: tabCategories, space: () => spaceSettings.tab(kit, spaces.groups(kit)), advanced: tabAdvanced, info: tabInfo }[tab]();
     if (tab === "workflow") toSide(sideNote("목록을 누르면 펼쳐서 고쳐요. 노드에서 쓰는 페르소나는 지울 수 없어요."));
     const content = el("div", `pg-content v4-set v4-set-${tab}`);

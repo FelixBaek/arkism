@@ -30,7 +30,6 @@ export function createAppConnection(deps) {
     deps.catalogQuery.reset(); deps.collectionPaging.reset(); deps.virtualList.clear(); deps.similarity.reset();
     deps.memoryPages.reset(); deps.memoryResults.reset(); deps.maintenanceRecords.clear();
     deps.crew.reset();
-    deps.routing.reset();
     deps.usage.reset();
     deps.knowledge.reset(); deps.overview.reset();
     deps.generation++;

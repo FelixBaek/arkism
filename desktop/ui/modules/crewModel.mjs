@@ -111,7 +111,7 @@ export function createCrewModel(deps) {
     // 새 워크플로우 (1511:4650): 직접 부르기 → AI 작업 → 결과. The AI 작업 has no task yet, so the canvas points at it.
     if (kind === "new") {
       return { nodes: [{ id: "start", type: "start", title: "직접 부르기", x: 40, y: 160, config: {} },
-        { id: "ai1", type: "ai", title: "AI 작업", x: 310, y: 160, config: { model: "auto", goal: "", access: "read" } },
+        { id: "ai1", type: "ai", title: "AI 작업", x: 310, y: 160, config: { model: "", goal: "", access: "read" } },
         { id: "end", type: "end", title: "결과", x: 580, y: 160, config: {} }],
       edges: [{ from: "start", to: "ai1" }, { from: "ai1", to: "end" }] };
     }

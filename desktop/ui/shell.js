@@ -1,4 +1,4 @@
-// v4 · NOCTURNE shell: six menus on the left rail, each with its own row of area tabs on top (Figma 아키즘 v4, 198:2).
+// v4 · NOCTURNE shell: menus on the left rail, each with its own row of area tabs on top (Figma 아키즘 v4, 198:2).
 // A tab only points at an existing screen (view + sub-tab); the screens themselves keep their own data and actions.
 // To add a tab, add a line here — app.js reads nothing else about the menu layout.
 window.ArkismShell = (ctx) => {
@@ -24,11 +24,6 @@ window.ArkismShell = (ctx) => {
       // One page, so no tab is drawn; usage sits in each workflow's 기록·사용량 tab. 디스코드 bots live in 설정 › 메신저.
       ["crew", "워크플로우", () => go("crew"), () => ["crew", "graph", "workers", "teams", "teamNew", "meetings"].includes(state.view), count("crew")]
     ] },
-    router: { label: "ROUTER", tabs: [
-      // 라우팅 설정 has no tab of its own (Figma 1303:79879): the policy card's 「라우팅 설정」 button opens it, and 라우팅 현황 stays lit.
-      ["routing", "라우팅 현황", () => go("routing"), () => state.view === "routing" || (state.view === "settings" && state.settingsTab === "routing"), count("routing")],
-      ["usage", "사용량", () => go("usage"), () => state.view === "usage", count("usage")]
-    ] },
     connect: { label: "TOOLS", tabs: [
       ["skills", "스킬", () => go("skills"), () => state.view === "skills", count("skills")],
       ["plugin", "플러그인", () => { state.toolTab = "plugin"; go("tools"); }, () => state.view === "tools" && state.toolTab === "plugin", () => String(state.data.tools?.plugins.length ?? "")],
@@ -42,7 +37,7 @@ window.ArkismShell = (ctx) => {
       ["image", "이미지", () => go("images", "image"), () => state.view === "images" && state.imageTab !== "slide", count("image")],
       ["slide", "슬라이드", () => go("images", "slide"), () => state.view === "images" && state.imageTab === "slide", count("slide")]
     ] },
-    // 설정 tabs (Figma 07 · 설정): one area tab per settings page. 라우팅 설정 opens from ROUTER › 라우팅 현황.
+    // 설정 tabs (Figma 07 · 설정): one area tab per settings page.
     settings: { label: "Settings", tabs: [
       ["general", "일반"], ["connect", "연결"], ["messenger", "메신저"], ["appearance", "모양"], ["agents", "에이전트"], ["roles", "역할별 모델"],
       ["workflow", "페르소나"], ["categories", "카테고리"], ["space", "기억 공간"], ["advanced", "고급"], ["info", "정보"]
@@ -57,7 +52,7 @@ window.ArkismShell = (ctx) => {
   function menuOf() {
     const owners = Object.entries(MENUS).filter(([, m]) => m.tabs.some((t) => t[3]())).map(([k]) => k);
     if (owners.includes(state.menu)) return state.menu;
-    return owners[0] || state.menu || "home";
+    return owners[0] || (MENUS[state.menu] ? state.menu : "home");
   }
 
   function sync() {

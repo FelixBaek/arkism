@@ -430,7 +430,7 @@ export function createCrewNodes(deps) {
       const was = n.type, text = c.goal || c.prompt || c.topic || "{{input}}";
       n.type = k;
       if (k === "team") c.topic ||= text;
-      else { c.goal ||= c.topic || ""; c.access ||= "read"; c.model ||= "auto"; }
+      else { c.goal ||= c.topic || ""; c.access ||= "read"; }
       if (!n.title || n.title === deps.NODES[was]?.label) n.title = deps.NODES[k].label;
       deps.touch();
       deps.redraw();
@@ -454,7 +454,7 @@ export function createCrewNodes(deps) {
       p = cur;
       if (!cur) {
         const row = deps.el("div", "scope-fields");
-        row.append(deps.field("모델", bind(deps.modelInput(c.model, deps.ed.rec.crew.model || "auto"), "model", true), "auto면 할 일에 맞는 모델을 골라요"),
+        row.append(deps.field("모델", bind(deps.modelInput(c.model, deps.ed.rec.crew.model || "기본"), "model", true)),
           deps.field("생각하는 깊이", bind(deps.select(deps.EFFORTS, c.effort || "medium"), "effort")));
         L.append(row);
       }

@@ -707,7 +707,7 @@ export function startApp() {
   const syncVisible = createVisibleSync({
     state, memoryPaging, collectionPaging, catalogQuery, request: appApi.request, query: appApi.query,
     loadTools: () => toolViews.loadTools(), loadUsage, render,
-    get routing() { return routing; }, get digests() { return digests; },
+    get digests() { return digests; },
     panels: () => ({ relations, traits, reflections }),
     invalidateVersions: () => { versionsLoading = -1; }
   });
@@ -1227,8 +1227,6 @@ export function startApp() {
     $("#count-slide").textContent = state.loading ? "" : serverCount(prompts && promptsOf("slide")).text;
     $("#count-design").textContent = state.loading ? "" : serverCount(state.listErrors.designSystems || state.loadError ? null : d.designSystems || []).text;
     $("#count-crew").textContent = state.loading ? "" : serverCount(state.listErrors.crew || state.loadError ? null : crew.count()).text;
-    $("#count-routing").textContent = state.loading ? "" : String(routing.count());
-    $("#count-usage").textContent = state.loading ? "" : String(usage.count());
     const t = d.tools;
     const toolCount = $("#count-tools");
     toolCount.textContent = state.loading || !t ? "" : String(t.servers.length + t.plugins.length);
@@ -1245,8 +1243,6 @@ export function startApp() {
     appConnection.serverBanner.viewChanged();
     virtualList.clear();
     if (state.view !== "todo") state.start = 0; // 시작 2·3단계 lives on 홈 only
-    if (state.view !== "routing") routing.leave();
-    if (state.view !== "settings" || state.settingsTab !== "routing") routing.leaveSettings(); // model changes from 설정 › 에이전트 show up next time
     if (state.view !== "memories" || state.memTab !== "originals") originals.reset();
     if (state.view !== "knowledge") knowledge.reset();
     if (state.view !== "memories" || state.memTab !== "past") memoryTime.reset();
@@ -1400,6 +1396,7 @@ export function startApp() {
   }
   function go(view, tab) {
     // Old links keep their destination available inside FLOW instead of opening separate catalogues.
+    if (view === "routing") view = "todo";
     if (view === "workers" || view === "teams") view = "crew";
     state.view = view;
     if (view === "todo") state.todoAll = false;
@@ -1636,7 +1633,7 @@ export function startApp() {
     const of = (m) => TODO_MENUS.filter(([menu]) => menu === m).map(([menu, name, ids, target]) => [menu, name, rest.filter((t) => ids.includes(t.id) && t.n !== 0), target]);
     const rows = of("MEMORY");
     digests.menuRows(rows); // 병합 제안 · 모아보기 (digests.js)
-    rows.push(homeChecks.knowledgeRow(state.connection.generation), ...of("TOOLS"), ...home.menuExtras(state.connection.generation)); // 지식 · 스킬 (TOOLS) · 워크플로우 · 라우팅
+    rows.push(homeChecks.knowledgeRow(state.connection.generation), ...of("TOOLS"), ...home.menuExtras(state.connection.generation)); // 지식 · 스킬 (TOOLS) · 워크플로우
     const tools = state.data.tools;
     if (tools) {
       const login = tools.servers.filter((s) => Object.values(s.login || {}).includes("needed"));
@@ -1734,7 +1731,7 @@ export function startApp() {
     }
     const links = el("section", "section home-links");
     links.append(el("h3", "", "바로가기"));
-    for (const [label, view, tab] of [["기억 보기", "memories", "active"], ["스킬 보기", "skills"], ["라우팅 현황", "routing"], ["사용량", "usage"]]) {
+    for (const [label, view, tab] of [["기억 보기", "memories", "active"], ["스킬 보기", "skills"], ["사용량", "usage"]]) {
       const b = el("button", "home-link");
       b.type = "button";
       b.append(el("span", "", label), el("span", "home-chev", "›"));
@@ -2267,7 +2264,6 @@ export function startApp() {
     get raw() { return raw; },
     get render() { return render; },
     get request() { return appApi.request; },
-    get routing() { return routing; },
     get segment() { return segment; },
     get setStatus() { return setStatus; },
     get state() { return state; },
@@ -2300,7 +2296,7 @@ export function startApp() {
 
   // j/k walk the list in the panel: every row, card or chip there that opens something (data-id, or a button that
   // marks itself picked). Tabs, filter chips and form controls are not list items.
-  const LIST_ITEM = ":is(.row, .cn-row, .todo-item, .crew-card, .prompt-card, .ds-card, .rt-mcard, .mp-chip, .wk-row, .wf-row, .tm-team, .tm-meet-row, .tm-urow, button.v4-tr, .cat-head, [data-id])";
+  const LIST_ITEM = ":is(.row, .cn-row, .todo-item, .crew-card, .prompt-card, .ds-card, .mp-chip, .wk-row, .wf-row, .tm-team, .tm-meet-row, .tm-urow, button.v4-tr, .cat-head, [data-id])";
   const NOT_ITEM = ".tab, .area-tab, .chip, .segment, [role=tab], input, select, textarea, label, dialog *";
   function listItems() {
     const root = document.querySelector(".home-first") && state.view === "todo" ? document.querySelector(".home-first") : $(".panel-main");
@@ -2309,7 +2305,6 @@ export function startApp() {
   }
   const isPicked = (n) => n.matches(".selected, .active, .on, [aria-selected=true], [aria-current], [aria-pressed=true], [aria-expanded=true]");
   const models = window.ArkismModels({ state, el, icon, button, go, render, request: appApi.request, query: appApi.query, notice, agentLogo, ago });
-  const routing = window.ArkismRouting({ canRefresh: () => !syncVisible.blocked(), state, $, el, icon, button, segment, go, render, request: appApi.request, query: appApi.query, notice, detailShell, agentLogo, ago });
   const openMemory = (id) => { state.menu = "memory"; go("memories", "active"); state.selected = id; renderDetail(); }; // one memory's detail (its 바뀐 이력 too)
   const usage = window.ArkismUsage({ state, $, el, button, segment, render, request: appApi.request, query: appApi.query, agentLogo, AGENTS, ago, go, detailShell,
     openSession: (sid) => window.dispatchEvent(new CustomEvent("arkism:open-overview-window", { detail: { wide: "sessions", args: sid ? [sid] : [] } })), openSettings: (tab) => { state.settingsTab = tab; go("settings"); },
@@ -2331,7 +2326,7 @@ export function startApp() {
     try { const a = el("a"); a.href = url; a.download = name; a.click(); } finally { setTimeout(() => URL.revokeObjectURL(url), 1000); }
   };
   const fileSize = window.ArkismCatalog.fileSize;
-  const pages = window.ArkismPages({ state, $, el, icon, button, segment, go, render, saveFile, fileSize, query: appApi.query, AGENTS, agentLogo, allowed: skillViews.allowed, notice, store, stored, lock: appConnection.lock, disconnect: appConnection.disconnect, useLocal: appConnection.useLocal, startLocal: appConnection.startLocal, sshFields: appConnection.sshFields, sshTest: appConnection.sshTest, sshConnect: appConnection.sshConnect, sshLabel: appConnection.sshLabel, storageRow: appConnection.storageRow, reopen: appConnection.open, serverBanner: appConnection.serverBanner, trimSlash, tauri, stat, models, routing, crew, catIconChoices: CAT_ICON_CHOICES, pcStatus,
+  const pages = window.ArkismPages({ state, $, el, icon, button, segment, go, render, saveFile, fileSize, query: appApi.query, AGENTS, agentLogo, allowed: skillViews.allowed, notice, store, stored, lock: appConnection.lock, disconnect: appConnection.disconnect, useLocal: appConnection.useLocal, startLocal: appConnection.startLocal, sshFields: appConnection.sshFields, sshTest: appConnection.sshTest, sshConnect: appConnection.sshConnect, sshLabel: appConnection.sshLabel, storageRow: appConnection.storageRow, reopen: appConnection.open, serverBanner: appConnection.serverBanner, trimSlash, tauri, stat, models, crew, catIconChoices: CAT_ICON_CHOICES, pcStatus,
     request: appApi.request, reloadTools: async () => { await toolViews.refreshTools(); toolViews.pollTools(); }, assist: (...a) => crew.assist(...a), privacyGroup: () => privacy.settingsGroup() });
   function openIntelligenceRecord(record) {
     const list = record.status === "active" ? "memories" : record.conflict_id ? "conflicted" : "candidates";
@@ -2365,6 +2360,18 @@ export function startApp() {
   const overview = window.ArkismOverview({ count: serverCount, remoteCollection, state, $, el, button, icon, request: appApi.request, query: appApi.query, ago, go, render, saveFile, reloadMemories: () => memoryList.reloadMemories(), maintenanceRecords: memoryPaging.maintenanceRecords, openRecord: openIntelligenceRecord, reload: loadAll, fixMemory: (m) => memoryDetail.openMemoryFix(m), kept: keptMemories, keepMemory: (id) => { try { localStorage.setItem(KEEP_KEY, JSON.stringify([...keptMemories(), id])); } catch (_) { /* private window */ } }, resolveConflict: (c, choice) => memoryList.resolveConflict(c, choice), memoryCount: () => memoryPaging.memoryCount(), memoryCheck: memoryList, onSessions: () => renderStatusCard(), notice }); // MEMORY › 개요 (overview.js)
   // TOOLS › 관리: what to look after, from the lists already loaded (skill use counts, update offers, apply requests).
   function manageView() {
+    const skillCard = window.ArkismSkillDecisions({ el, ago });
+    let decisions = { generation: -1, items: [] };
+    function loadDecisions() {
+      const generation = state.connection.generation;
+      if (decisions.generation === generation) return;
+      const current = decisions = { generation, items: [] };
+      void appApi.request(`/v1/routing/skills?${appApi.query({})}`).then((response) => {
+        if (state.connection.generation !== generation || decisions !== current || !Array.isArray(response?.items)) return;
+        current.items = response.items;
+        if (state.view === "manage") render(false);
+      }, () => {});
+    }
     const DAY = 864e5, uses = (sk) => state.data.skillUse?.get(sk.id)?.count || 0;
     const openSkill = (sk) => () => { go("skills"); state.selected = `skill:${sk.id}`; render(); };
     function box(title, hint, rows, more) {
@@ -2383,6 +2390,7 @@ export function startApp() {
       return g;
     }
     function renderView() {
+      loadDecisions();
       const d = state.data, live = (d.skills || []).filter((sk) => sk.status !== "deprecated");
       const often = live.filter(uses).sort((a, b) => uses(b) - uses(a));
       const rare = d.skillUse ? live.filter((sk) => !uses(sk)) : [];
@@ -2399,11 +2407,11 @@ export function startApp() {
         box("업데이트·설치 실패", "마지막 요청이 실패했어요. 이유를 보고 다시 시도하세요.", failed.map((q) => [q.name, `${KIND[q.kind] || q.kind} · ${q.error || "이유 모름"}`, null])),
         box("최근 추가", "최근 2주 사이에 들어온 스킬이에요.", recent.map((sk) => [sk.name, ago(sk.created_at), openSkill(sk)])));
       $("#table").className = "page-wrap";
-      $("#table").replaceChildren(grid);
+      $("#table").replaceChildren(...[grid, skillCard(decisions.items)].filter(Boolean));
     }
     return { manage: { title: "관리", sub: () => "자주 쓰는 것·안 쓰는 것·고칠 것을 한곳에서 봐요.", render: renderView, head: () => [] } };
   }
-  Object.assign(pages.views, routing.views, usage.views, knowledge.views, overview.views, manageView());
+  Object.assign(pages.views, usage.views, knowledge.views, overview.views, manageView());
   const home = window.ArkismHome({ count: serverCount, state, $, el, icon, button, go, render, request: appApi.request, query: appApi.query, notice, agentLogo, AGENTS, ago, pages, detailShell, markSelected, renderDetail, openDetail,
     skillCategory: (sk) => pages.categoryOf(sk)?.name || "", isPage: (v) => pages.views[v] || crew.pages[v], settingsTabs: () => shell.MENUS.settings.tabs, openRecord: openIntelligenceRecord,
     openSettings: (tab) => { if (tab) state.settingsTab = tab; go("settings"); }, sshLabel: appConnection.sshLabel, sshErrorText: appConnection.sshErrorText, useLocal: appConnection.useLocal, lock: appConnection.lock, reconnect: appConnection.reconnect });

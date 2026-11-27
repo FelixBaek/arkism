@@ -4,7 +4,7 @@ export function draftPrompt(text, cur, flows = []) {
   const g0 = JSON.stringify({ nodes: cur.nodes.map(({ id, type, title, config }) => ({ id, type, title, config })), edges: cur.edges }).slice(0, 12000);
   const list = JSON.stringify(flows.filter((w) => w.crew?.handle).slice(0, 40).map((w) => ({ name: w.crew.name, handle: w.crew.handle, role: String(w.crew.role || "").slice(0, 120), steps: (w.crew.graph?.nodes || []).length }))).slice(0, 6000);
   return "Change this Arkism workflow graph as the user asks. Keep node ids, types, titles and settings the request does not touch. " +
-    "Node types: start, ai, team, http, code, github, approval, condition, merge, loop, wait, subflow, notify, end. Every AI step is a node of type \"ai\" with config {\"goal\": one short Korean line, \"model\": \"auto\", \"access\": \"read\"}; for several AIs that discuss use \"team\"; do not use \"expert\" or \"ai_once\". " +
+    "Node types: start, ai, team, http, code, github, approval, condition, merge, loop, wait, subflow, notify, end. Every AI step is a node of type \"ai\" with config {\"goal\": one short Korean line, \"model\": \"\", \"access\": \"read\"}; for several AIs that discuss use \"team\"; do not use \"expert\" or \"ai_once\". " +
     "Saved workflows are listed below. When the request is the job one of them already does (even said loosely, e.g. \"research this as a test\" and a research workflow), do not rebuild it: add one node of type \"subflow\" with config {\"workflow\": that workflow's handle, \"task\": the request in Korean} and keep the rest small. " +
     "Otherwise build every step the job needs, each its own node in order, e.g. search or collect (http), analyse (ai), write (ai), review (ai or approval) where it fits; a job of several steps is never one single ai node. " +
     "Keep one start node and end with an \"end\" node; edges are {\"from\": id, \"to\": id}. When the request says when it should start, also set \"trigger\": {\"kind\":\"schedule\",\"cron\":\"m h dom mon dow\" in local time, 1-5 = weekdays} or {\"kind\":\"webhook\",\"label\":\"short Korean note\"} or {\"kind\":\"manual\"}; otherwise leave \"trigger\" out. " +
@@ -166,8 +166,8 @@ export function createCrewEditor(deps) {
     const anchor = drop ? null : g.nodes.find((n) => n.id === ed.sel) || g.nodes.filter((n) => n.type !== "end").at(-1) || g.nodes.at(-1);
     const n = { id: uid(type === "ai_once" ? "once" : type), type, title: preset.title || deps.NODES[type].label, x: (anchor?.x || 0) + 188 + 67, y: anchor?.y || 120, config: { ...(preset.config || {}) } };
     for (const [k, , kind, opts] of deps.FIELDS[type] || []) if ((kind === "select" || kind === "radio") && n.config[k] === undefined) n.config[k] = opts[0][0];
-    // A new AI 작업 starts with no task (it works on what comes in) and the router picking the model.
-    if (type === "ai") Object.assign(n.config, { goal: "", access: "read", model: "auto", ...preset.config });
+    // A new AI 작업 starts with no task and inherits its workflow model.
+    if (type === "ai") Object.assign(n.config, { goal: "", access: "read", model: "", ...preset.config });
     if (type === "expert") Object.assign(n.config, { goal: "{{input}}", access: "read", ...preset.config });
     if (type === "team") Object.assign(n.config, { topic: "{{input}}", ...preset.config });
     if (type === "ai_once") Object.assign(n.config, { prompt: "{{input}}", ...preset.config });

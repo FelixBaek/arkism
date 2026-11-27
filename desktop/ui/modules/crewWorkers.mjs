@@ -14,8 +14,6 @@ export function createCrewWorkers(deps) {
 
   const DEPTH = [["low", "빠르게"], ["medium", "보통"], ["high", "깊게"]];
 
-  const MODEL_MODES = [["auto", "자동 선택"], ["fixed", "모델 고정"]];
-
   const FORMATS = [["text", "자유 텍스트"], ["markdown", "마크다운"], ["json", "JSON"]];
 
   const FILE_EDITS = [["ask", "확인 받고 진행"], ["auto", "알아서 고침"], ["never", "고치지 않음"]];
@@ -239,7 +237,7 @@ export function createCrewWorkers(deps) {
     i.addEventListener("input", () => {
       const m = deps.modelMark(i.value); mark.replaceWith(m); mark = m;
       tag.textContent = deps.tr(window.ArkismBrand?.kindLabel(i.value) || "");
-      if (key === "model") wk.onModel?.();
+      if (key === "model") { if (i.value.trim()) d.model_mode = "fixed"; wk.onModel?.(); }
     });
     w.append(mark, i, tag);
     return w;
@@ -248,7 +246,7 @@ export function createCrewWorkers(deps) {
   // 모델 (868:61909): 기본·예비 모델 and 생각 깊이.
   function modelCard(d) {
     const models2 = deps.el("div", "scope-fields");
-    models2.append(deps.field("기본 모델", modelBox(d, "model", "고르기 · 예: claude sonnet 5.5", "기본 모델"), d.model_mode === "auto" ? "Clef가 일마다 고르고, 정해 두면 이 모델을 먼저 봐요" : ""),
+    models2.append(deps.field("기본 모델", modelBox(d, "model", "고르기 · 예: claude sonnet 5.5", "기본 모델"), d.model_mode === "auto" ? "저장된 자동 선택을 사용 중이에요. 모델을 입력하면 고정돼요." : ""),
       deps.field("예비 모델", modelBox(d, "fallback_model", "고르기 (선택)", "예비 모델")));
     return workerCard("모델", "", deps.modelList(), models2, depthRow(d));
   }
@@ -298,7 +296,6 @@ export function createCrewWorkers(deps) {
     const c = deps.el("section", "ex-run");
     const rows = deps.el("div", "ex-run-box");
     rows.append(...runnerRows(d),
-      exRow("방식", deps.segment(MODEL_MODES, d.model_mode || "fixed", (k) => { d.model_mode = k; touchWorker(); })),
       exRow("창의성", presetSeg([["0.2", "낮음"], ["0.7", "보통"], ["1", "높음"]], temp, (k) => { d.temperature = Number(k); touchWorker(); })),
       exRow("답변 길이", presetSeg([["0", "자동"], ["1024", "짧게"], ["4096", "길게"]], len, (k) => { d.max_output_tokens = Number(k); touchWorker(); }), deps.el("small", "dim", "토큰 수 상한이에요")),
       exRow("출력 형식", deps.segment(FORMATS, d.output_format || "text", (k) => { d.output_format = k; touchWorker(); })),
@@ -710,7 +707,7 @@ export function createCrewWorkers(deps) {
   async function saveWorker(rec) {
     const out = workerOut(wk.draft);
     if (!out.name || !out.handle || !out.instructions.trim()) { window.ArkismNeed(!out.name ? "이름" : !out.handle ? "@이름" : "지시", !out.name ? "이름을 적어 주세요." : !out.handle ? "@이름을 적어 주세요." : "지시를 적어 주세요."); return; }
-    if (out.model_mode === "fixed" && !out.model) { window.ArkismNeed("기본 모델", "기본 모델을 고르거나 방식을 자동(Clef)으로 바꿔 주세요."); return; }
+    if (out.model_mode === "fixed" && !out.model) { window.ArkismNeed("기본 모델", "기본 모델을 골라 주세요."); return; }
     if (agents().some((r) => r.id !== rec?.id && r.crew.handle === out.handle) || teams().some((r) => r.crew.handle === out.handle)) { deps.notice(`@${out.handle}은 이미 있어요. 다른 이름을 써 주세요.`); return; }
     wk.busy = true;
     drawWorkerSave();
