@@ -737,6 +737,20 @@ func sessionDeliver(job, prepared map[string]any, scope any, event, sid, origin,
 		}
 	}
 	receipt, err := post("/v1/work-checkpoints/save", request)
+	if code := host.HTTPCode(err); (code == 400 || code == 409) && len(anyList(request["archive_messages"])) > 0 {
+		// A live session is re-archived while its window is prepared, so the cited message refs (or the
+		// revision) go stale. The claims are already delivered: save the summary once more without
+		// source links at the current revision instead of failing the batch.
+		if request, err = sessionUnlinkedRequest(request, post); err != nil {
+			return err
+		}
+		prepared["checkpoint_request"] = request
+		if err := persist(); err != nil {
+			return err
+		}
+		metric(kv("event", "session_checkpoint_unlinked"), kv("session", head(sid, 12)), kv("error", code))
+		receipt, err = post("/v1/work-checkpoints/save", request)
+	}
 	if err != nil {
 		return err
 	}
@@ -746,6 +760,28 @@ func sessionDeliver(job, prepared map[string]any, scope any, event, sid, origin,
 		return sessionWait("session_checkpoint_not_acknowledged")
 	}
 	return nil
+}
+
+// sessionUnlinkedRequest copies request without archive message refs, at the checkpoint's current revision.
+func sessionUnlinkedRequest(request map[string]any, post func(path string, body any) (map[string]any, error)) (map[string]any, error) {
+	retry := map[string]any{}
+	for k, v := range request {
+		retry[k] = v
+	}
+	retry["archive_messages"], retry["expected_revision"] = []any{}, int64(0)
+	current, err := post("/v1/work-checkpoints/get", map[string]any{"scope": request["scope"], "id": request["id"]})
+	switch {
+	case host.HTTPCode(err) == 404:
+	case err != nil:
+		return nil, err
+	default:
+		revision, ok := host.Int(current["revision"])
+		if !ok || current["id"] != request["id"] {
+			return nil, sessionWait("session_checkpoint_invalid")
+		}
+		retry["expected_revision"] = revision
+	}
+	return retry, nil
 }
 
 // sessionCaptureClaims sends the prepared claims, if any, and requires every one acknowledged.

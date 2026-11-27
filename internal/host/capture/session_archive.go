@@ -538,9 +538,9 @@ func (c *collector) upload(path, device, origin, sid, logical string, observed f
 		case errors.Is(err, errArchivePrivate):
 			c.counts.inc("private_skipped")
 			err = nil
-		case errors.Is(err, errArchiveInspectionLimit):
-			// A record too large or too deep to inspect for project paths is never
-			// uploaded. One such transcript must not fail every run of the collector.
+		case errors.Is(err, errArchiveInspectionLimit), errors.Is(err, errArchiveInspectionFailed):
+			// A record too large, too deep or too broken to inspect for project paths
+			// is never uploaded. One such transcript must not fail every run of the collector.
 			c.counts.inc("inspection_skipped")
 			c.say("inspection_skipped: " + path)
 			err = nil

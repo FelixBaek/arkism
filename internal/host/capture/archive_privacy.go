@@ -221,7 +221,11 @@ func inspectPrivateArchiveFile(path, format string) error {
 	if info.Size() > archiveMaxBytes {
 		return valueErr("too_large")
 	}
-	marked, err := scanPrivate(io.LimitReader(f, archiveMaxBytes+1))
+	scan := scanPrivate
+	if format == "jsonl" {
+		scan = scanPrivateTyped
+	}
+	marked, err := scan(io.LimitReader(f, archiveMaxBytes+1))
 	if err != nil {
 		return err
 	}

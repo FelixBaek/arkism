@@ -246,3 +246,36 @@ func TestPrivateMarkedFindsTagAcrossChunks(t *testing.T) {
 		t.Fatal("missing source must remain an inspection error", err)
 	}
 }
+
+func TestPrivateMarkedOnlyCountsTypedWords(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name string, lines ...string) string {
+		path := filepath.Join(dir, name)
+		os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600)
+		return path
+	}
+	quoted := write("quoted.jsonl",
+		`{"type":"user","message":{"role":"user","content":"read the privacy code"}}`,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"it strips <private> spans"}]}}`,
+		`{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"const tag = \"<private>\""}]}}`,
+		`{"type":"response_item","payload":{"type":"function_call_output","output":"<private>x</private>"}}`,
+		`{"type":"event_msg","payload":{"type":"agent_message","message":"<private> is masked"}}`,
+		`{"type":"api-request-blob","message":{"role":"user","content":[{"type":"tool_result","content":"<private>"}]}}`,
+		`{"type":"user","isMeta":true,"message":{"role":"user","content":"peer said <private>"}}`)
+	if marked, err := privateMarked(quoted); err != nil || marked {
+		t.Fatal("a quoted tag in agent or tool output must not drop the session", marked, err)
+	}
+	for name, line := range map[string]string{
+		"claude.jsonl":  `{"type":"user","message":{"role":"user","content":"my key is <private>abc</private>"}}`,
+		"blocks.jsonl":  `{"type":"user","message":{"role":"user","content":[{"type":"text","text":"<private>abc</private>"}]}}`,
+		"escaped.jsonl": `{"type":"user","message":{"role":"user","content":"<private>abc"}}`,
+		"codex.jsonl":   `{"type":"event_msg","payload":{"type":"user_message","message":"<private>abc</private>"}}`,
+		"input.jsonl":   `{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<private>a"}]}}`,
+		"unknown.jsonl": `{"type":"attachment","content":"<private>abc</private>"}`,
+		"torn.jsonl":    `{"type":"assistant","message":"<private>`,
+	} {
+		if marked, err := privateMarked(write(name, `{"type":"user","message":{"role":"user","content":"hi"}}`, line)); err != nil || !marked {
+			t.Fatal(name, "typed or unknown mark must opt out", marked, err)
+		}
+	}
+}

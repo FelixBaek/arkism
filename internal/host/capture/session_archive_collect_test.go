@@ -437,14 +437,16 @@ func TestArchiveRecordAboveTheInspectionLimitIsSkippedAndNamedNotFailed(t *testi
 	huge := put(t, filepath.Join(home, ".codex/sessions/2026/10/18/r.jsonl"),
 		`{"type": "session_meta", "payload": {"id": "codex-sid"}}`+"\n"+`{"payload": "`+strings.Repeat("x", archiveMetadataRecordBytes)+`"}`+"\n")
 	put(t, filepath.Join(home, ".codex/sessions/2026/10/19/s.jsonl"), `{"type": "session_meta", "payload": {"id": "codex-sid-2"}}`+"\n")
+	torn := put(t, filepath.Join(home, ".codex/sessions/2026/10/19/t.jsonl"),
+		`{"type": "session_meta", "payload": {"id": "codex-sid-3"}}`+"\n"+`{"payload": "cut`+`{"type": "x"}`+"\n")
 	var errOut bytes.Buffer
 	c := newCollector(nil, nil, false)
 	c.stderr = &errOut
 	c.collect()
-	if n := c.counts.n; n["inspection_skipped"] != 1 || n["planned"] != 1 || n["failed"] != 0 {
+	if n := c.counts.n; n["inspection_skipped"] != 2 || n["planned"] != 1 || n["failed"] != 0 {
 		t.Fatal(n)
 	}
-	if !strings.Contains(errOut.String(), "inspection_skipped: "+huge) {
+	if !strings.Contains(errOut.String(), "inspection_skipped: "+huge) || !strings.Contains(errOut.String(), "inspection_skipped: "+torn) {
 		t.Fatal(errOut.String())
 	}
 	errOut.Reset()
