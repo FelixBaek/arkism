@@ -30,11 +30,17 @@ HEAVY = ["./internal/memory", "./internal/host/crew", "./cmd/memoryd"]
 # Keep daemon tests in their original within-package order, after sibling work.
 SERIAL_PACKAGES = {"./cmd/memoryd"}
 COVERAGE_FILE = "go-coverage.out"
-# These real PG measurements and restore checks need each worker round to complete,
-# including publication, within the unchanged one-second fixture budget. Run
-# them once after sibling test groups finish, rather than rerunning timeouts.
+# Run wall-clock measurements once after sibling groups finish. Concurrent race
+# binaries can consume the embedding budget, worker lease or query deadline
+# before the operation being measured gets CPU time on a hosted runner.
 SERIAL_TESTS = {
     "./internal/memory": {
+        "TestCaptureGateBudgetDefersTheCheckToTheWorker",
+        "TestDynamicsWorkerProcessCrashPG",
+        "TestDynamicsWorkerPublishesAfterFinalApplyDeadlinePG",
+        "TestPostgresCodeGraphArkism",
+        "TestPostgresSessionArchiveZcodeLongMetadata",
+        "TestPostgresAutomaticWorkWriterExactRetryAndConflict",
         "TestDynamicsMeasurementProjectionPG",
         "TestDynamicsMeasurementPilotSyncAsyncPG",
         "TestDynamicsLoadSustainedOverloadPG",
@@ -44,12 +50,10 @@ SERIAL_TESTS = {
 # Tests with a wall-clock budget that can miss it only because the groups share the machine.
 # They get one rerun alone, after every other group has finished; nothing else is rerun.
 RERUNNABLE = {
-    "TestPostgresCodeGraphArkism",  # impact query under 5s
     "TestSystemOneFailuresRecordOnce",  # timeout subtest
-    "TestSessionArchiveZcodeLongMetadata", "TestPostgresSessionArchiveZcodeLongMetadata",  # 15s search deadline
+    "TestSessionArchiveZcodeLongMetadata",  # 15s search deadline
     "TestPostgresSessionArchiveSQLiteLargeMessage",  # 10s read deadline
     "TestSkillComparisonRunner", "TestPostgresSkillComparisonRunner",  # adapter timeout
-    "TestPostgresAutomaticWorkWriterExactRetryAndConflict",  # waits up to 30s for hook processes
     "TestCLIRunBoundedOutputTimeoutAndFailures",  # 4s budget per case
 }
 # A bound loopback port is the slot: shared by every runner on the host (no shared files there),
