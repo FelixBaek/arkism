@@ -135,6 +135,7 @@ type FileMemoriesInput struct {
 	Filename      string     `json:"filename"`
 	ContentBase64 string     `json:"content_base64"`
 	MIME          string     `json:"mime,omitempty"`
+	KeepOriginal  bool       `json:"keep_original,omitempty"`
 	DryRun        bool       `json:"dry_run"`
 	Context       string     `json:"context,omitempty"`
 	Timestamp     *time.Time `json:"timestamp,omitempty"`
@@ -667,7 +668,7 @@ func (s *Service) uploadFile(in FileMemoriesInput) (uploadedFile, error) {
 	if err != nil {
 		return uploadedFile{}, err
 	}
-	f := uploadedFile{Scope: in.Scope, Name: in.Filename, MIME: mime, Parsers: in.Parsers, DryRun: in.DryRun}
+	f := uploadedFile{Scope: in.Scope, Name: in.Filename, MIME: mime, Parsers: in.Parsers, DryRun: in.DryRun, KeepOriginal: in.KeepOriginal}
 	if len(in.Blocks) > 0 {
 		if in.ContentBase64 != "" {
 			return uploadedFile{}, ErrInvalid

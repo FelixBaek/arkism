@@ -19,6 +19,8 @@ import (
 )
 
 type Service struct {
+	// CaptureRuntimeID identifies the local database targeted by capture clients.
+	CaptureRuntimeID   string
 	DynamicsLoad       *DynamicsLoadRuntime
 	NativeSearchShadow *NativeSearchShadowRuntime
 	NativeDynamics     *NativeDynamicsRuntime

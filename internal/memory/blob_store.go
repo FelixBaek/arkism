@@ -1,3 +1,5 @@
+//go:build linux || windows
+
 package memory
 
 import (
@@ -7,7 +9,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"syscall"
 	"time"
 )
 
@@ -40,8 +41,7 @@ func (s blobStore) locked(ctx context.Context, fn func(*lockedBlobs) error) erro
 	if err != nil {
 		return err
 	}
-	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !info.IsDir() || info.Mode().Perm() != 0700 || !ok || stat.Uid != uint32(os.Geteuid()) {
+	if !info.IsDir() {
 		return ErrInvalid
 	}
 	root, err := os.OpenRoot(s.dir)
@@ -56,33 +56,31 @@ func (s blobStore) locked(ctx context.Context, fn func(*lockedBlobs) error) erro
 	if !os.SameFile(info, opened) {
 		return ErrInvalid
 	}
-	lock, err := openPrivateBlob(root, ".lock", os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0600)
+	if err = privateBlobRoot(root, opened); err != nil {
+		return err
+	}
+	lock, err := openPrivateBlob(root, ".lock", os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return err
 	}
-	defer lock.Close()
-	if err = flockBlobs(ctx, lock); err != nil {
+	defer lock.Close() // also releases the OS lock
+	if err = lockBlobs(ctx, lock); err != nil {
 		return err
 	}
-	defer func() { _ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN) }() // closing the file also releases it
 	if err = ctx.Err(); err != nil {
 		return err
 	}
 	return fn(&lockedBlobs{root: root, ctx: ctx, maxBytes: limit})
 }
 
-// shortcut: one flock serializes all file/metadata mutations on this host;
-// use per-digest locks only if measured contention requires it.
-func flockBlobs(ctx context.Context, lock *os.File) error {
+// One OS lock serializes file and metadata changes across the API and worker.
+func lockBlobs(ctx context.Context, lock *os.File) error {
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
-		if err == nil {
-			return nil
-		}
-		if !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, syscall.EINTR) {
+		acquired, err := tryBlobLock(lock)
+		if acquired || err != nil {
 			return err
 		}
 		select {
@@ -103,7 +101,7 @@ func openPrivateBlob(root *os.Root, name string, flags int, mode os.FileMode) (*
 	if err == nil && !before.Mode().IsRegular() {
 		return nil, ErrInvalid
 	}
-	file, err := root.OpenFile(name, flags, mode)
+	file, err := root.OpenFile(name, flags|blobOpenFlags, mode)
 	if err != nil {
 		return nil, err
 	}
@@ -124,18 +122,6 @@ func openPrivateBlob(root *os.Root, name string, flags int, mode os.FileMode) (*
 	return file, nil
 }
 
-func privateBlobFile(file *os.File) error {
-	info, err := file.Stat()
-	if err != nil {
-		return err
-	}
-	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !info.Mode().IsRegular() || info.Mode().Perm() != 0600 || !ok || stat.Nlink != 1 || stat.Uid != uint32(os.Geteuid()) {
-		return ErrInvalid
-	}
-	return nil
-}
-
 // put is deliberately not a DB operation. The caller must hold locked through
 // metadata commit/cleanup; a failed or ambiguous commit must never expose a file
 // by digest alone. Only authorized source metadata may make bytes readable.
@@ -149,7 +135,7 @@ func (b *lockedBlobs) put(input io.Reader, expected string) (digest string, size
 		return "", 0, err
 	}
 	name := ".upload-" + ID()
-	file, err := b.root.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+	file, err := openPrivateBlob(b.root, name, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
 	if err != nil {
 		return "", 0, err
 	}
@@ -210,12 +196,12 @@ func (b *lockedBlobs) publishLocal(name, digest string, size int64) error {
 		return err
 	}
 	defer directory.Close()
-	return directory.Sync()
+	return syncBlobDirectory(directory)
 }
 
 // putObject uploads the verified staged file; the caller removes the staging file.
 func (b *lockedBlobs) putObject(name, digest string, size int64) error {
-	file, err := openPrivateBlob(b.root, name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	file, err := openPrivateBlob(b.root, name, os.O_RDONLY, 0)
 	if err != nil {
 		return err
 	}
@@ -224,7 +210,7 @@ func (b *lockedBlobs) putObject(name, digest string, size int64) error {
 }
 
 func (b *lockedBlobs) verify(name, digest string, size int64) error {
-	file, err := openPrivateBlob(b.root, name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	file, err := openPrivateBlob(b.root, name, os.O_RDONLY, 0)
 	if err != nil {
 		return err
 	}

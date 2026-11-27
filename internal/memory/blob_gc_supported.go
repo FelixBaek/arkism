@@ -1,3 +1,5 @@
+//go:build linux || windows
+
 package memory
 
 import (
@@ -7,7 +9,6 @@ import (
 	"io"
 	"os"
 	"strings"
-	"syscall"
 )
 
 // CollectBlobGarbage never detaches artifacts: live references always win.
@@ -44,7 +45,7 @@ func (s *Service) CollectBlobGarbage(ctx context.Context, token string) (BlobGCR
 		}
 		defer directory.Close()
 		checkFile := func(name string, limit int64) error {
-			file, e := openPrivateBlob(b.root, name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+			file, e := openPrivateBlob(b.root, name, os.O_RDONLY, 0)
 			if e != nil {
 				return e
 			}
@@ -119,7 +120,7 @@ func (s *Service) CollectBlobGarbage(ctx context.Context, token string) (BlobGCR
 				if e = b.root.Remove(name); e != nil {
 					return e
 				}
-				if e = directory.Sync(); e != nil {
+				if e = syncBlobDirectory(directory); e != nil {
 					return e
 				}
 				result.TemporaryFilesRemoved++
