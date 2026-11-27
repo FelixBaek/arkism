@@ -93,14 +93,14 @@ class IsolatedFailureReportingTests(unittest.TestCase):
         import io
         from unittest.mock import patch
         import ci_go_test as ci
-        name = "TestPostgresCodeGraphArkism"
+        name = "TestPostgresSessionArchiveSQLiteLargeMessage"
         command = ["test-binary", "-test.run", "^(TestOther|" + name + ")$", "-test.count=1", "-test.timeout=10m"]
         output = io.StringIO()
-        with patch.object(ci, "run", return_value=(1, "impact took 7s")) as run, contextlib.redirect_stdout(output):
+        with patch.object(ci, "run", return_value=(1, "archive read timed out")) as run, contextlib.redirect_stdout(output):
             self.assertFalse(ci.passes_alone("./internal/memory", "--- FAIL: " + name + " (8s)", command, None))
         run.assert_called_once_with(command[:2] + ["^" + name + "$"] + command[3:], "./internal/memory", None)
         self.assertIn("FAIL isolated rerun", output.getvalue())
-        self.assertIn("impact took 7s", output.getvalue())
+        self.assertIn("archive read timed out", output.getvalue())
 
 
 class SerialDaemonPackageTests(unittest.TestCase):
