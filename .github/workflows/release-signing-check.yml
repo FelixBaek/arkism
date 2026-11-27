@@ -1,0 +1,50 @@
+name: Release signing check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sign-fixture:
+    if: github.ref == 'refs/heads/main' && github.repository == 'FelixBaek/arkism'
+    runs-on: ubuntu-24.04
+    environment: release-signing
+    timeout-minutes: 10
+    env:
+      ARKISM_UPDATE_PUBLIC_KEY: ${{ vars.ARKISM_UPDATE_PUBLIC_KEY }}
+      FEED: https://signing-check.invalid/feed
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Prepare inert release inputs
+        run: |
+          bash tools/install-minisign.sh "$RUNNER_TEMP/release-tools"
+          echo "$RUNNER_TEMP/release-tools" >> "$GITHUB_PATH"
+          mkdir dist fixture
+          printf 'Arkism signing check\ncommit=%s\nrun=%s\nattempt=%s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > dist/Arkism-0.0.0-setup.exe
+          echo '{"spdxVersion":"SPDX-2.3","packages":[{"name":"inert-fixture"}]}' > dist/Arkism-0.0.0-windows.sbom.spdx.json
+          for file in arkism arkism-crew memoryd memory-principal; do
+            echo "test fixture: $file" > "fixture/$file"
+          done
+          for arch in amd64 arm64; do
+            tar -C fixture -czf "dist/arkism-server-0.0.0-linux-$arch.tar.gz" arkism arkism-crew memoryd memory-principal
+          done
+      - name: Sign with production release tooling
+        env:
+          ARKISM_UPDATE_SIGNING_KEY: ${{ secrets.ARKISM_UPDATE_SIGNING_KEY }}
+          ARKISM_UPDATE_SIGNING_PASSWORD: ${{ secrets.ARKISM_UPDATE_SIGNING_PASSWORD }}
+        run: python3 tools/release_artifacts.py sign --directory dist --version 0.0.0 --feed "$FEED"
+      - name: Verify signed inventory
+        run: python3 tools/release_artifacts.py verify --directory dist --version 0.0.0 --feed "$FEED"
+      - name: Upload test file and detached signature
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: signing-check
+          path: |
+            dist/Arkism-0.0.0-setup.exe
+            dist/Arkism-0.0.0-setup.exe.minisig
+          if-no-files-found: error
+          retention-days: 7
