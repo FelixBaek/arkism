@@ -182,20 +182,10 @@ export const createCrew = (ctx) => {
     i.setAttribute("list", list);
     return i;
   }
-  // "auto" names the router that picks (Clef, Jev), read once from the routing overview; its raw id ("clef-flash") or an
-  // unknown one is never shown (same names as routing-turns.js judge), and older servers keep the plain label.
-  let router = "";
-  const routerName = (c) => (/^clef/i.test(c) ? "Clef" : /^jev/i.test(c) ? "Jev" : "");
-  request(`/v1/routing/overview?${query({ range: "1h" })}`).then((d) => {
-    router = routerName(d?.policy?.classifier || "");
-    for (const o of document.querySelectorAll("option[data-router]")) { o.label = autoLabel(); if (o.parentElement?.tagName === "SELECT") o.textContent = o.label; }
-  }, () => {});
-  const autoLabel = () => (router ? tr(`자동 — ${router} 라우터가 일마다 골라요`) : tr("자동 — 라우터가 일마다 골라요"));
-  // The same live list as a plain choice (자동화 팝업, 그래프 노드): "" = the fallback, "auto" = the router picks, then the models grouped
+  // The same live list as a plain choice (자동화 팝업, 그래프 노드): "" = the fallback, then the models grouped
   // like 설정 › 역할별 모델 (logo, Max·Pro·API, input kind). The value is the plain model name; a saved model off the list stays choosable.
   function modelSelect(value, emptyLabel) {
-    const s = select([["", emptyLabel], ["auto", autoLabel()]], value || "");
-    s.querySelector('option[value="auto"]').dataset.router = "1";
+    const s = select([["", emptyLabel]], value || "");
     // Not connected models wait behind 「연결 안 된 모델도 보기」 (model-pick.js); no jump to 설정 from here: it would drop the unsaved editor.
     return globalThis.ArkismModelPick.fill(s, models?.enabledByProvider?.() || [], { current: value || "", valueFor: (p, m) => m, group: models.modelGroup });
   }
@@ -203,12 +193,6 @@ export const createCrew = (ctx) => {
   function modelList(id = "crew-models", only = null) {
     const dl = el("datalist");
     dl.id = id;
-    // "auto" lets the router pick per run; the rest is the live list the runner reports (설정 › 에이전트), never a fixed one.
-    const auto = el("option");
-    auto.value = "auto";
-    auto.label = autoLabel();
-    auto.dataset.router = "1";
-    if (!only) dl.append(auto);
     // Grouped by provider, the provider's logo before its name; each model says on the right what it takes in. The server keeps a plain model name (no provider), so a name offered by several providers
     // says so on every copy: picking either saves the same name, and the runner picks the CLI from the name.
     // One group per way a provider is connected (Max·Pro·API, as in 설정 › 역할별 모델).

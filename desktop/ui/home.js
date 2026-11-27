@@ -479,20 +479,18 @@ window.ArkismHome = function (ctx) {
       el("p", "meta", "연결 정보는 설정 › 연결에서 바꿀 수 있어요."));
   }
 
-  // ------------------------------------------------------------ 메뉴별 확인할 것: 워크플로우 · 라우팅 (198:200)
-  // One GET each per load (the crew runs list and the routing overview the other menus already use); hidden when the server has none.
+  // ------------------------------------------------------------ 워크플로우 확인할 것 (198:200)
   const RUN_LIMIT = 100;
-  let extra = { g: -1, runs: undefined, route: undefined };
+  let extra = { g: -1, runs: undefined };
   function menuExtras(generation) {
     if (extra.g !== generation) {
-      extra = { g: generation, runs: undefined, route: undefined };
+      extra = { g: generation, runs: undefined };
       const g = generation;
       const again = () => { if (extra.g === g && state.view === "todo" && !state.selected && !state.todoAll) render(false); };
       // by status, not the latest 30 runs: an approval or failure older than those still counts (#465)
-      const runs = (v) => { if (extra.g === g) { extra.runs = v; again(); } }, route = (v) => { if (extra.g === g) { extra.route = v; again(); } };
+      const runs = (v) => { if (extra.g === g) { extra.runs = v; again(); } };
       const byStatus = (status) => request(`/v1/crew/runs?${query({ status, limit: RUN_LIMIT })}`).then((r) => r.items || []);
       Promise.all([byStatus("waiting"), byStatus("failed")]).then(([waiting, failed]) => runs({ waiting, failed }), () => runs(null));
-      request(`/v1/routing/overview?${query({ range: "30d" })}`).then((d) => route(d?.kpi ? d : null), () => route(null));
     }
     const rows = [];
     if (extra.runs) {
@@ -502,13 +500,6 @@ window.ArkismHome = function (ctx) {
       const recent = (x) => new Date(x.created_at).getTime() > week; // newest first: a full page that reaches past the week is complete
       const failed = count(extra.runs.failed.filter((x) => x.crew_run?.status === "failed" && recent(x)), { more: full(extra.runs.failed) && extra.runs.failed.every(recent) });
       rows.push(["FLOW", "워크플로우", [{ label: `확인 대기 ${waiting.text}`, ...waiting }, { label: `실패 ${failed.text}`, ...failed }].filter((p) => p.min), ["crew"]]);
-    }
-    if (extra.route) {
-      const parts = (extra.route.models || []).filter((m) => m.status === "watch" || m.status === "slow")
-        .map((m) => ({ label: m.status === "slow" ? `${m.name} 느림` : `${m.name} 지연 모니터링`, n: 1 }));
-      const k = extra.route.kpi;
-      if (parts.length && k.budget_usd) parts.push({ label: `이번 달 예산 ${Math.round((k.cost_usd / k.budget_usd) * 100)}%`, n: 0 });
-      rows.push(["ROUTER", "라우팅", parts, ["routing"]]);
     }
     return rows;
   }

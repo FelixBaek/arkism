@@ -444,7 +444,7 @@ window.ArkismModels = (ctx) => {
   }
   // compact (an agent's detail): no title or count. Models come from 새로고침 only; ones added by hand earlier stay removable.
   function modelsCard(p, compact) {
-    const c = compact ? el("section", "mp-card ag-models") : card("모델", "켠 모델만 라우팅과 AI 도구에서 골라 쓸 수 있어요.");
+    const c = compact ? el("section", "mp-card ag-models") : card("모델", "켠 모델을 AI 도구에서 골라 쓸 수 있어요.");
     // A 직접 추가 provider may list hundreds: the ones turned on come first.
     const all = isCustom(p.id) ? modelsOf(p).sort((a, b) => Number(enabled(p.id, b)) - Number(enabled(p.id, a))) : modelsOf(p);
     const extra = extraOf(p.id);

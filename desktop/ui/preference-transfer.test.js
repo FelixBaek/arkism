@@ -18,7 +18,7 @@ test('export omits credentials and account content', () => {
   const data = JSON.parse(text);
   assert.equal(data.product, 'arkism-preferences'); assert.equal(data.version, 1);
   assert.deepEqual(data.values.agentsOff, ['grok']); assert.deepEqual(data.values.categories, []);
-  assert.equal(data.values['routing.policyOpen'].routing, true);
+  assert.equal(data.values['routing.policyOpen'], undefined);
   assert.deepEqual(data.values.look, {theme: 'dark', font: 'lg', zoom: 1.2});
   assert.equal(data.values.skillDir, '-1'); assert(!text.includes('private')); assert(!text.includes('collectUnused'));
   assert.equal(JSON.stringify(storage), original);

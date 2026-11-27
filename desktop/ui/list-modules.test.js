@@ -80,7 +80,7 @@ function syncFixture(over = {}) {
     query: (o) => new URLSearchParams(o || {}).toString(),
     loadTools: async () => ({ fresh: true }), loadUsage: (g) => calls.push(["usage", g]),
     render: (reset) => calls.push(["render", reset]), invalidateVersions: () => calls.push(["invalidate"]),
-    routing: { refresh: async () => calls.push(["routing"]) }, panels: () => ({}), digests: { refresh: () => calls.push(["digests"]) },
+    panels: () => ({}), digests: { refresh: () => calls.push(["digests"]) },
     ...over.deps
   };
   return { state, deps, calls };
@@ -132,12 +132,9 @@ test("visible sync reads skills, tools, settings and simple lists for their own 
   }
 });
 
-test("visible sync runs separate refreshes for routing and memory panels", async () => {
+test("visible sync runs separate refreshes for memory panels", async () => {
   const { createVisibleSync } = await import("./modules/visibleSync.mjs");
   let panel = 0;
-  const routing = syncFixture({ state: { view: "routing" } });
-  await createVisibleSync(routing.deps)();
-  assert.deepEqual(routing.calls, [["routing"]]);
   const panels = syncFixture({ state: { memTab: "traits" }, deps: { panels: () => ({ traits: { refresh: async () => panel++ } }) } });
   await createVisibleSync(panels.deps)();
   assert.equal(panel, 1); assert.equal(panels.calls.length, 0);
@@ -166,7 +163,7 @@ test("visible sync stays idle when blocked or ineligible and queues one rerun wh
   document.body.replaceChildren(); document.activeElement = document.body;
 
   let release, runs = 0;
-  const busy = syncFixture({ state: { view: "routing" }, deps: { routing: { refresh: () => { runs++; return new Promise((r) => { release = r; }); } } } });
+  const busy = syncFixture({ state: { view: "memories", memTab: "traits" }, deps: { panels: () => ({ traits: { refresh: () => { runs++; return new Promise((r) => { release = r; }); } } }) } });
   const once = createVisibleSync(busy.deps);
   const first = once("timer");
   await once("timer"); // a second call while syncing only marks a rerun

@@ -23,25 +23,10 @@ function summary(over = {}) {
     projects: [{ name: "arkism", tokens: 5, cost_usd: 0, priced: false }], models: [{ name: "opus", tokens: 5, cost_usd: 1, priced: true }],
     top_sessions: [session, { ...session, id: "s2", title: "", project: "", models: null, ended_at: "", agent: "" }], latest: [session],
     agents: [{ name: "claude", all_sessions: 3 }, { name: "zz" }],
-    requests: {
-      count: 10, failed: 2, input: 100, output: 200, cost_usd: 0.5,
-      models: [{ name: "openai/gpt", requests: 6, tokens: 100, cost_usd: 0.3, priced: true }, { name: "b", requests: 2, tokens: 1, cost_usd: 0.1 }, { name: "c", requests: 1, tokens: 1 }, { name: "d", requests: 1, tokens: 1, cost_usd: 0.1 }],
-      items: [
-        { model: "openai/gpt", decision: "clef", ok: true, input: 10, output: 5, latency_ms: 1200, at, cost_usd: 0.01 },
-        { model: "b", replaced: "openai/gpt", decision: "failover", ok: true, input: 1, output: 1, latency_ms: 10, at },
-        { model: "b", decision: "fixed", rule: "code", ok: false, error: "boom", input: 1, output: 0, latency_ms: 10, at },
-        { model: "c", decision: "", ok: false, input: 1, output: 0, latency_ms: 10, at },
-        { model: "openai/gpt", decision: "clef", ok: true, input: 1, output: 1, latency_ms: 1, at },
-      ],
-    },
     ...over,
   };
 }
-const daily = [{ t: "2026-10-01T00:00:00Z", traffic: 3, cost: 1 }, { t: "2026-10-02T00:00:00Z", traffic: 5, cost: 2 }];
-const overviewDoc = (points = daily) => ({ authority: "data_only_untrusted", kpi: { p95_ms: 2000, p50_ms: 1000, requests: 5, success_rate: 99 },
-  models: [{ id: "openai/gpt", name: "GPT", success_rate: 97, p95_ms: 1500 }, { id: "b", success_rate: 99 }], series: { points } });
-
-function mk({ menu = "router", doc = summary(), ov = overviewDoc(), fail = null, extra = {} } = {}) {
+function mk({ menu = "connect", doc = summary(), fail = null, extra = {} } = {}) {
   const state = { menu, view: "usage", scope: { project_id: "p" } };
   const nodes = Object.fromEntries(["#table", "#stats", "#chips", "#controls", "#detail", ".main > .page-head"].map((k) => [k, dom.el("div")]));
   const calls = [];
@@ -52,7 +37,6 @@ function mk({ menu = "router", doc = summary(), ov = overviewDoc(), fail = null,
     request: async (path) => {
       calls.push(path);
       if (fail) throw new Error(fail);
-      if (path.startsWith("/v1/routing/overview")) { if (ov instanceof Error) throw ov; return ov; }
       return typeof doc === "function" ? doc() : doc;
     },
     render: () => u.views.usage.render(), detailShell: () => { const b = dom.el("div"); nodes["#detail"].replaceChildren(b); return b; },
@@ -66,102 +50,13 @@ function mk({ menu = "router", doc = summary(), ov = overviewDoc(), fail = null,
 async function open(v) { v.u.views.usage.render(); for (let i = 0; i < 4; i++) await flush(); return v; }
 const click = (root, t) => { const all = byText(root, t), n = all.find((x) => x.tagName === "BUTTON") || all[0]; assert.ok(n, `no node with text ${t}`); n.click(); };
 
-test("ROUTER 라우팅 흐름 counts rule-routed calls in their own lane, not 고정 모델", async () => {
-  const it = (o) => ({ model: "b", ok: true, input: 1, output: 1, latency_ms: 1, at, ...o });
-  const items = [it({ decision: "fixed", rule: "code" }), it({ decision: "fixed", rule: "writing" }), it({ decision: "fixed" })];
-  const v = await open(mk({ doc: summary({ requests: { count: 3, failed: 0, input: 3, output: 3, cost_usd: 0, models: [{ name: "b", requests: 3, tokens: 6 }], items } }) }));
-  assert.match(text(v.table), /규칙으로2건 · 66\.7%/);
-  assert.match(text(v.table), /고정 모델1건 · 33\.3%/);
-  click(v.table, "b"); // one model: its main route is the rule lane
-  assert.match(text(v.table), /규칙으로 66\.7%주로 받은 경로/);
-});
-
-test("ROUTER 개요 shows routed calls, the flow card, model share and picks one model", async () => {
+test("usage keeps the month and time zone without requesting model routing", async () => {
   const v = await open(mk());
-  assert.match(text(v.table), /라우팅 흐름/);
-  assert.match(text(v.table), /기타 1개/);
-  assert.match(text(v.table), /응답 시간1\.0초보통 걸린 시간/);
-  assert.doesNotMatch(text(v.table), /p95|p50|공시|MEMORY·FLOW/);
-  assert.doesNotMatch(text(v.nodes["#controls"]), /결정/); // ROUTER keeps routing only; decision counts live in the other menus
-  assert.equal(v.u.count(), "10");
-  assert.match(v.u.views.usage.sub(), /라우터가 보낸 요청/);
-  assert.equal(v.u.views.usage.keepDetail, false);
-  click(v.table, "비용"); // day chart metric
-  click(v.table, "GPT");
-  assert.match(text(v.table), /받은 요청/);
-  assert.match(text(v.table), /만 진하게/);
-  click(v.table, "전체 모델");
-  click(v.table, "요청"); // traffic metric back
-  assert.equal(v.u.views.usage.title(), "사용량");
-  v.u.views.usage.head()[0].click();
-  await flush();
-  v.u.leave();
-  v.u.reset();
-  assert.equal(v.u.count(), "");
-});
-
-test("ROUTER 개요 labels sub-day points by time, several days by date and time, and other ranges by a hint", async () => {
-  const hourly = [{ t: "2026-10-01T00:00:00Z", traffic: 1 }, { t: "2026-10-01T01:00:00Z", traffic: 2 }];
-  const multi = [{ t: "2026-10-01T00:00:00Z", traffic: 1 }, { t: "2026-10-01T06:00:00Z", traffic: 2 }, { t: "2026-10-03T00:00:00Z", traffic: 2 }];
-  for (const [pts, range] of [[hourly, "오늘"], [multi, "7일"]]) {
-    const v = await open(mk({ ov: overviewDoc(pts) }));
-    click(v.nodes["#controls"], range);
-    for (let i = 0; i < 4; i++) await flush();
-    assert.match(text(v.table), /시간별/);
-  }
-  const v = await open(mk({ ov: { authority: "data_only_untrusted", kpi: {} } }));
-  click(v.nodes["#controls"], "90일");
-  for (let i = 0; i < 4; i++) await flush();
-  assert.match(text(v.table), /날짜별 그래프는 오늘·7일·30일/);
-  assert.match(text(v.table), /대신 받은 요청/);
-  click(v.nodes["#controls"], "90일"); // same range: nothing reloads
-});
-
-test("이번 달 asks the server for the month in the reader's time zone", async () => {
-  const calls = [];
-  const request = async (path) => { calls.push(path); return path.startsWith("/v1/routing/models") ? { authority: "data_only_untrusted", items: [{ id: "openai/gpt", name: "GPT 화면 이름" }] } : summary(); };
-  const v = await open(mk({ extra: { request } }));
-  v.calls = calls;
   click(v.nodes["#controls"], "이번 달");
   for (let i = 0; i < 4; i++) await flush();
-  const tz = -new Date().getTimezoneOffset();
-  assert.ok(v.calls.includes(`/v1/usage/summary?range=month&tz=${tz}`), v.calls.join(" "));
-  assert.ok(!v.calls.some((c) => c.startsWith("/v1/routing/overview?range=month")), "the routing overview has no month range");
-  assert.ok(v.calls.some((c) => c.startsWith("/v1/routing/models")), "names come from the model list instead");
-  assert.match(text(v.table), /GPT 화면 이름/);
-  assert.match(text(v.table), /날짜별 그래프는 오늘·7일·30일/);
-});
-
-test("ROUTER with no routed calls points to the routing settings; a failed overview read is ignored", async () => {
-  const doc = summary({ requests: { count: 0, failed: 0, input: 0, output: 0, cost_usd: 0, models: [], items: [] } });
-  const v = await open(mk({ doc, ov: new Error("down") }));
-  assert.match(text(v.table), /아직 라우터를 거친 요청이 없어요/);
-  click(v.table, "라우팅 설정 열기");
-  click(v.table, "라우팅 현황 보기 ›");
-  assert.deepEqual(v.went, ["settings:routing", "routing"]);
-  assert.equal(v.u.count(), "");
-});
-
-test("요청 tab lists each call and the side panel sums failures, fallbacks and speed", async () => {
-  const v = await open(mk());
-  click(v.nodes["#controls"], "요청");
-  assert.match(text(v.table), /실패 · boom/);
-  assert.match(text(v.table), /대신 받음/);
-  assert.match(text(v.nodes["#detail"]), /응답 속도/);
-  // one plain reason per request, tokens named; the slow tail waits under 자세히
-  for (const t of [/판정 모델이 골라서 → GPT입력 10 · 출력 5 · 1\.2초/, /GPT에서 실패해 넘김 → b/, /코딩 요청이라 → b/, /기본 모델이라 → c/]) assert.match(text(v.table), t);
-  assert.match(text(v.nodes["#detail"]), /보통1\.0초/);
-  assert.match(text(v.nodes["#detail"]), /자세히느릴 때2\.0초100건 중 가장 느린 5건/);
-  assert.doesNotMatch(text(v.nodes["#detail"]), /p95|p50/);
-  assert.equal(v.u.views.usage.keepDetail, true);
-  assert.match(v.u.views.usage.sub(), /라우터를 거친 요청의/);
-  click(v.nodes["#detail"], "라우팅 현황에서 보기 ›");
-  click(v.nodes["#detail"], "새로고침");
-  await flush();
-  const empty = await open(mk({ doc: summary({ requests: { count: 0, failed: 0, input: 0, output: 0, cost_usd: 0, models: [], items: [] } }), ov: { authority: "data_only_untrusted", kpi: { requests: 1 } } }));
-  click(empty.nodes["#controls"], "요청");
-  assert.match(text(empty.table), /이 기간에 Arkism 라우터를 거친 요청이 없어요/);
-  assert.match(text(empty.nodes["#detail"]), /p50—|—/);
+  assert.ok(v.calls.includes(`/v1/usage/summary?range=month&tz=${-new Date().getTimezoneOffset()}`));
+  assert.ok(v.calls.every((path) => !path.startsWith("/v1/routing/")));
+  assert.equal(byText(v.nodes["#controls"], "요청").length, 0);
 });
 
 test("MEMORY 개요 without memory_use keeps session numbers; with it shows the memory flow and tidy list", async () => {

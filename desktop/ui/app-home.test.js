@@ -1228,10 +1228,9 @@ test("home: ? opens the shortcuts once", async () => {
   app.$("#keys-dialog").close();
 });
 
-test("home: menu rows count crew runs, routing and knowledge; a stalled pipeline warns", async () => {
+test("home: menu rows count crew runs and knowledge; a stalled pipeline warns", async () => {
   const offs = [
     route("GET", "/v1/crew/runs", () => ok({ items: [{ crew_run: { status: "waiting", waiting: { kind: "approval" } }, created_at: ago(1) }, { crew_run: { status: "failed" }, created_at: ago(5) }, { crew_run: { status: "failed" }, created_at: ago(500) }] })),
-    route("GET", "/v1/routing/overview", () => ok({ kpi: { cost_usd: 12, budget_usd: 40 }, models: [{ name: "Sol", status: "slow" }, { name: "Astra", status: "watch" }, { name: "Jev", status: "ok" }] })),
     route("GET", "/v1/wiki/pages", () => ok({ items: [{ review_state: "draft" }, { review_state: "approved", stale_sources: ["a"] }, { review_state: "deleted" }] })),
     route("GET", "/v1/knowledge/sources", () => ok({ items: [{ lifecycle_status: "draft" }, { lifecycle_status: "ready", trust_level: "reviewed" }, { lifecycle_status: "failed" }] })),
     route("GET", "/v1/usage/sessions", () => ok({ authority: "data_only_untrusted", items: [{ id: "u1", ended_at: ago(70) }, { id: "u2", ended_at: ago(1) }], next_cursor: "" }))
@@ -1242,9 +1241,6 @@ test("home: menu rows count crew runs, routing and knowledge; a stalled pipeline
   const body = text(app.$("#table"));
   assert.match(body, /확인 대기 1/);
   assert.match(body, /실패 1/);
-  assert.match(body, /Sol 느림/);
-  assert.match(body, /Astra 지연 모니터링/);
-  assert.match(body, /이번 달 예산 30%/);
   assert.match(body, /위키 초안 1/);
   assert.match(body, /출처 바뀜 1/);
   assert.match(body, /검토 대기 자료 1/);
@@ -1255,8 +1251,8 @@ test("home: menu rows count crew runs, routing and knowledge; a stalled pipeline
   await app.settle(61000);
   assert.ok(app.apiCalls.filter(([, p]) => p.startsWith("/v1/usage/sessions")).length > before);
   offs.forEach((off) => off());
-  // a routing overview without kpi and failing reads hide those rows
-  const offs2 = [route("GET", "/v1/routing/overview", () => ok({})), route("GET", "/v1/crew/runs", () => fail(500, "boom")), route("GET", "/v1/wiki/pages", () => fail(500, "boom"))];
+  // Failed reads hide the affected rows.
+  const offs2 = [route("GET", "/v1/crew/runs", () => fail(500, "boom")), route("GET", "/v1/wiki/pages", () => fail(500, "boom"))];
   app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); await app.settle(100);
   await home(); await app.settle(100);
   assert.ok(!/이번 달 예산/.test(text(app.$("#table"))));
