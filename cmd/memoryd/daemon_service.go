@@ -154,6 +154,9 @@ func configureDaemonProviders(svc *memory.Service, cfg daemonOptions) error {
 	if err != nil {
 		return err
 	}
+	if err := configureTerraText(svc, config, cfg.Recovery); err != nil {
+		return err
+	}
 	if config.Configured() {
 		svc.Analyzer = &memory.ChatSkillAnalyzer{Config: config}
 		svc.Drafter = &memory.ChatSkillDrafter{Config: config}
@@ -228,6 +231,9 @@ func configureDaemonRouting(svc *memory.Service) {
 	}
 	// Every engine this server can run, by name: 설정 › 역할별 모델 may pick one per scope (role_models.go).
 	judges, pickers := map[string]memory.SkillJudge{}, map[string]memory.ModelPicker{}
+	if analyzer, ok := svc.Analyzer.(*memory.ChatSkillAnalyzer); ok && analyzer.TextModel != nil {
+		judges["codex"] = &memory.CodexSkillJudge{Model: analyzer.TextModel}
+	}
 	if jev != nil {
 		judges["jev"], pickers["jev"] = jev, jevPicker
 	}

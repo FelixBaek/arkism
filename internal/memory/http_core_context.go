@@ -25,6 +25,16 @@ func registerContextCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetri
 }
 
 func registerCaptureCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetrics) {
+	mux.HandleFunc("GET /v1/capture/readiness", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		scope, err := parseSourceTraceQuery(r.URL.RawQuery)
+		if err != nil {
+			respond(w, nil, err)
+			return
+		}
+		out, err := s.captureReadiness(r.Context(), bearer(r), scope)
+		respond(w, out, err)
+	})
 	mux.HandleFunc("POST /v1/capture", func(w http.ResponseWriter, r *http.Request) {
 		var in CaptureInput
 		if !decode(w, r, &in) {

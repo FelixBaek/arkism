@@ -60,6 +60,29 @@ type chatReply struct {
 	complete bool // the model stopped on its own, not at the token limit
 }
 
+// completeSkillChat lets the paired desktop's text model use the same analysis
+// and draft validation as a configured HTTP model.
+func completeSkillChat(ctx context.Context, config LLMConfig, model WikiLLM, req chatRequest) (chatReply, error) {
+	if model != nil {
+		if g := model.Generator(); g.Model == "" || strings.HasPrefix(strings.ToLower(g.Model), "jev") {
+			return chatReply{}, ErrUnavailable
+		}
+		ctx, cancel := context.WithTimeout(ctx, req.timeout)
+		defer cancel()
+		text, usage, err := model.Complete(ctx, req.system, req.user, req.maxTokens)
+		// Local text models can serve several Arkism operations. Attach the
+		// operation's accounting provider while preserving explicit measurements.
+		if usage.Provider == "" {
+			usage.Provider = req.provider
+		}
+		return chatReply{text: text, usage: usage, complete: err == nil}, err
+	}
+	if config.APIKey == "" || config.Model == "" || strings.HasPrefix(strings.ToLower(config.Model), "jev") || validateEndpoint(config.Endpoint) != nil {
+		return chatReply{}, ErrUnavailable
+	}
+	return config.chat(ctx, req)
+}
+
 // ValidLLMProtocol reports whether p names a supported wire protocol.
 func ValidLLMProtocol(p string) bool {
 	return p == "" || p == llmProtocolMessages || p == llmProtocolResponses

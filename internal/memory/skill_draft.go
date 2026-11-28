@@ -33,13 +33,21 @@ type SkillDrafter interface {
 	Draft(context.Context, SkillDraftInput) (SkillDraft, ProviderUsage, error)
 }
 
-type ChatSkillDrafter struct{ Config LLMConfig }
+type ChatSkillDrafter struct {
+	Config    LLMConfig
+	TextModel WikiLLM
+}
 
 // skillModelTimeout bounds one analysis or draft call. Both routes answer later when slow, so the
 // limit is the model's, not the request's; a long draft takes over a minute on a slow provider.
 const skillModelTimeout = 5 * time.Minute
 
 func (a *ChatSkillDrafter) Generator() Generator {
+	if a.TextModel != nil {
+		g := a.TextModel.Generator()
+		g.PromptVersion, g.PipelineVersion = "skill-draft-v5", "arkism-skill-draft-v1"
+		return g
+	}
 	return Generator{Model: a.Config.Model, PromptVersion: "skill-draft-v5", PipelineVersion: "arkism-skill-draft-v1"}
 }
 
@@ -68,7 +76,7 @@ func (a *ChatSkillDrafter) Draft(ctx context.Context, in SkillDraftInput) (Skill
 		return zero, ProviderUsage{}, ErrInvalid
 	}
 	g := a.Generator()
-	if !validGenerator(&g) || a.Config.APIKey == "" || strings.HasPrefix(strings.ToLower(a.Config.Model), "jev") || validateEndpoint(a.Config.Endpoint) != nil {
+	if !validGenerator(&g) {
 		return zero, ProviderUsage{}, ErrUnavailable
 	}
 	// Exclude baseline evaluation statistics and catalog identity from model data.
@@ -78,7 +86,7 @@ func (a *ChatSkillDrafter) Draft(ctx context.Context, in SkillDraftInput) (Skill
 		clone.SkillID, clone.Version, clone.ContentHash, clone.SourcePath, clone.SourceFile = "", "", "", "", ""
 		in.BaselineAnalysis = &clone
 	}
-	reply, err := a.Config.chat(ctx, chatRequest{op: "skill draft", provider: "skill_llm", maxTokens: 8192, jsonOut: true, timeout: skillModelTimeout,
+	reply, err := completeSkillChat(ctx, a.Config, a.TextModel, chatRequest{op: "skill draft", provider: "skill_llm", maxTokens: 8192, jsonOut: true, timeout: skillModelTimeout,
 		system: skillDraftSystemPrompt(in), user: structuredText(in)})
 	if err != nil {
 		return zero, ProviderUsage{}, err

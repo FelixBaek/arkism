@@ -951,6 +951,10 @@ export class ArkismClient {
   memoriesAt(body: MemoryAtInput): Promise<MemoryAtPage> {
     return this.request("POST", `/v1/memories/at`, undefined, body);
   }
+  /** GET /v1/capture/readiness — Check automatic capture permissions and extraction settings */
+  captureReadiness(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }): Promise<{ "extraction_enabled": boolean; "write_authorized": boolean; "runtime_id"?: string }> {
+    return this.request("GET", `/v1/capture/readiness`, query, undefined);
+  }
   /** POST /v1/capture — capture claims with optional exact archive provenance */
   captureClaims(body: CaptureInput): Promise<unknown> {
     return this.request("POST", `/v1/capture`, undefined, body);

@@ -39,7 +39,7 @@ var (
 	// Roles the host runs; it reports their defaults.
 	hostRoles = []string{"extract", "reflect", "skill_summary", "skill_scan"}
 	// Engines memoryd can be told to use per role ("fixed" is the rules / fixed model, no engine).
-	roleEngines = map[string][]string{"route_judge": {"fixed", "clef", "jev", "chat"}, "skill_judge": {"fixed", "clef", "jev"}}
+	roleEngines = map[string][]string{"route_judge": {"fixed", "clef", "jev", "chat"}, "skill_judge": {"fixed", "clef", "jev", "codex"}}
 	scanEngines = []string{"spector", "evaluator", "cisco"}
 	// The host runs these through the Claude CLI, so only Anthropic models are accepted; extract also runs
 	// on the other CLIs in host.Extractors (extractProviders).
