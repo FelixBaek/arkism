@@ -2244,6 +2244,106 @@
         }
       }
     },
+    "/v1/capture/readiness": {
+      "get": {
+        "operationId": "captureReadiness",
+        "summary": "Check automatic capture permissions and extraction settings",
+        "description": "Service credentials only. Checks scope-level source and candidate write policy, including the user scope for explicit user claims. Returns the effective automatic extraction flag. Request-specific authorization and model execution still take place during capture.",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Capture prerequisites for the requested scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "extraction_enabled",
+                    "write_authorized"
+                  ],
+                  "properties": {
+                    "extraction_enabled": {
+                      "type": "boolean"
+                    },
+                    "write_authorized": {
+                      "type": "boolean"
+                    },
+                    "runtime_id": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$",
+                      "description": "Capture identity of the current local database runtime. Omitted on other servers."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid capture event"
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied"
+          },
+          "503": {
+            "description": "Dependency unavailable"
+          }
+        }
+      }
+    },
     "/v1/capture": {
       "post": {
         "operationId": "captureClaims",

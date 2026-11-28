@@ -246,6 +246,10 @@ class ArkismClient(BaseClient):
         """POST /v1/memories/at — observed historical memories under current authorization"""
         return self.request("POST", "/v1/memories/at", None, body)
 
+    def capture_readiness(self, query=None):
+        """GET /v1/capture/readiness — Check automatic capture permissions and extraction settings"""
+        return self.request("GET", "/v1/capture/readiness", query, None)
+
     def capture_claims(self, body=None):
         """POST /v1/capture — capture claims with optional exact archive provenance"""
         return self.request("POST", "/v1/capture", None, body)

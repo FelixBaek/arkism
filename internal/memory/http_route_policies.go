@@ -151,6 +151,7 @@ var httpRoutePolicies = map[string]routePolicy{
 	"POST /v1/agent_tools/requests":                        {action: "write:agent_tools", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/agent_tools/requests/{id}/login":             {action: "write:agent_tools", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/auth/google":                                 {},
+	"GET /v1/capture/readiness":                            {action: "read:memory_candidates", scope: routeQuery, roles: []string{roleService}},
 	"POST /v1/capture":                                     {action: "read:memory_candidates", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/extract/preview":                             {action: "generate:memory_candidates", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},
 	"POST /v1/files/memories":                              {action: "write:memory_candidates", scope: routeJSON, limit: fileRequestJSONOverhead, fileLimit: true, roles: []string{roleHuman, roleAgent}},
